@@ -11,7 +11,7 @@ The existing save schema remains readable: missing recipe knowledge, skills and 
 - 236 C# checks including mobile gestures: quantities, equipped ingredient exclusion, skill threshold, solo/1–8 parties, overflow/rejections, status timing/expiry, multi-caster ordering, periodic victory, save continuation and old-save defaults.
 - 12 Python archive/overlay tests passed.
 - Client built without warnings/errors; headless gameplay and mobile smoke passed. Client smoke now crafts, equips and reloads a weapon, executes a multi-caster effect round and checks continuation after save/load.
-- Windows exported build and publication: pending verification before completion.
+- Windows self-hosted export, both exported EXE smoke tests, updater checks and public launcher download/offline verification passed: [Windows preview 11](https://github.com/Aetton/neowizardry/releases/tag/windows-build-11), [run 38654622216](https://github.com/Aetton/neowizardry/actions/runs/38654622216). Hosted Linux verification also passed ([run 38654622255](https://github.com/Aetton/neowizardry/actions/runs/38654622255)).
 
 ## Research boundary
 
