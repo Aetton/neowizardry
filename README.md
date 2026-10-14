@@ -13,7 +13,7 @@ Godot 4.5.1 .NET client + independent .NET 8 core + dependency-free Python 3.10+
 - A synthetic 3D corridor with free movement, collisions, mouse look, party size 1–8, a training sentinel, round resolution, XP, sample dialogue and save/load.
 - A solo captivity/escape regression fixture. This proves an engine state transition, **not** that the original Crock quest has been reproduced.
 - Deterministic core transitions and versioned saves, tested independently of Godot. Imported melee damage dice and weapon initiative are active; the prototype RNG state survives saves.
-- Original-item browser with search, raw weapon statistics and a test melee equipment slot enforcing race/profession/gender restrictions. Equipped items survive saves; loading requires the same source item database.
+- Original-item browser with search, raw weapon statistics and a melee equipment slot backed by the shared party bag enforcing race/profession/gender restrictions. Equipped items survive saves; loading requires the same source item database.
 - Ordinary resource overlay: loose data files, then descending `PATCH.NNN`, then base archive, with source provenance.
 
 Combat numbers and starting characters are **experimental placeholders**, not recovered Wizardry 8 formulas. No enemy scaling by party size. Reward is shared between living, uncaptured heroes, so solo retains the concentration of XP.
@@ -43,6 +43,8 @@ godot --headless --path client -- --smoke
 
 The smoke check intentionally writes `prototype-save.json` into Godot's user data directory. Do not use it as a real campaign save.
 
+New expeditions receive a limited **test** starter bag; the training sentinel drops one configured test item on victory. These are not original starting equipment or loot tables. In **Items**, owned items are shown by default; **Browse full catalog** is inspection only and cannot grant unowned weapons. Old saves retain equipped copies but do not receive a retroactive starter bag.
+
 ## Import your installation
 
 No originals, full exported databases or copyrighted textures belong in this repository. Put local outputs in the ignored `local/` directory.
@@ -62,7 +64,7 @@ For the supplied Steam installation, include its enabled patch:
 python -m tools.slf items "/path/to/Wizardry8/Data/DATA.SLF" --patch "/path/to/Wizardry8/Patches/PATCH.001" --out local/items.json
 ```
 
-Repeat `--patch` for every enabled `PATCH.NNN`; do not pass disabled `.BAK` files. Use `--loose-dir "/path/to/Wizardry8/Data"` to include loose-file overrides. Open **Items** in the client; `local/items.json` loads automatically. An external catalog can be selected with `godot --path client -- --catalog "/path/to/items.json"`. This is an equipment inspector: ownership, inventory transfer, curse removal and full original combat are not implemented. Assigned melee weapons now use their imported base damage dice and initiative in the experimental battle.
+Repeat `--patch` for every enabled `PATCH.NNN`; do not pass disabled `.BAK` files. Use `--loose-dir "/path/to/Wizardry8/Data"` to include loose-file overrides. Open **Items** in the client; `local/items.json` loads automatically. An external catalog can be selected with `godot --path client -- --catalog "/path/to/items.json"`. The shared party bag tracks quantities and equipment ownership. Transfer a weapon by returning it to the bag and equipping it on another eligible hero. Curse removal, item instances/charges and full original combat are not implemented. Assigned melee weapons now use their imported base damage dice and initiative in the experimental battle.
 
 `audit` reads SLF files and `PATCH.NNN` locally and produces a small inventory. The Drive connector cannot download `LEVELS.SLF` because its 497,064,244 bytes exceed the connector's 256 MiB limit. Local indexing avoids that restriction. Parallel Worlds and localization overlays remain unsupported.
 
@@ -75,7 +77,7 @@ Repeat `--patch` for every enabled `PATCH.NNN`; do not pass disabled `.BAK` file
 5. Replace the temporary gold frame with the planned Wizardry visual identity and Grimrock-inspired materials/lighting.
 
 See [format report](docs/formats.md), [architecture](docs/architecture.md) and [iteration report](docs/iteration-001.md).
-Latest progress: [iteration 005](docs/iteration-005.md).
+Latest progress: [iteration 006](docs/iteration-006.md).
 Mobile prototype: [touch controls, Android build and device checklist](docs/mobile.md). Preview on desktop with `godot --path client -- --touch`.
 
 The [formula research module](docs/formula-sources.md) contains a first source-backed candidate calculation; it remains separate from the experimental combat rules.
