@@ -36,7 +36,7 @@ godot --path client
 
 Replace `godot` with the path to your Godot .NET executable if it is not in PATH.
 
-WASD moves; hold the right mouse button to look; Esc releases the cursor. Approach the sentinel and press **Attack / next round**. Party size applies when pressing **New party**. **Save/Load** preserves the party, battle, captivity and camera. **Test captivity/Escape** demonstrates the solo regression fixture. The keeper's fixed line is sample text, not extracted story content.
+WASD moves; hold the right mouse button to look; Esc releases the cursor. Approach the sentinel and press **Attack / next round**. Open **Menu** for party size, **New party**, **Save/Load** and test-scenario controls. Click a side portrait to select the actor used by Magic, Items and Craft. **Save/Load** preserves the party, battle, captivity and camera. **Test captivity/Escape** demonstrates the solo regression fixture. The keeper's fixed line is sample text, not extracted story content.
 
 ```sh
 godot --headless --path client -- --smoke
@@ -82,7 +82,7 @@ Repeat `--patch` for every enabled `PATCH.NNN`; do not pass disabled `.BAK` file
 5. Replace the temporary gold frame with the planned Wizardry visual identity and Grimrock-inspired materials/lighting.
 
 See [format report](docs/formats.md), [architecture](docs/architecture.md) and [iteration report](docs/iteration-001.md).
-Latest progress: [iteration 009](docs/iteration-009.md).
+Latest progress: [iteration 010](docs/iteration-010.md). Desktop HUD: [original-layout interface](docs/interface.md).
 Mobile prototype: [touch controls, Android build and device checklist](docs/mobile.md). Preview on desktop with `godot --path client -- --touch`.
 
 The [formula research module](docs/formula-sources.md) contains a first source-backed candidate calculation; it remains separate from the experimental combat rules.

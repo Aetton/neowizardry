@@ -27,6 +27,14 @@ public partial class Main : Node3D
     private Button _partyToggle=null!, _logToggle=null!;
     private Label _title=null!;
     private Rect2 _lookRect;
+    private VBoxContainer _leftPortraits=null!,_rightPortraits=null!;
+    private HeroPortrait[] _portraits=[];
+    private ArenaCompass _compass=null!;
+    private RealmDial _realms=null!;
+    private Label _selection=null!;
+    private string _selectedHeroId="hero-1";
+    private string? _initialRealm;
+    private Theme _hudTheme=null!;
     private const string AutoSavePath="user://prototype-autosave.json";
     private ItemCatalog? _catalog;
     private bool _catalogRequested;
@@ -45,6 +53,7 @@ public partial class Main : Node3D
         _ready=true;
         if(!OS.GetCmdlineUserArgs().Contains("--smoke") && !OS.GetCmdlineUserArgs().Contains("--mobile-smoke") && Godot.FileAccess.FileExists(AutoSavePath))
             Try(()=>LoadFrom(AutoSavePath));
+        if(OS.GetCmdlineUserArgs().Contains("--ui-preview"))NewParty(8);
         Say("Technical slice. Synthetic room, sentinel and dialogue; combat rules are experimental.");
         Say(_touchMode ? "Left pad — move · swipe the view — look · approach the sentinel to attack." : "WASD — move · right mouse — look · Esc — release cursor.");
         if (OS.GetCmdlineUserArgs().Contains("--smoke")) CallDeferred(nameof(Smoke));
@@ -151,9 +160,9 @@ public partial class Main : Node3D
     private PanelContainer Panel(Control parent, Vector2 pos, Vector2 size)
     {
         var panel = new PanelContainer { Position = pos, Size = size };
-        var style = new StyleBoxFlat { BgColor = new(0.035f,0.045f,0.055f,0.95f), BorderColor = new(0.52f,0.42f,0.23f) };
-        style.SetBorderWidthAll(3);
-        style.SetContentMarginAll(14);
+        var style = new StyleBoxFlat { BgColor = new(0.035f,0.042f,0.041f,0.96f), BorderColor = new(0.36f,0.33f,0.25f) };
+        style.SetBorderWidthAll(2);
+        style.SetContentMarginAll(7);
         panel.AddThemeStyleboxOverride("panel",style);
         parent.AddChild(panel);
         return panel;
@@ -161,32 +170,77 @@ public partial class Main : Node3D
 
     private void BuildUi()
     {
+        ApplyUiTheme();
         var layer=new CanvasLayer();AddChild(layer);
-        _ui=new Control { MouseFilter=Control.MouseFilterEnum.Ignore };layer.AddChild(_ui);_ui.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        _title=new Label { Text="NEOWIZARDRY",MouseFilter=Control.MouseFilterEnum.Ignore };_title.AddThemeFontSizeOverride("font_size",22);_ui.AddChild(_title);
+        _ui=new Control { Theme=_hudTheme,MouseFilter=Control.MouseFilterEnum.Ignore };layer.AddChild(_ui);_ui.Draw+=DrawChrome;_ui.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _title=new Label { Text="N E O W I Z A R D R Y",MouseFilter=Control.MouseFilterEnum.Ignore };_title.AddThemeFontSizeOverride("font_size",13);_ui.AddChild(_title);
         _partyToggle=Button(_ui,"Party",()=>{_partyPanel.Visible=!_partyPanel.Visible;_touchInput.Reset();});
         _logToggle=Button(_ui,"Log",()=>{_logPanel.Visible=!_logPanel.Visible;_touchInput.Reset();});
-        _partyPanel=Panel(_ui,Vector2.Zero,new(220,400));
+        _partyPanel=Panel(_ui,Vector2.Zero,new(220,300));_partyPanel.Visible=false;
         var column=new VBoxContainer();_partyPanel.AddChild(column);
-        _size=new OptionButton { CustomMinimumSize=new(0,_touchMode?52:36) };for(int i=1;i<=8;i++)_size.AddItem($"{i} adventurer{(i==1?"":"s")}");column.AddChild(_size);
-        Button(column,"New party",()=>{_state=CreateExpedition(_size.Selected+1);_player.Position=new(0,0.9f,2);Refresh();Say("New expedition with a limited test starter bag.");});
-        var scroll=new ScrollContainer { CustomMinimumSize=new(180,80),SizeFlagsVertical=Control.SizeFlags.ExpandFill };column.AddChild(scroll);
+        _size=new OptionButton { CustomMinimumSize=new(0,_touchMode?52:32) };for(int i=1;i<=8;i++)_size.AddItem($"{i} adventurer{(i==1?"":"s")}");column.AddChild(_size);
+        Button(column,"New party",()=>NewParty(_size.Selected+1));
+        var scroll=new ScrollContainer { CustomMinimumSize=new(180,60),SizeFlagsVertical=Control.SizeFlags.ExpandFill };column.AddChild(scroll);
         _heroes=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };scroll.AddChild(_heroes);
         _quest=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart };column.AddChild(_quest);
-        _logPanel=Panel(_ui,Vector2.Zero,new(250,400));var rc=new VBoxContainer();_logPanel.AddChild(rc);
-        _enemy=new Label();rc.AddChild(_enemy);
-        _log=new RichTextLabel { CustomMinimumSize=new(200,80),ScrollFollowing=true,SizeFlagsVertical=Control.SizeFlags.ExpandFill };rc.AddChild(_log);
-        _actionsPanel=Panel(_ui,Vector2.Zero,new(900,80));_actions=new GridContainer();_actions.AddThemeConstantOverride("h_separation",8);_actions.AddThemeConstantOverride("v_separation",8);_actionsPanel.AddChild(_actions);
-        Button(_actions,"Attack",Attack);Button(_actions,"Magic",ShowMagic);Button(_actions,"Items",ShowItems);Button(_actions,"Craft",ShowCrafting);Button(_actions,"Save",Save);Button(_actions,"Load",Load);
-        Button(_actions,"Keeper",()=>Say("Test keeper: The real monastery is still being researched."));
-        Button(_actions,"Capture test",()=>Try(()=>{_state=Game.CaptureFirst(_state);Refresh();_touchInput.Reset();}));
-        Button(_actions,"Escape",()=>Try(()=>{_state=Game.Escape(_state);Refresh();}));
+        _leftPortraits=new VBoxContainer();_rightPortraits=new VBoxContainer();_ui.AddChild(_leftPortraits);_ui.AddChild(_rightPortraits);
+        _leftPortraits.AddThemeConstantOverride("separation",4);_rightPortraits.AddThemeConstantOverride("separation",4);
+        _portraits=Enumerable.Range(0,8).Select(i=>{
+            var card=new HeroPortrait { SizeFlagsVertical=Control.SizeFlags.ExpandFill,SizeFlagsHorizontal=Control.SizeFlags.ExpandFill,MouseDefaultCursorShape=Control.CursorShape.PointingHand };
+            card.Pick=id=>{_selectedHeroId=id;Refresh();};(i<4?_leftPortraits:_rightPortraits).AddChild(card);return card;
+        }).ToArray();
+        _enemy=new Label { HorizontalAlignment=HorizontalAlignment.Center,MouseFilter=Control.MouseFilterEnum.Ignore };_ui.AddChild(_enemy);
+        _logPanel=Panel(_ui,Vector2.Zero,new(400,120));
+        _log=new RichTextLabel { ScrollFollowing=true,SizeFlagsVertical=Control.SizeFlags.ExpandFill };_log.AddThemeFontSizeOverride("normal_font_size",12);_logPanel.AddChild(_log);
+        _compass=new ArenaCompass();_ui.AddChild(_compass);
+        _realms=new RealmDial();_realms.Pick=realm=>{_initialRealm=realm;ShowMagic();};_ui.AddChild(_realms);
+        _actionsPanel=Panel(_ui,Vector2.Zero,new(900,50));
+        var strip=new HBoxContainer();_actionsPanel.AddChild(strip);
+        _actions=new GridContainer();_actions.AddThemeConstantOverride("h_separation",4);_actions.AddThemeConstantOverride("v_separation",4);strip.AddChild(_actions);
+        Button(_actions,"Attack",Attack);Button(_actions,"Magic",ShowMagic);Button(_actions,"Items",ShowItems);Button(_actions,"Craft",ShowCrafting);Button(_actions,"Journal",()=>{_logPanel.Visible=!_logPanel.Visible;});Button(_actions,"Menu",ShowMenu);
+        _selection=new Label { VerticalAlignment=VerticalAlignment.Center,HorizontalAlignment=HorizontalAlignment.Right,AutowrapMode=TextServer.AutowrapMode.WordSmart,SizeFlagsHorizontal=Control.SizeFlags.ExpandFill,MouseFilter=Control.MouseFilterEnum.Ignore };strip.AddChild(_selection);
         _pad=new TouchPad { MouseFilter=Control.MouseFilterEnum.Ignore };_ui.AddChild(_pad);
         GetViewport().SizeChanged+=LayoutUi;LayoutUi();
     }
+    private void ApplyUiTheme()
+    {
+        var theme=new Theme { DefaultFontSize=14 };
+        var normal=HeroPortrait.Frame(new(.065f,.073f,.068f),new(.37f,.34f,.25f));
+        var hover=HeroPortrait.Frame(new(.12f,.14f,.12f),new(.66f,.54f,.32f));
+        foreach(var type in new[]{"Button","OptionButton"})
+        {
+            theme.SetStylebox("normal",type,normal);theme.SetStylebox("hover",type,hover);
+            theme.SetStylebox("pressed",type,HeroPortrait.Frame(new(.025f,.045f,.043f),new(.75f,.61f,.35f)));
+            theme.SetStylebox("disabled",type,HeroPortrait.Frame(new(.045f,.05f,.047f),new(.19f,.21f,.18f)));
+            theme.SetColor("font_color",type,new(.85f,.81f,.68f));theme.SetColor("font_hover_color",type,new(.98f,.91f,.70f));
+        }
+        theme.SetStylebox("panel","AcceptDialog",HeroPortrait.Frame(new(.035f,.043f,.041f),new(.53f,.44f,.28f)));
+        theme.SetColor("font_color","Label",new(.82f,.80f,.70f));
+        theme.SetColor("default_color","RichTextLabel",new(.77f,.77f,.66f));
+        _hudTheme=theme;GetWindow().Theme=theme;
+    }
+    private void NewParty(int size)
+    {
+        _state=CreateExpedition(size);_player.Position=new(0,.9f,2);_selectedHeroId=_state.Party[0].Id;Refresh();Say("New test expedition.");
+    }
+    private void ShowMenu()
+    {
+        Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
+        var dialog=new AcceptDialog { Theme=_hudTheme,Title="Expedition",Unresizable=true,WrapControls=false };AddChild(dialog);
+        dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
+        var scroll=new ScrollContainer();dialog.AddChild(scroll);var body=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };scroll.AddChild(body);
+        var size=new OptionButton();for(int i=1;i<=8;i++)size.AddItem($"{i} adventurer{(i==1?"":"s")}");size.Select(_state.Party.Length-1);body.AddChild(size);
+        Button(body,"New party",()=>{NewParty(size.Selected+1);dialog.QueueFree();});
+        Button(body,"Save",Save);Button(body,"Load",()=>{Load();size.Select(_state.Party.Length-1);});
+        Button(body,"Talk to keeper",()=>Say("Test keeper: The real monastery is still being researched."));
+        Button(body,"Capture test",()=>Try(()=>{_state=Game.CaptureFirst(_state);Refresh();}));
+        Button(body,"Escape",()=>Try(()=>{_state=Game.Escape(_state);Refresh();}));
+        var screen=GetViewport().GetVisibleRect().Size;var dimensions=new Vector2I((int)Math.Min(400,screen.X-32),(int)Math.Min(490,screen.Y-32));
+        scroll.Position=new(12,12);scroll.Size=new(dimensions.X-24,dimensions.Y-64);dialog.PopupCentered(dimensions);
+    }
     private Button Button(Control parent,string text,Action action)
     {
-        var button=new Button { Text=text,CustomMinimumSize=new(0,_touchMode?56:40),SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };
+        var button=new Button { Text=text,CustomMinimumSize=new(0,_touchMode?56:32),SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };
         button.Pressed+=action;parent.AddChild(button);return button;
     }
     private void LayoutUi()
@@ -203,27 +257,50 @@ public partial class Main : Node3D
             }
         }
         bool compact=_touchMode || bounds.Size.X<900;
-        if(compact!=_compact) { _partyPanel.Visible=!compact;_logPanel.Visible=!compact;_compact=compact; }
+        if(compact!=_compact) { _partyPanel.Visible=false;_logPanel.Visible=!compact;_compact=compact; }
         _partyToggle.Visible=compact;_logToggle.Visible=compact;
-        _title.Position=bounds.Position+new Vector2(4,4);
+        _leftPortraits.Visible=!compact;_rightPortraits.Visible=!compact;_compass.Visible=!compact;_realms.Visible=!compact;_selection.Visible=!compact;
+        _title.Position=bounds.Position+new Vector2(4,0);
         _partyToggle.Position=new(bounds.End.X-180,bounds.Position.Y);_partyToggle.Size=new(84,_touchMode?52:40);
         _logToggle.Position=new(bounds.End.X-88,bounds.Position.Y);_logToggle.Size=new(84,_touchMode?52:40);
-        int actionCount=_actions.GetChildCount();
-        int columns=Math.Max(3,Math.Min(actionCount,(int)(bounds.Size.X/110)));
-        _actions.Columns=columns;
-        int rows=(actionCount+columns-1)/columns;
-        float actionHeight=rows*(_touchMode?56:40)+(rows-1)*8+28;
+        int columns=compact?Math.Max(3,Math.Min(6,(int)(bounds.Size.X/110))):6;_actions.Columns=columns;
+        int rows=(6+columns-1)/columns;float actionHeight=compact?rows*(_touchMode?56:32)+(rows-1)*4+16:64;
         _actionsPanel.Position=new(bounds.Position.X,bounds.End.Y-actionHeight);_actionsPanel.Size=new(bounds.Size.X,actionHeight);
-        float top=bounds.Position.Y+(_touchMode?62:50);
-        float height=Math.Max(160,_actionsPanel.Position.Y-top-10);
-        _partyPanel.Position=new(bounds.Position.X,top);_partyPanel.Size=new(220,height);
-        _logPanel.Position=new(bounds.End.X-250,top);_logPanel.Size=new(250,height);
+        _actions.SizeFlagsHorizontal=compact?Control.SizeFlags.ExpandFill:Control.SizeFlags.ShrinkBegin;
+        foreach(var node in _actions.GetChildren().OfType<Button>())node.CustomMinimumSize=new(compact?0:78,_touchMode?56:32);
+        float top=bounds.Position.Y+(compact?62:22);
+        float dock=compact?0:128;
+        float worldBottom=_actionsPanel.Position.Y-dock-6;
+        float side=148;
+        _leftPortraits.Position=new(bounds.Position.X,top);_leftPortraits.Size=new(side,worldBottom-top-4);
+        _rightPortraits.Position=new(bounds.End.X-side,top);_rightPortraits.Size=new(side,worldBottom-top-4);
+        _compass.Position=new(bounds.Position.X,worldBottom);_compass.Size=new(side,dock);
+        _realms.Position=new(bounds.End.X-side,worldBottom);_realms.Size=new(side,dock);
+        _enemy.Position=new(bounds.Position.X+(compact?0:side+12),top+4);_enemy.Size=new(bounds.Size.X-(compact?0:2*side+24),48);
+        _partyPanel.Position=new(bounds.Position.X,top);_partyPanel.Size=new(240,Math.Max(160,_actionsPanel.Position.Y-top-10));
+        _logPanel.Position=compact ? new(bounds.End.X-Math.Min(400,bounds.Size.X),top+52) : new(bounds.Position.X+side+8,worldBottom);
+        _logPanel.Size=compact ? new(Math.Min(400,bounds.Size.X),Math.Max(140,_actionsPanel.Position.Y-top-62)) : new(bounds.Size.X-2*side-16,dock);
         _pad.Visible=_touchMode;_pad.Position=new(bounds.Position.X+8,_actionsPanel.Position.Y-154);_pad.Size=new(144,144);
-        _lookRect=new Rect2(new(bounds.Position.X,top),new(bounds.Size.X,Math.Max(0,_actionsPanel.Position.Y-top)));
-        if(!_compact) _lookRect=new Rect2(new(bounds.Position.X+230,top),new(Math.Max(0,bounds.Size.X-490),Math.Max(0,height)));
+        _lookRect=new Rect2(new(bounds.Position.X+(compact?0:side+8),top+52),new(bounds.Size.X-(compact?0:2*side+16),Math.Max(0,worldBottom-top-52)));
+        _ui.QueueRedraw();
+    }
+
+    private void DrawChrome()
+    {
+        var size=GetViewport().GetVisibleRect().Size;var dark=new Color(.045f,.050f,.046f);var edge=new Color(.28f,.27f,.22f);
+        float top=_compact?0:30;float bottom=_compact?size.Y-_actionsPanel.Position.Y:size.Y-_compass.Position.Y;
+        if(top>0)_ui.DrawRect(new Rect2(0,0,size.X,top),dark);
+        _ui.DrawRect(new Rect2(0,size.Y-bottom,size.X,bottom),dark);
+        if(!_compact)
+        {
+            _ui.DrawRect(new Rect2(0,top,160,size.Y-bottom-top),dark);
+            _ui.DrawRect(new Rect2(size.X-160,top,160,size.Y-bottom-top),dark);
+        }
+        _ui.DrawLine(new(0,size.Y-bottom),new(size.X,size.Y-bottom),edge,2);
+        _ui.DrawLine(new(0,top),new(size.X,top),edge,2);
     }
     private void Try(Action action) { try { action(); } catch (Exception e) { Say(e.Message); } }
-    private void Say(string message) { _log.AppendText(message+"\n\n"); }
+    private void Say(string message) { _log.AppendText(message+"\n"); }
     private void Refresh()
     {
         foreach (var child in _heroes.GetChildren()) { _heroes.RemoveChild(child); child.QueueFree(); }
@@ -234,7 +311,19 @@ public partial class Main : Node3D
             string mana=string.Join(" · ",(h.Mana ?? []).Select(p=>$"{p.Realm} {p.Current}/{p.Max}"));
             _heroes.AddChild(new Label { Text=$"{h.Name}\n{h.Race} · {h.Profession}\nHP {h.Hp}/{h.MaxHp}   XP {h.Xp}\n{mana}\n{effects}{equipment}{(h.Captive ? "\nCAPTIVE" : "")}", AutowrapMode=TextServer.AutowrapMode.WordSmart });
         }
-        _enemy.Text=$"{_state.Enemy.Id}\nHP {_state.Enemy.Hp} · Round {_state.Round}\n"+string.Join(" · ",(_state.Enemy.Effects ?? []).Select(e=>$"{e.Kind} {e.Rounds}r"));
+        if(!_state.Party.Any(h=>h.Id==_selectedHeroId))_selectedHeroId=_state.Party[0].Id;
+        var selected=_state.Party.Single(h=>h.Id==_selectedHeroId);
+        int left=(_state.Party.Length+1)/2;
+        for(int i=0;i<8;i++)
+        {
+            int index=i<4 ? i : left+i-4;
+            bool occupied=i<4 ? i<left : index<_state.Party.Length;
+            _portraits[i].Hero=occupied?_state.Party[index]:null;_portraits[i].Selected=occupied && _portraits[i].Hero!.Id==_selectedHeroId;_portraits[i].QueueRedraw();
+        }
+        _selection.Text=$"{selected.Name} · HP {selected.Hp}/{selected.MaxHp}\n"+(selected.EquippedItemId is int id && _catalog is not null?_catalog.Find(id).Name:"Unarmed");
+        _realms.Available=Magic.Spells.Where(s=>(selected.Spellbook ?? []).Contains(s.Id)).Select(s=>s.Realm).Distinct().ToArray();_realms.QueueRedraw();
+        _compass.EnemyAlive=_state.Enemy.Hp>0;_compass.QueueRedraw();
+        _enemy.Text=$"{_state.Enemy.Id} · HP {_state.Enemy.Hp} · Round {_state.Round}\n"+string.Join(" · ",(_state.Enemy.Effects ?? []).Select(e=>$"{e.Kind} {e.Rounds}r"));
         _quest.Text=$"Captivity fixture: {_state.Quest}";
         _sentinel.Visible=_state.Enemy.Hp>0;
         _size.Select(_state.Party.Length-1);
@@ -258,12 +347,12 @@ public partial class Main : Node3D
     private void ShowMagic()
     {
         Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
-        var dialog=new AcceptDialog { Title="Prototype magic",Unresizable=true,WrapControls=false };
+        var dialog=new AcceptDialog { Theme=_hudTheme,Title="Prototype magic",Unresizable=true,WrapControls=false };
         AddChild(dialog);dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;
         dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var body=new VBoxContainer();dialog.AddChild(body);
-        var caster=new OptionButton();foreach(var h in _state.Party)caster.AddItem(h.Name);body.AddChild(caster);
-        var spell=new OptionButton();foreach(var s in Magic.Spells)spell.AddItem($"{s.Name} · {s.Realm}");body.AddChild(spell);
+        var caster=new OptionButton();foreach(var h in _state.Party)caster.AddItem(h.Name);caster.Select(Array.FindIndex(_state.Party,h=>h.Id==_selectedHeroId));body.AddChild(caster);
+        var spell=new OptionButton();foreach(var s in Magic.Spells)spell.AddItem($"{s.Name} · {s.Realm}");if(_initialRealm is not null)spell.Select(Math.Max(0,Array.FindIndex(Magic.Spells.ToArray(),s=>s.Realm==_initialRealm)));_initialRealm=null;body.AddChild(spell);
         var power=new OptionButton();for(int i=1;i<=3;i++)power.AddItem($"Power {i}");body.AddChild(power);
         var target=new OptionButton();foreach(var h in _state.Party)target.AddItem(h.Name);body.AddChild(target);
         var details=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(400,160) };body.AddChild(details);
@@ -314,12 +403,12 @@ public partial class Main : Node3D
         if(_catalog is null) { Say("No item catalog loaded.");return; }
         if(!Crafting.UsesFixture(_catalog)) { Say("Original recipes are pending archive research; synthetic recipe IDs do not apply to this catalog.");return; }
         Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
-        var dialog=new AcceptDialog { Title="Test crafting",Unresizable=true,WrapControls=false };
+        var dialog=new AcceptDialog { Theme=_hudTheme,Title="Test crafting",Unresizable=true,WrapControls=false };
         AddChild(dialog);dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;
         dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var scroll=new ScrollContainer();dialog.AddChild(scroll);
         var body=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };scroll.AddChild(body);
-        var hero=new OptionButton();foreach(var h in _state.Party)hero.AddItem(h.Name);body.AddChild(hero);
+        var hero=new OptionButton();foreach(var h in _state.Party)hero.AddItem(h.Name);hero.Select(Array.FindIndex(_state.Party,h=>h.Id==_selectedHeroId));body.AddChild(hero);
         var recipe=new OptionButton();foreach(var r in Crafting.Recipes)recipe.AddItem(r.Name);body.AddChild(recipe);
         var detail=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart };body.AddChild(detail);
         var craft=new Button { Text="Craft one batch",CustomMinimumSize=new(0,56) };body.AddChild(craft);
@@ -382,7 +471,7 @@ public partial class Main : Node3D
     {
         if (_catalog is null) { Say("Import your installation's item catalog using the README to open original items."); return; }
         Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
-        var dialog=new AcceptDialog { Title="Party inventory", Size=new(920,620),Unresizable=true,WrapControls=false };
+        var dialog=new AcceptDialog { Theme=_hudTheme,Title="Party inventory", Size=new(920,620),Unresizable=true,WrapControls=false };
         AddChild(dialog);
         dialog.Confirmed+=dialog.QueueFree; dialog.CloseRequested+=dialog.QueueFree;dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var layout=new VBoxContainer(); dialog.AddChild(layout);
@@ -392,7 +481,7 @@ public partial class Main : Node3D
         layout.Position=new(12,12);layout.Size=new(dialogSize.X-24,dialogSize.Y-64);
         var search=new LineEdit { PlaceholderText="Search item name" };layout.AddChild(search);
         var browse=new CheckButton { Text="Browse full catalog" };layout.AddChild(browse);
-        var hero=new OptionButton();foreach(var h in _state.Party)hero.AddItem(h.Name);layout.AddChild(hero);
+        var hero=new OptionButton();foreach(var h in _state.Party)hero.AddItem(h.Name);hero.Select(Array.FindIndex(_state.Party,h=>h.Id==_selectedHeroId));layout.AddChild(hero);
         BoxContainer row=narrow ? new VBoxContainer() : new HBoxContainer();row.SizeFlagsVertical=Control.SizeFlags.ExpandFill;layout.AddChild(row);
         var list=new ItemList { CustomMinimumSize=new(narrow?0:Math.Min(360,dialogSize.X*0.4f),narrow?120:180),SizeFlagsVertical=Control.SizeFlags.ExpandFill,AutoHeight=false };row.AddChild(list);
         var detailColumn=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };row.AddChild(detailColumn);
@@ -445,6 +534,7 @@ public partial class Main : Node3D
     }
     public override void _UnhandledInput(InputEvent e)
     {
+        if(_dialogs>0 || _paused)return;
         if(e is InputEventMouseButton b && b.ButtonIndex==MouseButton.Right && !_touchMode)Input.MouseMode=b.Pressed?Input.MouseModeEnum.Captured:Input.MouseModeEnum.Visible;
         if(e is InputEventKey k && k.Pressed && k.Keycode==Key.Escape)Input.MouseMode=Input.MouseModeEnum.Visible;
         if(e is InputEventMouseMotion m && Input.MouseMode==Input.MouseModeEnum.Captured)Look(m.Relative,0.003f);
@@ -454,6 +544,7 @@ public partial class Main : Node3D
     public override void _PhysicsProcess(double delta)
     {
         if(!_ready)return;
+        _compass.PlayerPosition=_player.Position;_compass.Yaw=_player.Rotation.Y;_compass.QueueRedraw();
         var look=_touchInput.ConsumeLook();if(!_paused && _dialogs==0)Look(new(look.X,look.Y),0.004f);
         _pad.Stick=new(_touchInput.Movement.X,_touchInput.Movement.Y);_pad.QueueRedraw();
         if(_paused || _dialogs>0 || !_state.Party.Any(h=>h.Hp>0 && !h.Captive)) { _player.Velocity=Vector3.Zero;return; }
