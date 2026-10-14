@@ -1,6 +1,7 @@
 param([switch]$Offline, [switch]$NoLaunch)
 
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repository = 'Aetton/neowizardry'
 
