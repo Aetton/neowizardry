@@ -31,3 +31,5 @@ The launcher runs in a console window and waits for the game to exit. It is an e
 `.github/workflows/windows.yml` runs on a Windows runner with Godot 4.5.1 .NET, exports x64, then runs the exported executable's combat/equipment/save and touch/autosave checks. The launcher is tested using **Windows PowerShell 5.1**, matching its double-click entry point. CI does not verify the user's GPU or interactive Windows rendering.
 
 The public builds package the synthetic staff catalog; original SLF/DBS resources stay outside releases. Android APK installation is needed when testing mobile-specific changes or milestone builds rather than every gameplay iteration.
+
+Windows previews are built automatically on relevant `main` changes. Android export is now manual (`workflow_dispatch`) for mobile changes and milestone checks.

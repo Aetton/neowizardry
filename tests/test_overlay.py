@@ -44,7 +44,11 @@ class OverlayTest(unittest.TestCase):
     def test_loose_ambiguity_and_symlink(self):
         loose = self.root/"Data"; loose.mkdir()
         (loose/"a").write_text("a"); (loose/"A").write_text("A")
-        with self.assertRaises(FormatError): Resources(Archive(self.base), loose=loose)
+        if (loose/"a").samefile(loose/"A"):
+            # Case-insensitive filesystems overwrite one file rather than creating an ambiguity.
+            self.assertEqual(Resources(Archive(self.base), loose=loose).read("a"), b"A")
+        else:
+            with self.assertRaises(FormatError): Resources(Archive(self.base), loose=loose)
         (loose/"A").unlink()
         (loose/"link").symlink_to(self.base)
         with self.assertRaises(FormatError): Resources(Archive(self.base), loose=loose)

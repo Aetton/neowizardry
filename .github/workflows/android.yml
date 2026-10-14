@@ -1,13 +1,5 @@
 name: Android prototype APK
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'client/**'
-      - 'core/**'
-      - 'core-checks/**'
-      - '.github/workflows/android.yml'
-      - 'tools/configure_android.py'
   workflow_dispatch:
 jobs:
   apk:
