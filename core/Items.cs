@@ -84,18 +84,38 @@ public static class Equipment
         var item = catalog.Find(itemId);
         var denial = Denial(hero,item);
         if (denial is not null) throw new InvalidOperationException(denial);
+        if (hero.EquippedItemId == itemId) return state;
+        // Work on copies: a rejected swap never consumes the replacement or removes the old weapon.
+        var result = Inventory.Remove(state,itemId,1);
+        if (hero.EquippedItemId.HasValue) result = Inventory.Add(result,hero.EquippedItemId.Value,1,catalog);
         var party = state.Party.ToArray();
         party[index] = hero with { EquippedItemId = itemId };
-        return state with { Party = party };
+        return result with { Party = party };
+    }
+
+    public static GameState Unequip(GameState state, string heroId, ItemCatalog catalog)
+    {
+        Game.Validate(state); catalog.Validate();
+        int index = Array.FindIndex(state.Party,h => h.Id==heroId);
+        if (index<0) throw new InvalidOperationException("Unknown hero");
+        var hero = state.Party[index];
+        if (hero.Captive || hero.Hp==0) throw new InvalidOperationException("Hero cannot change equipment");
+        if (!hero.EquippedItemId.HasValue) return state;
+        var result = Inventory.Add(state,hero.EquippedItemId.Value,1,catalog);
+        var party = state.Party.ToArray();
+        party[index] = hero with { EquippedItemId=null };
+        return result with { Party=party };
     }
 
     public static void ValidateLoadedEquipment(GameState state, ItemCatalog? catalog, string? expectedHash)
     {
         Game.Validate(state);
-        if (!state.Party.Any(h => h.EquippedItemId.HasValue)) return;
+        if (!state.Party.Any(h => h.EquippedItemId.HasValue) && (state.Bag?.Length ?? 0)==0 && !state.Enemy.LootItemId.HasValue) return;
         if (catalog is null || catalog.Provenance.Sha256 != expectedHash)
             throw new InvalidDataException("Save requires the same imported item database.");
         catalog.Validate();
+        foreach (var stack in state.Bag ?? []) catalog.Find(stack.ItemId);
+        if (state.Enemy.LootItemId.HasValue) catalog.Find(state.Enemy.LootItemId.Value);
         foreach (var hero in state.Party.Where(h=>h.EquippedItemId.HasValue))
         {
             var denial = Denial(hero,catalog.Find(hero.EquippedItemId!.Value));

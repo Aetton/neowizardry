@@ -6,9 +6,9 @@ namespace NeoWizardry.Core;
 public sealed record Hero(string Id, string Name, string Race, string Profession,
     int Hp, int MaxHp, int Speed, int Power, int Xp = 0, bool Captive = false,
     string Gender = "Male", int? EquippedItemId = null);
-public sealed record Enemy(string Id, int Hp, int Speed, int Power, int XpReward);
+public sealed record Enemy(string Id, int Hp, int Speed, int Power, int XpReward, int? LootItemId = null);
 public sealed record GameState(int Schema, Hero[] Party, Enemy Enemy, int Round = 0,
-    bool RewardGranted = false, string Quest = "none", uint RandomState = Dice.DefaultSeed);
+    bool RewardGranted = false, string Quest = "none", uint RandomState = Dice.DefaultSeed, ItemStack[]? Bag = null);
 public sealed record RoundResult(GameState State, string[] Events);
 
 public static class Game
@@ -21,7 +21,7 @@ public static class Game
         var party = Enumerable.Range(1, size).Select(i =>
             new Hero($"hero-{i}", i == 1 ? "Faerie Ninja" : $"Companion {i}",
                 i == 1 ? "Faerie" : "Human", "Ninja", 36, 36, 12-i, 7)).ToArray();
-        return new(SaveSchema, party, new("Training Sentinel", 32, 4, 3, 120));
+        return new(SaveSchema, party, new("Training Sentinel", 32, 4, 3, 120), Bag: []);
     }
 
     public static void Validate(GameState state)
@@ -29,7 +29,7 @@ public static class Game
         ArgumentNullException.ThrowIfNull(state);
         if (state.Schema != SaveSchema || state.Party is null || state.Enemy is null ||
             state.Party.Length is < 1 or > 8 || state.Round < 0 ||
-            state.Enemy.Hp < 0 || state.Enemy.Power < 0 || state.Enemy.Speed < 0 || state.Enemy.XpReward < 0 ||
+            state.Enemy.Hp < 0 || state.Enemy.Power < 0 || state.Enemy.Speed < 0 || state.Enemy.XpReward < 0 || state.Enemy.LootItemId < 0 ||
             string.IsNullOrWhiteSpace(state.Enemy.Id) || state.Quest is not ("none" or "captive" or "escaped"))
             throw new InvalidDataException("Invalid save state");
         var ids = new HashSet<string>();
@@ -40,6 +40,10 @@ public static class Game
                 throw new InvalidDataException("Invalid party member");
         if (state.RewardGranted && state.Enemy.Hp != 0)
             throw new InvalidDataException("Reward before victory");
+        var itemIds = new HashSet<int>();
+        foreach (var stack in state.Bag ?? [])
+            if (stack is null || stack.ItemId < 0 || stack.Count <= 0 || !itemIds.Add(stack.ItemId))
+                throw new InvalidDataException("Invalid party bag");
     }
 
     public static RoundResult Attack(GameState state, ItemCatalog? catalog = null)
@@ -105,8 +109,14 @@ public static class Game
                 events.Add($"Victory. {enemy.XpReward} XP divided between {eligible.Length} survivors.");
             }
         }
-        return new(state with { Party = heroes, Enemy = enemy, Round = checked(state.Round+1), RewardGranted = granted,
-            RandomState = randomState }, events.ToArray());
+        var result = state with { Party = heroes, Enemy = enemy, Round = checked(state.Round+1), RewardGranted = granted,
+            RandomState = randomState };
+        if (granted && !state.RewardGranted && enemy.LootItemId.HasValue)
+        {
+            result = Inventory.Add(result,enemy.LootItemId.Value,1,catalog!);
+            events.Add($"Loot: {catalog!.Find(enemy.LootItemId.Value).Name} ×1 added to the party bag.");
+        }
+        return new(result, events.ToArray());
     }
 
     // A regression fixture for the solo captivity softlock, not a canonical Crock quest implementation.

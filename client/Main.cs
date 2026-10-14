@@ -40,6 +40,7 @@ public partial class Main : Node3D
         BuildRoom();
         BuildUi();
         LoadCatalog();
+        _state=CreateExpedition(1);
         Refresh();
         _ready=true;
         if(!OS.GetCmdlineUserArgs().Contains("--smoke") && !OS.GetCmdlineUserArgs().Contains("--mobile-smoke") && Godot.FileAccess.FileExists(AutoSavePath))
@@ -49,6 +50,16 @@ public partial class Main : Node3D
         if (OS.GetCmdlineUserArgs().Contains("--smoke")) CallDeferred(nameof(Smoke));
         if (OS.GetCmdlineUserArgs().Contains("--mobile-smoke")) Callable.From(MobileSmoke).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--items")) Callable.From(ShowItems).CallDeferred();
+    }
+
+    private GameState CreateExpedition(int size)
+    {
+        var state=Game.Create(size);
+        if(_catalog is null)return state;
+        var starter=_catalog.Items.OrderBy(i=>i.Id).Where(i=>Equipment.Denial(state.Party[0],i) is null).Take(2).ToArray();
+        foreach(var item in starter) state=Inventory.Add(state,item.Id,1,_catalog);
+        if(starter.Length>0)state=state with { Enemy=state.Enemy with { LootItemId=starter[^1].Id } };
+        return state;
     }
 
     private void LoadCatalog()
@@ -151,7 +162,7 @@ public partial class Main : Node3D
         _partyPanel=Panel(_ui,Vector2.Zero,new(220,400));
         var column=new VBoxContainer();_partyPanel.AddChild(column);
         _size=new OptionButton { CustomMinimumSize=new(0,_touchMode?52:36) };for(int i=1;i<=8;i++)_size.AddItem($"{i} adventurer{(i==1?"":"s")}");column.AddChild(_size);
-        Button(column,"New party",()=>{_state=Game.Create(_size.Selected+1);_player.Position=new(0,0.9f,2);Refresh();Say("New expedition.");});
+        Button(column,"New party",()=>{_state=CreateExpedition(_size.Selected+1);_player.Position=new(0,0.9f,2);Refresh();Say("New expedition with a limited test starter bag.");});
         var scroll=new ScrollContainer { CustomMinimumSize=new(180,80),SizeFlagsVertical=Control.SizeFlags.ExpandFill };column.AddChild(scroll);
         _heroes=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };scroll.AddChild(_heroes);
         _quest=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart };column.AddChild(_quest);
@@ -263,7 +274,7 @@ public partial class Main : Node3D
     {
         if (_catalog is null) { Say("Import your installation's item catalog using the README to open original items."); return; }
         Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
-        var dialog=new AcceptDialog { Title="Items — test equipment", Size=new(920,620),Unresizable=true,WrapControls=false };
+        var dialog=new AcceptDialog { Title="Party inventory", Size=new(920,620),Unresizable=true,WrapControls=false };
         AddChild(dialog);
         dialog.Confirmed+=dialog.QueueFree; dialog.CloseRequested+=dialog.QueueFree;dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var layout=new VBoxContainer(); dialog.AddChild(layout);
@@ -272,32 +283,42 @@ public partial class Main : Node3D
         bool narrow=dialogSize.X<740;
         layout.Position=new(12,12);layout.Size=new(dialogSize.X-24,dialogSize.Y-64);
         var search=new LineEdit { PlaceholderText="Search item name" };layout.AddChild(search);
+        var browse=new CheckButton { Text="Browse full catalog" };layout.AddChild(browse);
         var hero=new OptionButton();foreach(var h in _state.Party)hero.AddItem(h.Name);layout.AddChild(hero);
         BoxContainer row=narrow ? new VBoxContainer() : new HBoxContainer();row.SizeFlagsVertical=Control.SizeFlags.ExpandFill;layout.AddChild(row);
         var list=new ItemList { CustomMinimumSize=new(narrow?0:Math.Min(360,dialogSize.X*0.4f),narrow?120:180),SizeFlagsVertical=Control.SizeFlags.ExpandFill,AutoHeight=false };row.AddChild(list);
         var detailColumn=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };row.AddChild(detailColumn);
         var detail=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(narrow?0:Math.Max(220,dialogSize.X-410),narrow?100:180) };detailColumn.AddChild(detail);
-        var assign=new Godot.Button { Text="Assign test melee weapon",Disabled=true };detailColumn.AddChild(assign);
-        detailColumn.AddChild(new Label { Text="Imported data; experimental battle rules.\nOwnership and curses are pending." });
+        var assign=new Godot.Button { Text="Equip from party bag",Disabled=true };detailColumn.AddChild(assign);
+        var remove=new Godot.Button { Text="Return weapon to bag",Disabled=true };detailColumn.AddChild(remove);
+        detailColumn.AddChild(new Label { Text="Shared bag; one equipped copy per hero.\nCurse effects and removal magic are pending." });
         ItemDefinition[] shown=[];
         ItemDefinition? selected=null;
         void Details()
         {
-            if(selected is null) { detail.Text="Choose an item.";assign.Disabled=true;return; }
             var h=_state.Party[hero.Selected];
+            remove.Disabled=!h.EquippedItemId.HasValue || h.Captive || h.Hp==0;
+            if(selected is null) { detail.Text="Choose an item.";assign.Disabled=true;return; }
             var reason=Equipment.Denial(h,selected);
-            detail.Text=$"{selected.Name}  [ID {selected.Id}]\n\n{selected.DamageDescription}\nInitiative {selected.Initiative:+0;-0;0} · To hit {selected.ToHit:+0;-0;0}\nWeight {selected.WeightTenthsLb/10m} lb\nCursed: {selected.Cursed}\n\n{(reason ?? "Race, profession and gender permit this weapon.")}\n\nSource: {_catalog.Provenance.File}";
-            assign.Disabled=reason is not null || h.Captive || h.Hp==0;
+            int count=Inventory.Count(_state,selected.Id);
+            detail.Text=$"{selected.Name}  [ID {selected.Id}]\nIn bag: {count} · Equipped: {_state.Party.Count(p=>p.EquippedItemId==selected.Id)}\n\n{selected.DamageDescription}\nInitiative {selected.Initiative:+0;-0;0} · To hit {selected.ToHit:+0;-0;0}\nWeight {selected.WeightTenthsLb/10m} lb\nCursed: {selected.Cursed}\n\n{(reason ?? (count==0 ? "No spare copy in the party bag." : "Available to equip."))}\n\nSource: {_catalog.Provenance.File}";
+            assign.Disabled=reason is not null || h.Captive || h.Hp==0 || count==0 || h.EquippedItemId==selected.Id;
         }
         void Filter(string term)
         {
-            shown=_catalog.Items.Where(i=>i.Name.Contains(term,StringComparison.OrdinalIgnoreCase)).ToArray();
-            list.Clear();foreach(var i in shown)list.AddItem($"{i.Id}: {i.Name}");selected=null;Details();
+            int? selectedId=selected?.Id;
+            shown=_catalog.Items.Where(i=>(browse.ButtonPressed || Inventory.Count(_state,i.Id)>0 || _state.Party.Any(h=>h.EquippedItemId==i.Id)) && i.Name.Contains(term,StringComparison.OrdinalIgnoreCase)).ToArray();
+            list.Clear();foreach(var i in shown)list.AddItem($"{i.Name} · bag {Inventory.Count(_state,i.Id)} · worn {_state.Party.Count(h=>h.EquippedItemId==i.Id)}");
+            selected=shown.FirstOrDefault(i=>i.Id==selectedId);
+            if(selected is not null)list.Select(Array.IndexOf(shown,selected));
+            Details();
         }
         search.TextChanged+=Filter;
+        browse.Toggled+=_=>Filter(search.Text);
         list.ItemSelected+=(long i)=>{selected=shown[(int)i];Details();};
         hero.ItemSelected+=(long _) => Details();
-        assign.Pressed+=()=>Try(()=>{if(selected is null)return;_state=Equipment.Equip(_state,_state.Party[hero.Selected].Id,selected.Id,_catalog);Refresh();Say($"Assigned {selected.Name}: damage dice and initiative active. Combat is experimental.");Details();});
+        assign.Pressed+=()=>Try(()=>{if(selected is null)return;_state=Equipment.Equip(_state,_state.Party[hero.Selected].Id,selected.Id,_catalog);Refresh();Say($"Equipped {selected.Name} from the party bag.");Filter(search.Text);});
+        remove.Pressed+=()=>Try(()=>{_state=Equipment.Unequip(_state,_state.Party[hero.Selected].Id,_catalog);Refresh();Say("Weapon returned to the party bag.");Filter(search.Text);});
         Filter("");dialog.PopupCentered(dialogSize);
     }
 
@@ -344,7 +365,7 @@ public partial class Main : Node3D
             _Input(new InputEventScreenDrag { Index=1,Position=view+new Vector2(30,0),Relative=new(30,0) });
             var before=_player.Rotation.Y;_PhysicsProcess(1.0/60);
             if(_player.Rotation.Y==before)throw new Exception("Touch look failed");
-            _state=Game.Attack(_state).State;var saved=Game.Save(_state);
+            _state=Game.Attack(_state,_catalog).State;var saved=Game.Save(_state);
             _Notification((int)NotificationApplicationPaused);
             if(_touchInput.MovePointer is not null || _touchInput.LookPointer is not null)throw new Exception("Pause left stuck gesture");
             _state=Game.Create(8);LoadFrom(AutoSavePath);
@@ -373,6 +394,7 @@ public partial class Main : Node3D
                     _catalog.Items.FirstOrDefault(i=>Equipment.Denial(_state.Party[0],i) is null);
                 if(cane is null) throw new Exception("Smoke catalog has no eligible melee weapon");
                 {
+                    if(Inventory.Count(_state,cane.Id)==0)_state=Inventory.Add(_state,cane.Id,1,_catalog);
                     _state=Equipment.Equip(_state,_state.Party[0].Id,cane.Id,_catalog); Save(); _state=Game.Create(8); Load();
                     if(_state.Party[0].EquippedItemId!=cane.Id) throw new Exception("Imported equipment save/load failed");
                     var expected=Game.Save(Game.Attack(_state,_catalog).State);
@@ -381,6 +403,9 @@ public partial class Main : Node3D
                     Save(); var continuation=Game.Save(Game.Attack(_state,_catalog).State);
                     _state=Game.Create(8); Load();
                     if(Game.Save(Game.Attack(_state,_catalog).State)!=continuation) throw new Exception("Weapon roll continuation failed");
+                    int copies=Inventory.Count(_state,cane.Id);
+                    _state=Equipment.Unequip(_state,_state.Party[0].Id,_catalog);Save();Load();
+                    if(_state.Party[0].EquippedItemId.HasValue || Inventory.Count(_state,cane.Id)!=copies+1)throw new Exception("Inventory unequip/save failed");
                     GD.Print($"PASS: imported catalog {_catalog.Count}, equipment and save binding");
                 }
             }
