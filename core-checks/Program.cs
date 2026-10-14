@@ -69,7 +69,7 @@ foreach(var member in oldSave["Party"]!.AsArray()) { member!.AsObject().Remove("
 var migrated=Game.Load(oldSave.ToJsonString());
 Check(migrated.Party[0].Gender=="Male" && migrated.Party[0].EquippedItemId is null,"Iteration-001 saves remain readable");
 if(args.Length==2 && args[0]=="--fixture")
-    File.WriteAllText(args[1],snakeJson);
+    File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with { Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256) },new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
 else if(args.Length>0)
 {
     var real=ItemCatalog.Parse(File.ReadAllText(args[0]));
@@ -80,3 +80,17 @@ else if(args.Length>0)
     Console.WriteLine($"PASS: real imported item catalog ({real.Count} records)");
 }
 Console.WriteLine($"PASS: {checks} core checks");
+var touch=new NeoWizardry.Input.MobileControls();
+var origin=System.Numerics.Vector2.Zero;
+Check(touch.Press(0,origin,true,false,origin),"Move pointer claimed");
+touch.Drag(0,new(0,-60),new(0,-60));Check(touch.Movement.Y < -0.99f,"Stick forward");
+Check(touch.Press(1,new(200,0),false,true,origin),"Independent look pointer");
+touch.Drag(1,new(230,10),new(30,10));Check(touch.ConsumeLook()==new System.Numerics.Vector2(30,10),"Look delta queued once");
+Check(touch.ConsumeLook()==origin,"Look delta consumed");
+Check(!touch.Press(2,origin,true,false,origin),"Third pointer cannot steal stick");
+touch.Release(1);Check(touch.Movement.Y < -0.99f,"Look release preserves movement");
+touch.Release(0);Check(touch.Movement==origin,"Release stops movement");
+Check(!touch.Press(3,origin,false,false,origin),"UI touch is not claimed");
+touch.Press(0,origin,true,false,origin);touch.Drag(0,new(1000,1000),origin);Check(touch.Movement.Length()<=1.001f,"Stick magnitude clamped");
+touch.Reset();Check(touch.MovePointer is null && touch.LookPointer is null && touch.Movement==origin,"Background resets ownership");
+Console.WriteLine($"PASS: {checks} checks including mobile gestures");

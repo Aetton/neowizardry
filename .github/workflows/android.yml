@@ -1,0 +1,50 @@
+name: Android prototype APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare Android tools
+        run: |
+          dotnet workload install android
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Get Godot .NET and Android templates
+        run: |
+          curl -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_mono_linux_x86_64.zip -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          curl -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_mono_export_templates.tpz -o /tmp/templates.tpz
+          unzip -q /tmp/templates.tpz 'templates/android_debug.apk' 'templates/android_release.apk' -d /tmp/neo-templates
+          executable=/tmp/godot/Godot_v4.5.1-stable_mono_linux_x86_64/Godot_v4.5.1-stable_mono_linux.x86_64
+          chmod +x "$executable"
+          echo "GODOT=$executable" >> "$GITHUB_ENV"
+      - name: Package synthetic demonstration data
+        run: dotnet run --project core-checks -- --fixture client/demo-items.json
+      - name: Configure and export debug APK
+        run: |
+          mkdir -p build "$HOME/.config/godot"
+          keytool -genkeypair -keystore /tmp/neo-debug.keystore -storepass android -keypass android -alias androiddebugkey -dname "CN=Android Debug,O=NeoWizardry,C=US" -keyalg RSA -validity 10000
+          python3 tools/configure_android.py --java "$JAVA_HOME" --sdk "$ANDROID_HOME" --templates /tmp/neo-templates/templates --keystore /tmp/neo-debug.keystore
+          dotnet build client/NeoWizardry.csproj
+          "$GODOT" --headless --editor --path client --import
+          "$GODOT" --headless --path client --export-debug Android ../build/neowizardry-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose build/neowizardry-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neowizardry-android-debug
+          path: build/neowizardry-debug.apk
+          if-no-files-found: error
+          retention-days: 14

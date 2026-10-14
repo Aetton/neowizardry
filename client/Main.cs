@@ -14,6 +14,20 @@ public partial class Main : Node3D
     private Label _quest = null!;
     private OptionButton _size = null!;
     private float _pitch;
+    private readonly NeoWizardry.Input.MobileControls _touchInput=new();
+    private bool _touchMode;
+    private bool _compact;
+    private bool _ready;
+    private bool _paused;
+    private int _dialogs;
+    private Control _ui=null!;
+    private PanelContainer _partyPanel=null!, _logPanel=null!, _actionsPanel=null!;
+    private GridContainer _actions=null!;
+    private TouchPad _pad=null!;
+    private Button _partyToggle=null!, _logToggle=null!;
+    private Label _title=null!;
+    private Rect2 _lookRect;
+    private const string AutoSavePath="user://prototype-autosave.json";
     private ItemCatalog? _catalog;
     private bool _catalogRequested;
     private readonly Vector3 _enemyPosition = new(0, 1, -7);
@@ -22,13 +36,18 @@ public partial class Main : Node3D
 
     public override void _Ready()
     {
+        _touchMode=OS.HasFeature("mobile") || OS.GetCmdlineUserArgs().Contains("--touch");
         BuildRoom();
         BuildUi();
         LoadCatalog();
         Refresh();
+        _ready=true;
+        if(!OS.GetCmdlineUserArgs().Contains("--smoke") && !OS.GetCmdlineUserArgs().Contains("--mobile-smoke") && Godot.FileAccess.FileExists(AutoSavePath))
+            Try(()=>LoadFrom(AutoSavePath));
         Say("Technical slice. Synthetic room, sentinel and dialogue; combat rules are experimental.");
-        Say("WASD — move · right mouse — look · Esc — release cursor · approach the sentinel to attack.");
+        Say(_touchMode ? "Left pad — move · swipe the view — look · approach the sentinel to attack." : "WASD — move · right mouse — look · Esc — release cursor.");
         if (OS.GetCmdlineUserArgs().Contains("--smoke")) CallDeferred(nameof(Smoke));
+        if (OS.GetCmdlineUserArgs().Contains("--mobile-smoke")) Callable.From(MobileSmoke).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--items")) Callable.From(ShowItems).CallDeferred();
     }
 
@@ -37,17 +56,30 @@ public partial class Main : Node3D
         var args = OS.GetCmdlineUserArgs();
         int index = Array.IndexOf(args,"--catalog");
         _catalogRequested=index>=0;
-        string project = ProjectSettings.GlobalizePath("res://").TrimEnd('/', '\\');
-        string root = Directory.GetParent(project)!.FullName;
-        string? path = index>=0 && index+1<args.Length ? args[index+1] : null;
+        string? path=index>=0 && index+1<args.Length ? args[index+1] : null;
         if(_catalogRequested && path is null) { Say("No item catalog path selected.");return; }
-        if (path is null)
+        if(path is null)
         {
-            path = Path.Combine(root,"local","items.json");
+            if(Godot.FileAccess.FileExists("user://items.json"))path="user://items.json";
+            else if(Godot.FileAccess.FileExists("res://demo-items.json"))path="res://demo-items.json";
+            else if(OS.HasFeature("mobile")) { Say("No original item catalog loaded.");return; }
+            else
+            {
+                string project=ProjectSettings.GlobalizePath("res://").TrimEnd('/', '\\');
+                path=Path.Combine(Directory.GetParent(project)!.FullName,"local","items.json");
+            }
         }
-        if(!Path.IsPathRooted(path))path=Path.GetFullPath(path,root);
-        if (!System.IO.File.Exists(path)) { Say("No original item catalog loaded. The scene still works with test rules."); return; }
-        Try(() => { _catalog=ItemCatalog.Parse(System.IO.File.ReadAllText(path)); Say($"Loaded {_catalog.Count} original items from {_catalog.Provenance.File}."); });
+        if(path.StartsWith("user://") || path.StartsWith("res://"))
+        {
+            Try(()=>{_catalog=ItemCatalog.Parse(Godot.FileAccess.GetFileAsString(path));Say($"Loaded {_catalog.Count} items.");});return;
+        }
+        if(!Path.IsPathRooted(path))
+        {
+            string project=ProjectSettings.GlobalizePath("res://").TrimEnd('/', '\\');
+            path=Path.GetFullPath(path,Directory.GetParent(project)!.FullName);
+        }
+        if(!System.IO.File.Exists(path)) { Say("No original item catalog loaded. The scene still works with test rules.");return; }
+        Try(()=>{_catalog=ItemCatalog.Parse(System.IO.File.ReadAllText(path));Say($"Loaded {_catalog.Count} items from {_catalog.Provenance.File}.");});
     }
 
     private StandardMaterial3D Material(Color color) => new() { AlbedoColor = color, Roughness = 0.92f };
@@ -111,35 +143,66 @@ public partial class Main : Node3D
 
     private void BuildUi()
     {
-        var layer = new CanvasLayer(); AddChild(layer);
-        var ui = new Control(); ui.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect); ui.MouseFilter = Control.MouseFilterEnum.Ignore; layer.AddChild(ui);
-        var title = new Label { Text = "NEOWIZARDRY  /  FIRST INCISION", Position = new(28,16) }; title.AddThemeFontSizeOverride("font_size",24); ui.AddChild(title);
-        var left = Panel(ui,new(20,66),new(224,600));
-        var column = new VBoxContainer(); left.AddChild(column);
-        column.AddChild(new Label { Text = "PARTY" });
-        _size = new OptionButton(); for (int i=1; i<=8; i++) _size.AddItem($"{i} adventurer{(i==1 ? "" : "s")}"); column.AddChild(_size);
-        Button(column,"New party",() => { _state=Game.Create(_size.Selected+1); _player.Position=new(0,0.9f,2); Refresh(); Say("New expedition."); });
-        var scroll = new ScrollContainer { CustomMinimumSize = new(190,380), SizeFlagsVertical = Control.SizeFlags.ExpandFill };
-        column.AddChild(scroll);
-        _heroes = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; scroll.AddChild(_heroes);
-        _quest = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart }; column.AddChild(_quest);
-        var right = Panel(ui,new(958,66),new(302,600));
-        var rc = new VBoxContainer(); right.AddChild(rc);
-        _enemy = new Label(); rc.AddChild(_enemy);
-        _log = new RichTextLabel { CustomMinimumSize = new(270,510), ScrollFollowing = true, SizeFlagsVertical = Control.SizeFlags.ExpandFill }; rc.AddChild(_log);
-        var bottom = Panel(ui,new(20,686),new(1240,94));
-        var buttons = new HBoxContainer(); buttons.AddThemeConstantOverride("separation",10); bottom.AddChild(buttons);
-        Button(buttons,"Attack / next round",Attack);
-        Button(buttons,"Keeper: monastery",() => Say("Test keeper: This is a synthetic corridor. The real monastery importer is still being researched."));
-        Button(buttons,"Items",ShowItems);
-        Button(buttons,"Save",Save);
-        Button(buttons,"Load",Load);
-        Button(buttons,"Test captivity",() => Try(() => { _state=Game.CaptureFirst(_state); Refresh(); Say("Captured. Self-escape remains available even for a solo hero."); }));
-        Button(buttons,"Escape",() => Try(() => { _state=Game.Escape(_state); Refresh(); Say("Escaped without hiring another hero."); }));
+        var layer=new CanvasLayer();AddChild(layer);
+        _ui=new Control { MouseFilter=Control.MouseFilterEnum.Ignore };layer.AddChild(_ui);_ui.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _title=new Label { Text="NEOWIZARDRY",MouseFilter=Control.MouseFilterEnum.Ignore };_title.AddThemeFontSizeOverride("font_size",22);_ui.AddChild(_title);
+        _partyToggle=Button(_ui,"Party",()=>{_partyPanel.Visible=!_partyPanel.Visible;_touchInput.Reset();});
+        _logToggle=Button(_ui,"Log",()=>{_logPanel.Visible=!_logPanel.Visible;_touchInput.Reset();});
+        _partyPanel=Panel(_ui,Vector2.Zero,new(220,400));
+        var column=new VBoxContainer();_partyPanel.AddChild(column);
+        _size=new OptionButton { CustomMinimumSize=new(0,_touchMode?52:36) };for(int i=1;i<=8;i++)_size.AddItem($"{i} adventurer{(i==1?"":"s")}");column.AddChild(_size);
+        Button(column,"New party",()=>{_state=Game.Create(_size.Selected+1);_player.Position=new(0,0.9f,2);Refresh();Say("New expedition.");});
+        var scroll=new ScrollContainer { CustomMinimumSize=new(180,80),SizeFlagsVertical=Control.SizeFlags.ExpandFill };column.AddChild(scroll);
+        _heroes=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };scroll.AddChild(_heroes);
+        _quest=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart };column.AddChild(_quest);
+        _logPanel=Panel(_ui,Vector2.Zero,new(250,400));var rc=new VBoxContainer();_logPanel.AddChild(rc);
+        _enemy=new Label();rc.AddChild(_enemy);
+        _log=new RichTextLabel { CustomMinimumSize=new(200,80),ScrollFollowing=true,SizeFlagsVertical=Control.SizeFlags.ExpandFill };rc.AddChild(_log);
+        _actionsPanel=Panel(_ui,Vector2.Zero,new(900,80));_actions=new GridContainer();_actions.AddThemeConstantOverride("h_separation",8);_actions.AddThemeConstantOverride("v_separation",8);_actionsPanel.AddChild(_actions);
+        Button(_actions,"Attack",Attack);Button(_actions,"Items",ShowItems);Button(_actions,"Save",Save);Button(_actions,"Load",Load);
+        Button(_actions,"Keeper",()=>Say("Test keeper: The real monastery is still being researched."));
+        Button(_actions,"Capture test",()=>Try(()=>{_state=Game.CaptureFirst(_state);Refresh();_touchInput.Reset();}));
+        Button(_actions,"Escape",()=>Try(()=>{_state=Game.Escape(_state);Refresh();}));
+        _pad=new TouchPad { MouseFilter=Control.MouseFilterEnum.Ignore };_ui.AddChild(_pad);
+        GetViewport().SizeChanged+=LayoutUi;LayoutUi();
     }
-
-    private void Button(Control parent, string text, Action action)
-    { var b=new Godot.Button { Text=text }; b.Pressed += action; parent.AddChild(b); }
+    private Button Button(Control parent,string text,Action action)
+    {
+        var button=new Button { Text=text,CustomMinimumSize=new(0,_touchMode?56:40),SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };
+        button.Pressed+=action;parent.AddChild(button);return button;
+    }
+    private void LayoutUi()
+    {
+        var size=GetViewport().GetVisibleRect().Size;
+        var bounds=new Rect2(new Vector2(10,10),size-new Vector2(20,20));
+        if(OS.HasFeature("mobile"))
+        {
+            var safe=DisplayServer.GetDisplaySafeArea();var pixels=GetWindow().Size;
+            if(pixels.X>0 && pixels.Y>0 && safe.Size.X>0 && safe.Size.Y>0)
+            {
+                var factor=new Vector2(size.X/pixels.X,size.Y/pixels.Y);
+                bounds=new Rect2((Vector2)safe.Position*factor+new Vector2(10,10),(Vector2)safe.Size*factor-new Vector2(20,20));
+            }
+        }
+        bool compact=_touchMode || bounds.Size.X<900;
+        if(compact!=_compact) { _partyPanel.Visible=!compact;_logPanel.Visible=!compact;_compact=compact; }
+        _partyToggle.Visible=compact;_logToggle.Visible=compact;
+        _title.Position=bounds.Position+new Vector2(4,4);
+        _partyToggle.Position=new(bounds.End.X-180,bounds.Position.Y);_partyToggle.Size=new(84,_touchMode?52:40);
+        _logToggle.Position=new(bounds.End.X-88,bounds.Position.Y);_logToggle.Size=new(84,_touchMode?52:40);
+        int columns=Math.Max(3,Math.Min(7,(int)(bounds.Size.X/135)));
+        _actions.Columns=columns;
+        int rows=(7+columns-1)/columns;
+        float actionHeight=rows*(_touchMode?56:40)+(rows-1)*8+28;
+        _actionsPanel.Position=new(bounds.Position.X,bounds.End.Y-actionHeight);_actionsPanel.Size=new(bounds.Size.X,actionHeight);
+        float top=bounds.Position.Y+(_touchMode?62:50);
+        float height=Math.Max(160,_actionsPanel.Position.Y-top-10);
+        _partyPanel.Position=new(bounds.Position.X,top);_partyPanel.Size=new(220,height);
+        _logPanel.Position=new(bounds.End.X-250,top);_logPanel.Size=new(250,height);
+        _pad.Visible=_touchMode;_pad.Position=new(bounds.Position.X+8,_actionsPanel.Position.Y-154);_pad.Size=new(144,144);
+        _lookRect=new Rect2(new(bounds.Position.X,top),new(bounds.Size.X,Math.Max(0,_actionsPanel.Position.Y-top)));
+        if(!_compact) _lookRect=new Rect2(new(bounds.Position.X+230,top),new(Math.Max(0,bounds.Size.X-490),Math.Max(0,height)));
+    }
     private void Try(Action action) { try { action(); } catch (Exception e) { Say(e.Message); } }
     private void Say(string message) { _log.AppendText(message+"\n\n"); }
     private void Refresh()
@@ -160,40 +223,60 @@ public partial class Main : Node3D
         if (_player.Position.DistanceTo(_enemyPosition)>4.5f) { Say("Too far from the sentinel. Move closer."); return; }
         Try(() => { var r=Game.Attack(_state); _state=r.State; foreach(var e in r.Events) Say(e); Refresh(); });
     }
-    private void Save() => Try(() =>
+    private void Save() => Try(()=>{SaveTo(SavePath);Say("Saved.");});
+    private void SaveTo(string path)
     {
-        var s=new ClientSave(1,_state,_player.Position.X,_player.Position.Z,_player.Rotation.Y,_pitch,_catalog?.Provenance.Sha256);
-        using var file=Godot.FileAccess.Open(SavePath,Godot.FileAccess.ModeFlags.Write);
-        if(file is null) throw new IOException("Cannot open save");
-        file.StoreString(JsonSerializer.Serialize(s)); Say("Saved.");
-    });
-    private void Load() => Try(() =>
+        Game.Validate(_state);
+        var snapshot=new ClientSave(1,_state,_player.Position.X,_player.Position.Z,_player.Rotation.Y,_pitch,_catalog?.Provenance.Sha256);
+        string temporary=path+".tmp";
+        using(var file=Godot.FileAccess.Open(temporary,Godot.FileAccess.ModeFlags.Write))
+        {
+            if(file is null)throw new IOException("Cannot open save");
+            file.StoreString(JsonSerializer.Serialize(snapshot));file.Flush();
+            if(file.GetError()!=Error.Ok)throw new IOException("Cannot write save");
+        }
+        if(DirAccess.RenameAbsolute(temporary,path)!=Error.Ok)throw new IOException("Cannot commit save");
+    }
+    private void Load() => Try(()=>{LoadFrom(SavePath);Say("Loaded.");});
+    private void LoadFrom(string path)
     {
-        using var file=Godot.FileAccess.Open(SavePath,Godot.FileAccess.ModeFlags.Read);
-        if(file is null) throw new IOException("No saved expedition");
+        using var file=Godot.FileAccess.Open(path,Godot.FileAccess.ModeFlags.Read);
+        if(file is null)throw new IOException("No saved expedition");
         var s=JsonSerializer.Deserialize<ClientSave>(file.GetAsText()) ?? throw new IOException("Empty save");
-        Game.Validate(s.Game);
-        Equipment.ValidateLoadedEquipment(s.Game,_catalog,s.ItemDatabaseHash);
-        if(s.Schema!=1 || !float.IsFinite(s.X) || !float.IsFinite(s.Z) || !float.IsFinite(s.Yaw) || !float.IsFinite(s.Pitch) ||
-            Math.Abs(s.X)>5 || s.Z < -16 || s.Z>4 || Math.Abs(s.Pitch)>1.2f) throw new IOException("Invalid saved camera position");
-        _state=s.Game; _player.Position=new(s.X,0.9f,s.Z); _player.Rotation=new(0,s.Yaw,0); _pitch=s.Pitch; _camera.Rotation=new(_pitch,0,0); Refresh(); Say("Loaded.");
-    });
+        Game.Validate(s.Game);Equipment.ValidateLoadedEquipment(s.Game,_catalog,s.ItemDatabaseHash);
+        if(s.Schema!=1 || !float.IsFinite(s.X) || !float.IsFinite(s.Z) || !float.IsFinite(s.Yaw) || !float.IsFinite(s.Pitch) || Math.Abs(s.X)>5.3f || s.Z < -16.5f || s.Z>4.5f || Math.Abs(s.Pitch)>1.2f)
+            throw new IOException("Invalid saved camera position");
+        _state=s.Game;_player.Position=new(s.X,0.9f,s.Z);_player.Rotation=new(0,s.Yaw,0);_pitch=s.Pitch;_camera.Rotation=new(_pitch,0,0);_touchInput.Reset();Refresh();
+    }
+    public override void _Notification(int what)
+    {
+        if(!_ready)return;
+        if(what==NotificationApplicationPaused)
+        {
+            _paused=true;_touchInput.Reset();Input.MouseMode=Input.MouseModeEnum.Visible;
+            Try(()=>SaveTo(AutoSavePath));
+        }
+        if(what==NotificationApplicationResumed) { _paused=false;_touchInput.Reset(); }
+    }
 
     private void ShowItems()
     {
         if (_catalog is null) { Say("Import your installation's item catalog using the README to open original items."); return; }
-        Input.MouseMode=Input.MouseModeEnum.Visible;
-        var dialog=new AcceptDialog { Title="Original items — test equipment", Size=new(920,620),Unresizable=true,WrapControls=false };
+        Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
+        var dialog=new AcceptDialog { Title="Items — test equipment", Size=new(920,620),Unresizable=true,WrapControls=false };
         AddChild(dialog);
-        dialog.Confirmed+=dialog.QueueFree; dialog.CloseRequested+=dialog.QueueFree;
+        dialog.Confirmed+=dialog.QueueFree; dialog.CloseRequested+=dialog.QueueFree;dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var layout=new VBoxContainer(); dialog.AddChild(layout);
-        layout.Position=new(12,12);layout.Size=new(896,550);
+        var screen=GetViewport().GetVisibleRect().Size;
+        var dialogSize=new Vector2I((int)Math.Min(920,screen.X-32),(int)Math.Min(620,screen.Y-32));
+        bool narrow=dialogSize.X<740;
+        layout.Position=new(12,12);layout.Size=new(dialogSize.X-24,dialogSize.Y-64);
         var search=new LineEdit { PlaceholderText="Search item name" };layout.AddChild(search);
         var hero=new OptionButton();foreach(var h in _state.Party)hero.AddItem(h.Name);layout.AddChild(hero);
-        var row=new HBoxContainer { SizeFlagsVertical=Control.SizeFlags.ExpandFill };layout.AddChild(row);
-        var list=new ItemList { CustomMinimumSize=new(360,420),SizeFlagsVertical=Control.SizeFlags.ExpandFill,AutoHeight=false };row.AddChild(list);
+        BoxContainer row=narrow ? new VBoxContainer() : new HBoxContainer();row.SizeFlagsVertical=Control.SizeFlags.ExpandFill;layout.AddChild(row);
+        var list=new ItemList { CustomMinimumSize=new(narrow?0:Math.Min(360,dialogSize.X*0.4f),narrow?120:180),SizeFlagsVertical=Control.SizeFlags.ExpandFill,AutoHeight=false };row.AddChild(list);
         var detailColumn=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };row.AddChild(detailColumn);
-        var detail=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(460,300) };detailColumn.AddChild(detail);
+        var detail=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(narrow?0:Math.Max(220,dialogSize.X-410),narrow?100:180) };detailColumn.AddChild(detail);
         var assign=new Godot.Button { Text="Assign test melee weapon",Disabled=true };detailColumn.AddChild(assign);
         detailColumn.AddChild(new Label { Text="Imported data; experimental battle rules.\nOwnership and curses are pending." });
         ItemDefinition[] shown=[];
@@ -215,22 +298,61 @@ public partial class Main : Node3D
         list.ItemSelected+=(long i)=>{selected=shown[(int)i];Details();};
         hero.ItemSelected+=(long _) => Details();
         assign.Pressed+=()=>Try(()=>{if(selected is null)return;_state=Equipment.Equip(_state,_state.Party[hero.Selected].Id,selected.Id,_catalog);Refresh();Say($"Assigned {selected.Name}. Battle still uses experimental rules.");Details();});
-        Filter("");dialog.PopupCentered(new(920,620));
+        Filter("");dialog.PopupCentered(dialogSize);
     }
 
+    private static System.Numerics.Vector2 N(Vector2 value)=>new(value.X,value.Y);
+    public override void _Input(InputEvent e)
+    {
+        if(!_touchMode || _paused)return;
+        if(e is InputEventScreenTouch touch)
+        {
+            if(!touch.Pressed) { _touchInput.Release((int)touch.Index);return; }
+            if(_dialogs>0 || (_compact && (_partyPanel.Visible || _logPanel.Visible)))return;
+            var pad=_pad.GetGlobalRect();
+            _touchInput.Press((int)touch.Index,N(touch.Position),pad.HasPoint(touch.Position),_lookRect.HasPoint(touch.Position),N(pad.GetCenter()));
+        }
+        if(e is InputEventScreenDrag drag)_touchInput.Drag((int)drag.Index,N(drag.Position),N(drag.Relative));
+    }
     public override void _UnhandledInput(InputEvent e)
     {
-        if(e is InputEventMouseButton b && b.ButtonIndex==MouseButton.Right) Input.MouseMode=b.Pressed ? Input.MouseModeEnum.Captured : Input.MouseModeEnum.Visible;
-        if(e is InputEventKey k && k.Pressed && k.Keycode==Key.Escape) Input.MouseMode=Input.MouseModeEnum.Visible;
-        if(e is InputEventMouseMotion m && Input.MouseMode==Input.MouseModeEnum.Captured)
-        { _player.RotateY(-m.Relative.X*0.003f); _pitch=Math.Clamp(_pitch-m.Relative.Y*0.003f,-1.2f,1.2f); _camera.Rotation=new(_pitch,0,0); }
+        if(e is InputEventMouseButton b && b.ButtonIndex==MouseButton.Right && !_touchMode)Input.MouseMode=b.Pressed?Input.MouseModeEnum.Captured:Input.MouseModeEnum.Visible;
+        if(e is InputEventKey k && k.Pressed && k.Keycode==Key.Escape)Input.MouseMode=Input.MouseModeEnum.Visible;
+        if(e is InputEventMouseMotion m && Input.MouseMode==Input.MouseModeEnum.Captured)Look(m.Relative,0.003f);
     }
+    private void Look(Vector2 relative,float sensitivity)
+    { _player.RotateY(-relative.X*sensitivity);_pitch=Math.Clamp(_pitch-relative.Y*sensitivity,-1.2f,1.2f);_camera.Rotation=new(_pitch,0,0); }
     public override void _PhysicsProcess(double delta)
     {
-        if(!_state.Party.Any(h => h.Hp>0 && !h.Captive)) { _player.Velocity=Vector3.Zero; return; }
-        var d=new Vector3((Input.IsPhysicalKeyPressed(Key.D)?1:0)-(Input.IsPhysicalKeyPressed(Key.A)?1:0),0,
-            (Input.IsPhysicalKeyPressed(Key.S)?1:0)-(Input.IsPhysicalKeyPressed(Key.W)?1:0));
-        d=_player.Transform.Basis*d.Normalized(); _player.Velocity=new(d.X*3,-2,d.Z*3); _player.MoveAndSlide();
+        if(!_ready)return;
+        var look=_touchInput.ConsumeLook();if(!_paused && _dialogs==0)Look(new(look.X,look.Y),0.004f);
+        _pad.Stick=new(_touchInput.Movement.X,_touchInput.Movement.Y);_pad.QueueRedraw();
+        if(_paused || _dialogs>0 || !_state.Party.Any(h=>h.Hp>0 && !h.Captive)) { _player.Velocity=Vector3.Zero;return; }
+        var d=new Vector3((Input.IsPhysicalKeyPressed(Key.D)?1:0)-(Input.IsPhysicalKeyPressed(Key.A)?1:0)+_touchInput.Movement.X,0,
+            (Input.IsPhysicalKeyPressed(Key.S)?1:0)-(Input.IsPhysicalKeyPressed(Key.W)?1:0)+_touchInput.Movement.Y);
+        if(d.Length()>1)d=d.Normalized();d=_player.Transform.Basis*d;_player.Velocity=new(d.X*3,-2,d.Z*3);_player.MoveAndSlide();
+    }
+    public void MobileSmoke()
+    {
+        try
+        {
+            var pad=_pad.GetGlobalRect();var center=pad.GetCenter();
+            _Input(new InputEventScreenTouch { Index=0,Pressed=true,Position=center });
+            _Input(new InputEventScreenDrag { Index=0,Position=center+new Vector2(0,-60),Relative=new(0,-60) });
+            if(_touchInput.Movement.Y>=-0.9f)throw new Exception("Touch movement failed");
+            var view=_lookRect.GetCenter();_Input(new InputEventScreenTouch { Index=1,Pressed=true,Position=view });
+            _Input(new InputEventScreenDrag { Index=1,Position=view+new Vector2(30,0),Relative=new(30,0) });
+            var before=_player.Rotation.Y;_PhysicsProcess(1.0/60);
+            if(_player.Rotation.Y==before)throw new Exception("Touch look failed");
+            _state=Game.Attack(_state).State;var saved=Game.Save(_state);
+            _Notification((int)NotificationApplicationPaused);
+            if(_touchInput.MovePointer is not null || _touchInput.LookPointer is not null)throw new Exception("Pause left stuck gesture");
+            _state=Game.Create(8);LoadFrom(AutoSavePath);
+            if(Game.Save(_state)!=saved)throw new Exception("Background autosave failed");
+            _Notification((int)NotificationApplicationResumed);
+            GD.Print("PASS: multitouch movement/look, pause reset, atomic autosave and restore");GetTree().Quit();
+        }
+        catch(Exception e) { GD.PushError(e.ToString());GetTree().Quit(1); }
     }
 
     public void Smoke()

@@ -11,3 +11,6 @@ imported/
 *.DBS
 *.SAV
 *.CHR
+build/
+client/demo-items.json
+*.keystore

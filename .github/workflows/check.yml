@@ -22,3 +22,4 @@ jobs:
           executable=/tmp/godot/Godot_v4.5.1-stable_mono_linux_x86_64/Godot_v4.5.1-stable_mono_linux.x86_64
           chmod +x "$executable"
           timeout 60s "$executable" --headless --path client -- --smoke --catalog "$RUNNER_TEMP/neo-test-items.json"
+          timeout 60s "$executable" --headless --path client -- --touch --mobile-smoke --catalog "$RUNNER_TEMP/neo-test-items.json"
