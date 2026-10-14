@@ -32,4 +32,17 @@ Throws(() => Game.Escape(solo), "Escape requires capture");
 var fast = solo with { Party = [solo.Party[0] with { Speed = 0, Hp = 1 }] };
 var dead = Game.Attack(fast).State;
 Check(dead.Party[0].Hp == 0 && dead.Enemy.Hp == 32, "Dead actor cannot execute queued attack");
+// These validate the published model and reported level breakpoints, not the original executable.
+foreach (var (multiplier, lower, upper) in new[] { (4,18,19), (3,24,26), (2,37,38) })
+{
+    Check(LegacyResearch.SingleClassAttackScore(125,125,100,100,lower,multiplier)<600, "Candidate score below breakpoint");
+    Check(LegacyResearch.SingleClassAttackScore(125,125,100,100,upper,multiplier)>600, "Candidate score above breakpoint");
+}
+Check(LegacyResearch.SingleClassAttackScore(125,125,100,100,25,3)==599.9999m,
+    "Published decimal approximation straddles reported level-25 threshold");
+Check(LegacyResearch.SingleClassAttackScore(125,125,100,125,14,4)<600, "Primary weapon candidate below breakpoint");
+Check(LegacyResearch.SingleClassAttackScore(125,125,100,125,15,4)>600, "Primary weapon candidate above breakpoint");
+Throws(() => LegacyResearch.SingleClassAttackScore(126,0,0,0,1,4), "Reject uncapped effective attributes");
+Throws(() => LegacyResearch.SingleClassAttackScore(0,0,0,0,0,4), "Reject invalid level");
+Throws(() => LegacyResearch.SingleClassAttackScore(0,0,0,0,1,5), "Reject unknown profession coefficient");
 Console.WriteLine($"PASS: {checks} core checks");

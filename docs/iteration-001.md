@@ -14,10 +14,11 @@ Repository: https://github.com/Aetton/neowizardry
 ## Validation
 
 - Python: 8 tests passed.
-- .NET core: 63 checks passed, covering 1–8 parties, state isolation, repeatable rounds, XP conservation, duplicate reward prevention, death before queued action, schema validation and solo escape.
+- .NET core: 75 checks passed, covering party/state regression cases and a separate candidate formula model.
 - Full client csproj build: passed, zero warnings/errors.
 - Godot .NET headless scene: passed — UI combat, save/load and solo escape.
-- GitHub CI has been defined; its remote execution status is separate from the local checks above.
+- Graphical scene rendered under software OpenGL and visually inspected at 1280×800.
+- GitHub CI for the initial slice passed: https://github.com/Aetton/neowizardry/actions/runs/38592500927. Formula-module follow-up has its own run.
 
 ## Explicit limits
 

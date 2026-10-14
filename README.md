@@ -4,6 +4,8 @@ Improved Wizardry 8 remake research project. **Iteration 0.1 is a technical slic
 
 Godot 4.5.1 .NET client + independent .NET 8 core + dependency-free Python 3.10+ asset tools.
 
+![Technical slice: synthetic corridor and party UI](docs/preview.png)
+
 ## What works
 
 - Read-only SLF index, SHA-256 inventory and selective extraction, verified against an original Steam `DATA.SLF` containing 3314 entries.
@@ -59,3 +61,5 @@ Windows PowerShell uses the same commands, with your Windows installation path. 
 5. Replace the temporary gold frame with the planned Wizardry visual identity and Grimrock-inspired materials/lighting.
 
 See [format report](docs/formats.md), [architecture](docs/architecture.md) and [iteration report](docs/iteration-001.md).
+
+The [formula research module](docs/formula-sources.md) contains a first source-backed candidate calculation; it remains separate from the experimental combat rules.
