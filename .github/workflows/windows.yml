@@ -18,7 +18,7 @@ concurrency:
 jobs:
   windows:
     if: github.ref == 'refs/heads/main' && github.repository == 'Aetton/neowizardry'
-    runs-on: ${{ fromJSON(vars.NEOWIZARDRY_WINDOWS_RUNNER || '"windows-latest"') }}
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 25
     defaults:
       run:
