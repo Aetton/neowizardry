@@ -25,7 +25,12 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
+      - name: Bootstrap persistent self-hosted tools
+        if: runner.environment == 'self-hosted'
+        shell: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: ./tools/windows/BootstrapHost.ps1
       - uses: actions/setup-python@v5
+        if: runner.environment == 'github-hosted'
         with:
           python-version: '3.12'
       - name: Locate installed .NET 8 SDK and tool paths
@@ -118,6 +123,7 @@ jobs:
       - name: Publish completed preview
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: Aetton/neowizardry
         run: |
           $known = @(gh release list --json tagName,isDraft --limit 100 | ConvertFrom-Json | Where-Object tagName -eq $env:PREVIEW_TAG)
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

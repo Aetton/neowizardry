@@ -33,3 +33,7 @@ Code commit: `38e4d4f07afca18fb409f64faa72e7eeb065c6e1`. Gameplay mechanics did 
 ## Warm-cache observation
 
 Attempt 2 restored both NuGet and Godot caches; Godot preparation took 1 second and .NET client build completed in 2.66 seconds. Godot then stalled during headless editor import after an EditorSettings diagnostic, so the attempt was canceled when a newer job superseded it. A complete faster warm-run result is **not** claimed. Build/import/export were separated, each with a timeout; obsolete previews now cancel instead of holding the queue.
+
+## Self-hosted routing proof
+
+Run https://github.com/Aetton/neowizardry/actions/runs/38651263873 started job 116150636202 on runner `AETTON-PC` (runner ID22; labels `self-hosted`, `Windows`, `X64`) at 2026-10-14T23:00:18Z. This confirms that the user's registered machine is accepting the Windows build. First local build outcome and performance are still being checked.
