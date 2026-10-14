@@ -250,7 +250,7 @@ public partial class Main : Node3D
     private void ShowMagic()
     {
         Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
-        var dialog=new AcceptDialog { Title="Prototype magic",Unresizable=true };
+        var dialog=new AcceptDialog { Title="Prototype magic",Unresizable=true,WrapControls=false };
         AddChild(dialog);dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;
         dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var body=new VBoxContainer();dialog.AddChild(body);
