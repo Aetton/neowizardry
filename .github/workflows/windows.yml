@@ -14,7 +14,7 @@ permissions:
   contents: write
 concurrency:
   group: windows-preview
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   windows:
     if: github.ref == 'refs/heads/main' && github.repository == 'Aetton/neowizardry'
@@ -70,16 +70,26 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/windows/TestUpdater.ps1
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Export and run the Windows game
+      - name: Build Windows client
+        timeout-minutes: 3
         run: |
           dotnet build client/NeoWizardry.csproj
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Import Godot resources
+        timeout-minutes: 2
+        run: |
           & $env:GODOT --headless --editor --path client --import
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Export Windows game
+        timeout-minutes: 3
+        run: |
           New-Item -ItemType Directory -Force build/windows | Out-Null
           & $env:GODOT --headless --path client --export-debug Windows ../build/windows/NeoWizardry.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           if (!(Get-ChildItem build/windows -Recurse -Filter coreclr.dll)) { throw 'Bundled .NET runtime is missing' }
+      - name: Run exported Windows smoke checks
+        timeout-minutes: 3
+        run: |
           foreach ($mode in @('--smoke', '--mobile-smoke')) {
             $process = Start-Process -FilePath "$PWD/build/windows/NeoWizardry.exe" -ArgumentList "--headless -- --touch $mode" -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP/$mode.log" -RedirectStandardError "$env:RUNNER_TEMP/$mode-error.log"
             if (!$process.WaitForExit(60000)) { $process.Kill(); throw "Windows $mode timed out" }
