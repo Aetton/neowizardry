@@ -5,7 +5,7 @@ namespace NeoWizardry.Core;
 // These are prototype rules, NOT recovered Wizardry 8 combat formulas.
 public sealed record Hero(string Id, string Name, string Race, string Profession,
     int Hp, int MaxHp, int Speed, int Power, int Xp = 0, bool Captive = false,
-    string Gender = "Male", int? EquippedItemId = null);
+    string Gender = "Male", int? EquippedItemId = null, ManaPool[]? Mana = null, string[]? Spellbook = null);
 public sealed record Enemy(string Id, int Hp, int Speed, int Power, int XpReward, int? LootItemId = null);
 public sealed record GameState(int Schema, Hero[] Party, Enemy Enemy, int Round = 0,
     bool RewardGranted = false, string Quest = "none", uint RandomState = Dice.DefaultSeed, ItemStack[]? Bag = null);
@@ -20,7 +20,8 @@ public static class Game
         if (size is < 1 or > 8) throw new ArgumentOutOfRangeException(nameof(size));
         var party = Enumerable.Range(1, size).Select(i =>
             new Hero($"hero-{i}", i == 1 ? "Faerie Ninja" : $"Companion {i}",
-                i == 1 ? "Faerie" : "Human", "Ninja", 36, 36, 12-i, 7)).ToArray();
+                i == 1 ? "Faerie" : "Human", "Ninja", 36, 36, 12-i, 7,
+                Mana: [new("Fire",12,12),new("Divine",12,12)], Spellbook: ["test-spark","test-mend"])).ToArray();
         return new(SaveSchema, party, new("Training Sentinel", 32, 4, 3, 120), Bag: []);
     }
 
@@ -44,9 +45,21 @@ public static class Game
         foreach (var stack in state.Bag ?? [])
             if (stack is null || stack.ItemId < 0 || stack.Count <= 0 || !itemIds.Add(stack.ItemId))
                 throw new InvalidDataException("Invalid party bag");
+        foreach(var hero in state.Party) Magic.ValidateHero(hero);
     }
 
-    public static RoundResult Attack(GameState state, ItemCatalog? catalog = null)
+    public static RoundResult Attack(GameState state, ItemCatalog? catalog = null) => ResolveRound(state,catalog,null);
+
+    public static RoundResult Cast(GameState state, SpellOrder order, ItemCatalog? catalog = null)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+        Validate(state);
+        var denial=Magic.Denial(state,order);
+        if(denial is not null)throw new InvalidOperationException(denial);
+        return ResolveRound(state,catalog,order);
+    }
+
+    private static RoundResult ResolveRound(GameState state, ItemCatalog? catalog, SpellOrder? cast)
     {
         Validate(state);
         if (state.Enemy.Hp == 0 || !state.Party.Any(h => h.Hp > 0 && !h.Captive))
@@ -60,7 +73,7 @@ public static class Game
         var events = new List<string>();
         // Equal-speed actions have a stable key, so replay does not depend on renderer timing.
         var order = heroes.Where(h => h.Hp > 0 && !h.Captive)
-            .Select(h => (Id: h.Id, Speed: (long)h.Speed + (weapons[h.Id]?.Initiative ?? 0), IsEnemy: false))
+            .Select(h => (Id: h.Id, Speed: (long)h.Speed + (cast?.HeroId==h.Id ? 0 : weapons[h.Id]?.Initiative ?? 0), IsEnemy: false))
             .Append((Id: "enemy", Speed: (long)enemy.Speed, IsEnemy: true))
             .OrderByDescending(a => a.Speed).ThenBy(a => a.Id, StringComparer.Ordinal).ToArray();
         foreach (var action in order)
@@ -79,6 +92,30 @@ public static class Game
             {
                 var h = heroes.First(h => h.Id == action.Id);
                 if (h.Hp == 0 || h.Captive) continue;
+                if(cast?.HeroId==h.Id)
+                {
+                    var spell=Magic.Find(cast.SpellId);
+                    int targetIndex=spell.Heals ? Array.FindIndex(heroes,t=>t.Id==cast.TargetId && t.Hp>0 && !t.Captive) : -1;
+                    if(spell.Heals && (targetIndex<0 || heroes[targetIndex].Hp==heroes[targetIndex].MaxHp))
+                    { events.Add($"{h.Name}: spell target unavailable; no mana spent.");continue; }
+                    int casterIndex=Array.FindIndex(heroes,c=>c.Id==h.Id);
+                    heroes[casterIndex]=Magic.Spend(h,spell,cast.Power);
+                    int amount=cast.Power;
+                    for(int i=0;i<cast.Power;i++)amount+=Dice.Roll(ref randomState,6);
+                    if(spell.Heals)
+                    {
+                        var target=heroes[targetIndex];
+                        int restored=Math.Min(target.MaxHp-target.Hp,amount);
+                        heroes[targetIndex]=target with { Hp=target.Hp+restored };
+                        events.Add($"{h.Name}: {spell.Name} P{cast.Power} → {target.Name}: +{restored} HP (roll {amount}, {spell.CostPerPower*cast.Power} {spell.Realm} mana)");
+                    }
+                    else
+                    {
+                        int hit=Math.Min(enemy.Hp,amount);enemy=enemy with { Hp=enemy.Hp-hit };
+                        events.Add($"{h.Name}: {spell.Name} P{cast.Power} → {enemy.Id}: {hit} (roll {amount}, {spell.CostPerPower*cast.Power} {spell.Realm} mana)");
+                    }
+                    continue;
+                }
                 var weapon = weapons[h.Id];
                 int rolled = h.Power;
                 if (weapon is not null)

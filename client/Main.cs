@@ -50,6 +50,7 @@ public partial class Main : Node3D
         if (OS.GetCmdlineUserArgs().Contains("--smoke")) CallDeferred(nameof(Smoke));
         if (OS.GetCmdlineUserArgs().Contains("--mobile-smoke")) Callable.From(MobileSmoke).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--items")) Callable.From(ShowItems).CallDeferred();
+        if (OS.GetCmdlineUserArgs().Contains("--magic")) Callable.From(ShowMagic).CallDeferred();
     }
 
     private GameState CreateExpedition(int size)
@@ -170,7 +171,7 @@ public partial class Main : Node3D
         _enemy=new Label();rc.AddChild(_enemy);
         _log=new RichTextLabel { CustomMinimumSize=new(200,80),ScrollFollowing=true,SizeFlagsVertical=Control.SizeFlags.ExpandFill };rc.AddChild(_log);
         _actionsPanel=Panel(_ui,Vector2.Zero,new(900,80));_actions=new GridContainer();_actions.AddThemeConstantOverride("h_separation",8);_actions.AddThemeConstantOverride("v_separation",8);_actionsPanel.AddChild(_actions);
-        Button(_actions,"Attack",Attack);Button(_actions,"Items",ShowItems);Button(_actions,"Save",Save);Button(_actions,"Load",Load);
+        Button(_actions,"Attack",Attack);Button(_actions,"Magic",ShowMagic);Button(_actions,"Items",ShowItems);Button(_actions,"Save",Save);Button(_actions,"Load",Load);
         Button(_actions,"Keeper",()=>Say("Test keeper: The real monastery is still being researched."));
         Button(_actions,"Capture test",()=>Try(()=>{_state=Game.CaptureFirst(_state);Refresh();_touchInput.Reset();}));
         Button(_actions,"Escape",()=>Try(()=>{_state=Game.Escape(_state);Refresh();}));
@@ -201,9 +202,10 @@ public partial class Main : Node3D
         _title.Position=bounds.Position+new Vector2(4,4);
         _partyToggle.Position=new(bounds.End.X-180,bounds.Position.Y);_partyToggle.Size=new(84,_touchMode?52:40);
         _logToggle.Position=new(bounds.End.X-88,bounds.Position.Y);_logToggle.Size=new(84,_touchMode?52:40);
-        int columns=Math.Max(3,Math.Min(7,(int)(bounds.Size.X/110)));
+        int actionCount=_actions.GetChildCount();
+        int columns=Math.Max(3,Math.Min(actionCount,(int)(bounds.Size.X/110)));
         _actions.Columns=columns;
-        int rows=(7+columns-1)/columns;
+        int rows=(actionCount+columns-1)/columns;
         float actionHeight=rows*(_touchMode?56:40)+(rows-1)*8+28;
         _actionsPanel.Position=new(bounds.Position.X,bounds.End.Y-actionHeight);_actionsPanel.Size=new(bounds.Size.X,actionHeight);
         float top=bounds.Position.Y+(_touchMode?62:50);
@@ -222,7 +224,8 @@ public partial class Main : Node3D
         foreach (var h in _state.Party)
         {
             string equipment = h.EquippedItemId.HasValue && _catalog is not null ? $"\n{_catalog.Find(h.EquippedItemId.Value).Name}" : "";
-            _heroes.AddChild(new Label { Text=$"{h.Name}\n{h.Race} · {h.Profession}\nHP {h.Hp}/{h.MaxHp}   XP {h.Xp}{equipment}{(h.Captive ? "\nCAPTIVE" : "")}", AutowrapMode=TextServer.AutowrapMode.WordSmart });
+            string mana=string.Join(" · ",(h.Mana ?? []).Select(p=>$"{p.Realm} {p.Current}/{p.Max}"));
+            _heroes.AddChild(new Label { Text=$"{h.Name}\n{h.Race} · {h.Profession}\nHP {h.Hp}/{h.MaxHp}   XP {h.Xp}\n{mana}{equipment}{(h.Captive ? "\nCAPTIVE" : "")}", AutowrapMode=TextServer.AutowrapMode.WordSmart });
         }
         _enemy.Text=$"{_state.Enemy.Id}\nHP {_state.Enemy.Hp} · Round {_state.Round}";
         _quest.Text=$"Captivity fixture: {_state.Quest}";
@@ -235,6 +238,51 @@ public partial class Main : Node3D
         Try(() => { var r=Game.Attack(_state,_catalog); _state=r.State; foreach(var e in r.Events) Say(e); Refresh(); });
     }
     private void Save() => Try(()=>{SaveTo(SavePath);Say("Saved.");});
+
+    private void Cast(SpellOrder order)
+    {
+        if(_player.Position.DistanceTo(_enemyPosition)>4.5f)throw new InvalidOperationException("Too far from the sentinel.");
+        var result=Game.Cast(_state,order,_catalog);_state=result.State;
+        foreach(var entry in result.Events)Say(entry);
+        Refresh();
+    }
+
+    private void ShowMagic()
+    {
+        Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
+        var dialog=new AcceptDialog { Title="Prototype magic",Unresizable=true };
+        AddChild(dialog);dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;
+        dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
+        var body=new VBoxContainer();dialog.AddChild(body);
+        var caster=new OptionButton();foreach(var h in _state.Party)caster.AddItem(h.Name);body.AddChild(caster);
+        var spell=new OptionButton();foreach(var s in Magic.Spells)spell.AddItem($"{s.Name} · {s.Realm}");body.AddChild(spell);
+        var power=new OptionButton();for(int i=1;i<=3;i++)power.AddItem($"Power {i}");body.AddChild(power);
+        var target=new OptionButton();foreach(var h in _state.Party)target.AddItem(h.Name);body.AddChild(target);
+        var details=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(400,160) };body.AddChild(details);
+        var cast=new Button { Text="Cast / next round" };body.AddChild(cast);
+        body.AddChild(new Label { Text="Synthetic spells and formulas.\nOriginal success, resistance and Power Cast are pending.",AutowrapMode=TextServer.AutowrapMode.WordSmart });
+        SpellOrder Order()
+        {
+            var s=Magic.Spells[spell.Selected];
+            return new(_state.Party[caster.Selected].Id,s.Id,power.Selected+1,s.Heals ? _state.Party[target.Selected].Id : _state.Enemy.Id);
+        }
+        void Details()
+        {
+            var s=Magic.Spells[spell.Selected];var order=Order();
+            target.Visible=s.Heals;
+            var denial=Magic.Denial(_state,order);
+            if(_player.Position.DistanceTo(_enemyPosition)>4.5f)denial="Approach the sentinel to cast in battle.";
+            var h=_state.Party[caster.Selected];
+            int mana=(h.Mana ?? []).FirstOrDefault(p=>p.Realm==s.Realm)?.Current ?? 0;
+            details.Text=$"{s.Name} · Power {order.Power}\n{order.Power}d6 + {order.Power} {(s.Heals ? "healing" : "damage")}\nCost: {s.CostPerPower*order.Power} {s.Realm} mana · Available: {mana}\n\n{(denial ?? "Ready. This replaces the caster's weapon attack; everyone else takes their normal turn.")}";
+            cast.Disabled=denial is not null;
+        }
+        caster.ItemSelected+=_=>Details();spell.ItemSelected+=_=>Details();power.ItemSelected+=_=>Details();target.ItemSelected+=_=>Details();
+        cast.Pressed+=()=>Try(()=>{Cast(Order());Details();});
+        var size=GetViewport().GetVisibleRect().Size;var dimensions=new Vector2I((int)Math.Min(640,size.X-32),(int)Math.Min(530,size.Y-32));
+        body.Position=new(12,12);body.Size=new(dimensions.X-24,dimensions.Y-64);
+        Details();dialog.PopupCentered(dimensions);
+    }
     private void SaveTo(string path)
     {
         Game.Validate(_state);
@@ -409,7 +457,14 @@ public partial class Main : Node3D
                     GD.Print($"PASS: imported catalog {_catalog.Count}, equipment and save binding");
                 }
             }
-            GD.Print("PASS: Godot C# scene, UI combat, save/load, solo escape"); GetTree().Quit();
+            _state=CreateExpedition(1);
+            var fire=_state.Party[0].Mana!.Single(p=>p.Realm=="Fire").Current;
+            Cast(new("hero-1","test-spark",2,_state.Enemy.Id));
+            if(_state.Party[0].Mana!.Single(p=>p.Realm=="Fire").Current!=fire-4)throw new Exception("Client spell casting failed");
+            Save();var spellContinuation=Game.Save(Game.Cast(_state,new("hero-1","test-mend",1,"hero-1"),_catalog).State);
+            _state=Game.Create(8);Load();Cast(new("hero-1","test-mend",1,"hero-1"));
+            if(Game.Save(_state)!=spellContinuation)throw new Exception("Client magic save continuation failed");
+            GD.Print("PASS: Godot C# scene, UI combat, save/load, solo escape and magic"); GetTree().Quit();
         }
         catch(Exception e) { GD.PushError(e.ToString()); GetTree().Quit(1); }
     }

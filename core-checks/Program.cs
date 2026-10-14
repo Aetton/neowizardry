@@ -24,6 +24,53 @@ for (int size = 1; size <= 8; size++)
     Check(Game.Save(Game.Attack(start).State) == Game.Save(Game.Attack(start).State), "Deterministic replay");
 }
 var solo = Game.Create(1);
+var spark=new SpellOrder("hero-1","test-spark",2,solo.Enemy.Id);
+var sparked=Game.Cast(solo,spark).State;
+Check(sparked.Party[0].Mana!.Single(p=>p.Realm=="Fire").Current==8 && sparked.Party[0].Mana!.Single(p=>p.Realm=="Divine").Current==12,"Spell spends only its realm mana");
+Check(sparked.Enemy.Hp==19 && sparked.Round==1,"Power-two synthetic spell replaces the physical attack");
+Check(solo.Enemy.Hp==32 && solo.Party[0].Mana!.All(p=>p.Current==12),"Casting leaves source state unchanged");
+var wounded=solo with { Party=[solo.Party[0] with { Hp=10 }] };
+var healed=Game.Cast(wounded,new("hero-1","test-mend",2,"hero-1")).State;
+Check(healed.Party[0].Hp==20 && healed.Enemy.Hp==32,"Healing uses its turn and enemy still acts");
+Check(healed.Party[0].Mana!.Single(p=>p.Realm=="Divine").Current==8,"Self healing preserves mana spending");
+var nearFull=solo with { Party=[solo.Party[0] with { Hp=35 }],Enemy=solo.Enemy with { Power=0 } };
+Check(Game.Cast(nearFull,new("hero-1","test-mend",3,"hero-1")).State.Party[0].Hp==36,"Healing is capped at maximum HP");
+foreach(int power in new[]{0,4})Throws(()=>Game.Cast(solo,spark with { Power=power }),"Reject unsupported spell power");
+Throws(()=>Game.Cast(solo,spark with { SpellId="unknown" }),"Reject unknown spell");
+Throws(()=>Game.Cast(solo,spark with { HeroId="unknown" }),"Reject unknown caster");
+Throws(()=>Game.Cast(solo,spark with { TargetId="hero-1" }),"Offensive spell rejects friendly target");
+Throws(()=>Game.Cast(solo,new("hero-1","test-mend",1,"hero-1")),"Reject healing a full-health target");
+Throws(()=>Game.Cast(solo,new("hero-1","test-mend",1,solo.Enemy.Id)),"Healing rejects enemy target");
+Throws(()=>Game.Cast(solo with { Party=[solo.Party[0] with { Spellbook=[] }] },spark),"Reject unlearned spell");
+Throws(()=>Game.Cast(solo with { Party=[solo.Party[0] with { Mana=[new("Fire",0,12)] }] },spark),"Insufficient mana rejects the round");
+Throws(()=>Game.Cast(Game.CaptureFirst(solo),spark),"Captive cannot cast");
+Throws(()=>Game.Cast(solo with { Enemy=solo.Enemy with { Hp=0 } },spark),"No casting after battle");
+var killedCaster=Game.Cast(solo with { Party=[solo.Party[0] with { Hp=1,Speed=0 }] },spark).State;
+Check(killedCaster.Enemy.Hp==32 && killedCaster.RandomState==solo.RandomState && killedCaster.Party[0].Mana!.All(p=>p.Current==12),"Killed queued caster spends no mana or rolls");
+var doomedTarget=Game.Create(2);
+doomedTarget=doomedTarget with { Party=[doomedTarget.Party[0] with { Hp=1,Speed=0 },doomedTarget.Party[1] with { Speed=0 }] };
+var cancelledHeal=Game.Cast(doomedTarget,new("hero-2","test-mend",1,"hero-1")).State;
+Check(cancelledHeal.Party[0].Hp==0 && cancelledHeal.Party[1].Mana!.All(p=>p.Current==12) && cancelledHeal.RandomState==doomedTarget.RandomState,"Target killed before healing causes no resurrection or mana loss");
+var earlyKill=Game.Create(2) with { Enemy=solo.Enemy with { Hp=1 } };
+var skippedCast=Game.Cast(earlyKill,new("hero-2","test-spark",1,solo.Enemy.Id)).State;
+Check(skippedCast.Party[1].Mana!.All(p=>p.Current==12) && skippedCast.RandomState==earlyKill.RandomState,"Earlier ally victory skips queued spell without costs");
+Check(Game.Save(Game.Cast(sparked,spark).State)==Game.Save(Game.Cast(Game.Load(Game.Save(sparked)),spark).State),"Magic RNG and mana continue identically after save/load");
+Throws(()=>Game.Validate(solo with { Party=[solo.Party[0] with { Mana=[new("Fire",13,12)] }] }),"Reject invalid mana quantities");
+Throws(()=>Game.Validate(solo with { Party=[solo.Party[0] with { Mana=[new("Fire",1,12),new("Fire",2,12)] }] }),"Reject duplicate mana realms");
+Throws(()=>Game.Validate(solo with { Party=[solo.Party[0] with { Spellbook=["test-spark","test-spark"] }] }),"Reject duplicate learned spells");
+var preMagic=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(solo))!;
+foreach(var h in preMagic["Party"]!.AsArray()){h!.AsObject().Remove("Mana");h.AsObject().Remove("Spellbook");}
+var oldMagic=Game.Load(preMagic.ToJsonString());
+Check(oldMagic.Party[0].Mana is null && oldMagic.Party[0].Spellbook is null,"Old saves do not gain retroactive spells or mana");
+for(int size=1;size<=8;size++)
+{
+    var magicParty=Game.Create(size);
+    magicParty=magicParty with { Party=magicParty.Party.Select(h=>h with { Profession="Mage" }).ToArray() };
+    for(int i=0;i<20 && magicParty.Enemy.Hp>0;i++)
+        magicParty=magicParty.Party[0].Mana!.Single(p=>p.Realm=="Fire").Current>=2
+            ? Game.Cast(magicParty,new("hero-1","test-spark",1,magicParty.Enemy.Id)).State : Game.Attack(magicParty).State;
+    Check(magicParty.Enemy.Hp==0 && magicParty.Party.Sum(h=>h.Xp)==120,$"Magic-oriented party {size} retains conserved XP");
+}
 Throws(() => Game.Create(0), "No empty party");
 Throws(() => Game.Create(9), "UI limit enforced");
 Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 1", "\"Schema\": 99")), "Reject unknown save version");
