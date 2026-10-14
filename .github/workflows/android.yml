@@ -18,8 +18,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: android-actions/setup-android@v4
       - name: Prepare Android tools
         run: |
+          python3 - <<'PY'
+          import json, subprocess
+          versions=[line.split()[0] for line in subprocess.check_output(['dotnet','--list-sdks'],text=True).splitlines() if line.startswith('9.')]
+          if not versions: raise SystemExit('No .NET 9 SDK installed')
+          with open('global.json','w') as f: json.dump({'sdk':{'version':versions[-1],'rollForward':'latestPatch'}},f)
+          PY
           dotnet workload install android
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - name: Get Godot .NET and Android templates

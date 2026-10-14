@@ -190,7 +190,7 @@ public partial class Main : Node3D
         _title.Position=bounds.Position+new Vector2(4,4);
         _partyToggle.Position=new(bounds.End.X-180,bounds.Position.Y);_partyToggle.Size=new(84,_touchMode?52:40);
         _logToggle.Position=new(bounds.End.X-88,bounds.Position.Y);_logToggle.Size=new(84,_touchMode?52:40);
-        int columns=Math.Max(3,Math.Min(7,(int)(bounds.Size.X/135)));
+        int columns=Math.Max(3,Math.Min(7,(int)(bounds.Size.X/110)));
         _actions.Columns=columns;
         int rows=(7+columns-1)/columns;
         float actionHeight=rows*(_touchMode?56:40)+(rows-1)*8+28;
