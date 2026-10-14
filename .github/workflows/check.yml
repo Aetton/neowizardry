@@ -1,0 +1,24 @@
+name: Verify technical slice
+on: [push, pull_request]
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: python -m unittest discover -s tests -v
+      - run: dotnet run --project core-checks
+      - run: dotnet build client/NeoWizardry.csproj
+      - name: Get Godot .NET and smoke test
+        shell: bash
+        run: |
+          curl -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_mono_linux_x86_64.zip -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          executable=/tmp/godot/Godot_v4.5.1-stable_mono_linux_x86_64/Godot_v4.5.1-stable_mono_linux.x86_64
+          chmod +x "$executable"
+          timeout 60s "$executable" --headless --path client -- --smoke

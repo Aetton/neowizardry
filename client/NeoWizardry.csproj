@@ -1,0 +1,4 @@
+<Project Sdk="Godot.NET.Sdk/4.5.1">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework><EnableDynamicLoading>true</EnableDynamicLoading><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../core/NeoWizardry.Core.csproj" /></ItemGroup>
+</Project>
