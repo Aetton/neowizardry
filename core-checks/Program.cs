@@ -49,6 +49,46 @@ var restricted = new ItemDefinition(77,"Restricted test staff",0,0,32,32,3,new s
 var catalog = new ItemCatalog(2,"DATABASES/ITEMS.DBS",new Provenance("archive","PATCH.001",new string('b',64)),269,1,[restricted]);
 catalog.Validate();
 var equipped = Equipment.Equip(solo,solo.Party[0].Id,77,catalog);
+uint diceState = Dice.DefaultSeed;
+var diceResults = Enumerable.Range(0,6).Select(_ => Dice.Roll(ref diceState,6)).ToArray();
+Check(diceResults.SequenceEqual(new[]{5,6,3,2,1,5}) && diceState==3050220688u,"Stable prototype RNG vector");
+uint rejectionState=1165839077u;
+Check(Dice.Roll(ref rejectionState,255)==19 && rejectionState==587785823u,"Incomplete die bucket rejected before return");
+Throws(()=>Dice.Roll(ref diceState,0),"Reject zero-sided die");
+Throws(()=>Dice.Roll(ref diceState,256),"Reject unsupported die");
+for(int sides=1;sides<=255;sides++)
+    for(int roll=0;roll<100;roll++)
+    {
+        int value=Dice.Roll(ref diceState,sides);
+        if(value<1 || value>sides) throw new Exception("Die bounds");
+    }
+Check(true,"All supported die bounds");
+var armedRound=Game.Attack(equipped,catalog);
+int armedDamage=equipped.Enemy.Hp-armedRound.State.Enemy.Hp;
+Check(armedDamage is >=3 and <=9 && armedRound.State.RandomState!=equipped.RandomState,"Imported 2d4+1 damage used");
+Check(armedRound.Events[0].Contains("Restricted test staff") && armedRound.Events[0].Contains("2d4 + 1"),"Combat log identifies weapon roll");
+Check(equipped.Enemy.Hp==32 && equipped.RandomState==Dice.DefaultSeed,"Weapon attack leaves source state intact");
+Check(Game.Save(Game.Attack(armedRound.State,catalog).State)==
+    Game.Save(Game.Attack(Game.Load(Game.Save(armedRound.State)),catalog).State),"Save resumes exact weapon roll sequence");
+Throws(()=>Game.Attack(equipped),"Armed combat requires item catalog");
+var initiativeState=equipped with { Party=[equipped.Party[0] with { Speed=3,Hp=1 }],Enemy=equipped.Enemy with { Speed=4 } };
+Check(Game.Attack(initiativeState,catalog).State.Enemy.Hp<32,"Weapon initiative moves hero before lethal enemy");
+var slowCatalog=catalog with { Items=[restricted with { Initiative=-8 }] };
+var skipped=Game.Attack(equipped with { Party=[equipped.Party[0] with { Hp=1 }] },slowCatalog).State;
+Check(skipped.Enemy.Hp==32 && skipped.RandomState==equipped.RandomState,"Dead queued weapon attack consumes no dice");
+Check(Game.Attack(equipped with { Enemy=equipped.Enemy with { Hp=0 } },catalog).State.RandomState==equipped.RandomState,"Finished combat consumes no dice");
+Check(Game.Attack(Game.CaptureFirst(equipped),catalog).State.RandomState==equipped.RandomState,"Captive consumes no dice");
+Check(Game.Attack(solo).State.RandomState==solo.RandomState,"Unarmed fixture consumes no dice");
+Throws(()=>Equipment.Equip(solo,"hero-1",77,catalog with { Items=[restricted with { DamageDice=0,DamageSides=0 }] }),"Percentage weapon cannot become flat melee damage");
+var oldRngSave=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(solo))!;
+oldRngSave.AsObject().Remove("RandomState");
+Check(Game.Load(oldRngSave.ToJsonString()).RandomState==Dice.DefaultSeed,"Old saves acquire deterministic seed");
+for(int size=1;size<=8;size++)
+{
+    var partyBattle=Equipment.Equip(Game.Create(size),"hero-1",77,catalog);
+    for(int i=0;i<20 && partyBattle.Enemy.Hp>0;i++) partyBattle=Game.Attack(partyBattle,catalog).State;
+    Check(partyBattle.Enemy.Hp==0 && partyBattle.Party.Sum(h=>h.Xp)==120,$"Weapon combat and XP conservation for party {size}");
+}
 Check(equipped.Party[0].EquippedItemId==77 && solo.Party[0].EquippedItemId is null,"Equipment immutable transition");
 Check(Game.Load(Game.Save(equipped)).Party[0].EquippedItemId==77,"Equipment save roundtrip");
 Equipment.ValidateLoadedEquipment(equipped,catalog,catalog.Provenance.Sha256);
@@ -77,6 +117,9 @@ else if(args.Length>0)
     Check(Equipment.Denial(solo.Party[0],cane) is null,"Real faerie ninja weapon allowed");
     Check(Equipment.Denial(Game.Create(2).Party[1],cane)=="Race restriction.","Real human denied exclusive weapon");
     Check(real.Find(0).DamageDescription=="1d4 + 0","Real dagger dice parsed");
+    var caneState=Equipment.Equip(solo with { Enemy=solo.Enemy with { Hp=1000 } },"hero-1",cane.Id,real);
+    var caneRound=Game.Attack(caneState,real);
+    Check(1000-caneRound.State.Enemy.Hp is >=12 and <=42 && caneRound.Events[0].Contains("6d6 + 6"),"Real Cane of Corpus base dice used by combat");
     Console.WriteLine($"PASS: real imported item catalog ({real.Count} records)");
 }
 Console.WriteLine($"PASS: {checks} core checks");

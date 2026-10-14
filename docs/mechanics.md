@@ -4,13 +4,13 @@
 |---|---|---|
 | Solo and variable parties | Preserve | Explicit project requirement. Core/client tested for 1–8. Final upper limit open. |
 | Solo XP concentration | Preserve | Design requirement; fixed test reward conserved across all party sizes. Exact original XP rules still unknown. |
-| Race/class identity and restrictions | Preserve | Original item restriction masks parsed. Race/class enums, progression and equipment checks pending. |
-| Phase/round-based combat | Preserve structure | Prototype uses deterministic speed order. Original initiative, hit/damage formulas, formations and distance rules pending. |
+| Race/class identity and restrictions | Preserve | Original item restriction masks parsed. Race/class enums and equipment checks implemented; progression pending. |
+| Phase/round-based combat | Preserve structure | Prototype uses deterministic speed plus imported weapon initiative order (a provisional rule). Original initiative, hit/damage formulas, formations and distance rules pending. |
 | Strong unusual builds | Preserve | No automatic enemy scaling or special nerf to the faerie ninja. Starting stats and combat are temporary fixtures. |
 | Crock captivity softlock | Fix after reproduction | User-reported original issue. Solo escape fixture passes; actual original event not reproduced. |
 | Slow battle presentation | Improve | Client resolves a round immediately. Full animation speed/QoL options pending. |
 | Skill grinding | Research before redesign | No skill gain system yet; no assumed replacement formula. |
-| Inventory/equipment/spells | Preserve depth, improve UI | Item catalog only; no simulated inventory or spell rules yet. |
+| Inventory/equipment/spells | Preserve depth, improve UI | Catalog, restricted test equipment and imported melee base dice; no item ownership or spell rules yet. |
 | Dialogue | Preserve keywords and deterministic knowledge | One fixed synthetic keeper line. Canonical dialogue import and semantic interface pending. |
 | Art and UI | Modernize | Grimrock-inspired material/light direction; Wizardry framing target. Current scene and frame are placeholders. |
 

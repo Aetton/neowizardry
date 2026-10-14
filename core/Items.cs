@@ -66,6 +66,7 @@ public static class Equipment
     public static string? Denial(Hero hero, ItemDefinition item)
     {
         if (item.TypeCode is not (0 or 1)) return "Only melee weapons are supported in this test slot.";
+        if (item.DamageDice <= 0 || item.DamageSides <= 0) return "This weapon has no supported standalone damage roll.";
         if (!Races.TryGetValue(hero.Race,out int race) || (item.RaceMask & race)==0) return "Race restriction.";
         if (!Professions.TryGetValue(hero.Profession,out int profession) || (item.ProfessionMask & profession)==0) return "Profession restriction.";
         int gender = hero.Gender == "Male" ? 1 : hero.Gender == "Female" ? 2 : 0;

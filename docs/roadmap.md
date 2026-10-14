@@ -1,7 +1,7 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Iterations 001–002 delivered the SLF reader, ordinary patch/loose-file overlay, a local catalog of 819 items, a Godot client, independent C# core, variable parties, experimental combat and saves. Equipment remains a test assignment; canonical combat, magic, crafting and level geometry are not implemented.
+Iterations 001–004 delivered the SLF reader, ordinary patch/loose-file overlay, a local catalog of 819 items, a Godot client, independent C# core, variable parties, experimental combat and saves. Android launch was confirmed by the user. Assigned melee weapons use imported base damage dice and initiative with saved deterministic rolls. Equipment remains a test assignment; canonical combat, magic, crafting and level geometry are not implemented.
 
 ## Stages
 1. **Combat:** recover and verify initiative, hit/penetration, weapon damage, attack/swing counts, range and formation. Integrate imported weapons.

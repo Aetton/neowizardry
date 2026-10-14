@@ -26,6 +26,6 @@ Code commit: `744b16658feb0795319b3defe059c7bb50bfebef`.
 
 ## Physical-device gate still open
 
-The APK has been built and inspected, **not run on an Android device**. Device lifecycle, notches, physical touch target sizing, GPU compatibility, temperature, battery consumption and performance remain unverified. See docs/mobile.md for the checklist.
+At delivery, the APK had been built and inspected without a physical-device run. The user subsequently confirmed basic launch/work (2026-10-14: “Норм, пашет”). The device model and Android version are not yet reported. Device lifecycle, notches, physical touch target sizing, GPU compatibility, temperature, battery consumption and performance remain unverified. See docs/mobile.md for the checklist.
 
 This is still the synthetic room and experimental battle system. The new platform work does not implement original combat formulas, real monastery geometry, magic or crafting. iOS remains a separate later gate.

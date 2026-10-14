@@ -221,7 +221,7 @@ public partial class Main : Node3D
     private void Attack()
     {
         if (_player.Position.DistanceTo(_enemyPosition)>4.5f) { Say("Too far from the sentinel. Move closer."); return; }
-        Try(() => { var r=Game.Attack(_state); _state=r.State; foreach(var e in r.Events) Say(e); Refresh(); });
+        Try(() => { var r=Game.Attack(_state,_catalog); _state=r.State; foreach(var e in r.Events) Say(e); Refresh(); });
     }
     private void Save() => Try(()=>{SaveTo(SavePath);Say("Saved.");});
     private void SaveTo(string path)
@@ -297,7 +297,7 @@ public partial class Main : Node3D
         search.TextChanged+=Filter;
         list.ItemSelected+=(long i)=>{selected=shown[(int)i];Details();};
         hero.ItemSelected+=(long _) => Details();
-        assign.Pressed+=()=>Try(()=>{if(selected is null)return;_state=Equipment.Equip(_state,_state.Party[hero.Selected].Id,selected.Id,_catalog);Refresh();Say($"Assigned {selected.Name}. Battle still uses experimental rules.");Details();});
+        assign.Pressed+=()=>Try(()=>{if(selected is null)return;_state=Equipment.Equip(_state,_state.Party[hero.Selected].Id,selected.Id,_catalog);Refresh();Say($"Assigned {selected.Name}: damage dice and initiative active. Combat is experimental.");Details();});
         Filter("");dialog.PopupCentered(dialogSize);
     }
 
@@ -375,6 +375,12 @@ public partial class Main : Node3D
                 {
                     _state=Equipment.Equip(_state,_state.Party[0].Id,cane.Id,_catalog); Save(); _state=Game.Create(8); Load();
                     if(_state.Party[0].EquippedItemId!=cane.Id) throw new Exception("Imported equipment save/load failed");
+                    var expected=Game.Save(Game.Attack(_state,_catalog).State);
+                    Attack();
+                    if(Game.Save(_state)!=expected) throw new Exception("Client did not use equipped weapon");
+                    Save(); var continuation=Game.Save(Game.Attack(_state,_catalog).State);
+                    _state=Game.Create(8); Load();
+                    if(Game.Save(Game.Attack(_state,_catalog).State)!=continuation) throw new Exception("Weapon roll continuation failed");
                     GD.Print($"PASS: imported catalog {_catalog.Count}, equipment and save binding");
                 }
             }

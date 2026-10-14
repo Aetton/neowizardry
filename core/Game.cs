@@ -8,7 +8,7 @@ public sealed record Hero(string Id, string Name, string Race, string Profession
     string Gender = "Male", int? EquippedItemId = null);
 public sealed record Enemy(string Id, int Hp, int Speed, int Power, int XpReward);
 public sealed record GameState(int Schema, Hero[] Party, Enemy Enemy, int Round = 0,
-    bool RewardGranted = false, string Quest = "none");
+    bool RewardGranted = false, string Quest = "none", uint RandomState = Dice.DefaultSeed);
 public sealed record RoundResult(GameState State, string[] Events);
 
 public static class Game
@@ -42,18 +42,22 @@ public static class Game
             throw new InvalidDataException("Reward before victory");
     }
 
-    public static RoundResult Attack(GameState state)
+    public static RoundResult Attack(GameState state, ItemCatalog? catalog = null)
     {
         Validate(state);
         if (state.Enemy.Hp == 0 || !state.Party.Any(h => h.Hp > 0 && !h.Captive))
             return new(state, ["No combat action available."]);
+        Equipment.ValidateLoadedEquipment(state, catalog, catalog?.Provenance.Sha256);
         var heroes = state.Party.ToArray();
+        var weapons = heroes.ToDictionary(h => h.Id,
+            h => h.EquippedItemId.HasValue ? catalog!.Find(h.EquippedItemId.Value) : null);
+        uint randomState = state.RandomState;
         var enemy = state.Enemy;
         var events = new List<string>();
         // Equal-speed actions have a stable key, so replay does not depend on renderer timing.
         var order = heroes.Where(h => h.Hp > 0 && !h.Captive)
-            .Select(h => (Id: h.Id, Speed: h.Speed, IsEnemy: false))
-            .Append((Id: "enemy", Speed: enemy.Speed, IsEnemy: true))
+            .Select(h => (Id: h.Id, Speed: (long)h.Speed + (weapons[h.Id]?.Initiative ?? 0), IsEnemy: false))
+            .Append((Id: "enemy", Speed: (long)enemy.Speed, IsEnemy: true))
             .OrderByDescending(a => a.Speed).ThenBy(a => a.Id, StringComparer.Ordinal).ToArray();
         foreach (var action in order)
         {
@@ -71,9 +75,18 @@ public static class Game
             {
                 var h = heroes.First(h => h.Id == action.Id);
                 if (h.Hp == 0 || h.Captive) continue;
-                var damage = Math.Min(enemy.Hp, h.Power);
+                var weapon = weapons[h.Id];
+                int rolled = h.Power;
+                if (weapon is not null)
+                {
+                    rolled = weapon.DamageConstant;
+                    for (int i = 0; i < weapon.DamageDice; i++)
+                        rolled += Dice.Roll(ref randomState, weapon.DamageSides);
+                }
+                var damage = Math.Min(enemy.Hp, rolled);
                 enemy = enemy with { Hp = enemy.Hp-damage };
-                events.Add($"{h.Name} → {enemy.Id}: {damage}");
+                events.Add($"{h.Name} → {enemy.Id}: {damage}" + (weapon is null ? "" :
+                    $" [{weapon.Name}: {weapon.DamageDescription} = {rolled}]") );
             }
         }
         bool granted = state.RewardGranted;
@@ -92,7 +105,8 @@ public static class Game
                 events.Add($"Victory. {enemy.XpReward} XP divided between {eligible.Length} survivors.");
             }
         }
-        return new(state with { Party = heroes, Enemy = enemy, Round = checked(state.Round+1), RewardGranted = granted }, events.ToArray());
+        return new(state with { Party = heroes, Enemy = enemy, Round = checked(state.Round+1), RewardGranted = granted,
+            RandomState = randomState }, events.ToArray());
     }
 
     // A regression fixture for the solo captivity softlock, not a canonical Crock quest implementation.
