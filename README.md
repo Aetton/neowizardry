@@ -13,6 +13,8 @@ Godot 4.5.1 .NET client + independent .NET 8 core + dependency-free Python 3.10+
 - A synthetic 3D corridor with free movement, collisions, mouse look, party size 1–8, a training sentinel, round resolution, XP, sample dialogue and save/load.
 - A solo captivity/escape regression fixture. This proves an engine state transition, **not** that the original Crock quest has been reproduced.
 - Deterministic core transitions and versioned saves, tested independently of Godot.
+- Original-item browser with search, raw weapon statistics and a test melee equipment slot enforcing race/profession/gender restrictions. Equipped items survive saves; loading requires the same source item database.
+- Ordinary resource overlay: loose data files, then descending `PATCH.NNN`, then base archive, with source provenance.
 
 Combat numbers and starting characters are **experimental placeholders**, not recovered Wizardry 8 formulas. No enemy scaling by party size. Reward is shared between living, uncaptured heroes, so solo retains the concentration of XP.
 
@@ -50,16 +52,25 @@ python -m tools.slf extract "/path/to/Wizardry8/Data/DATA.SLF" --pattern "DATABA
 
 Windows PowerShell uses the same commands, with your Windows installation path. Do not run extraction twice into the same destination: existing files are deliberately protected.
 
-`audit` reads SLF files and `PATCH.NNN` locally and produces a small inventory. The Drive connector cannot download `LEVELS.SLF` because its 497,064,244 bytes exceed the connector's 256 MiB limit. Local indexing avoids that restriction. Patches are inventoried separately; effective resource overlay precedence and localized/modded databases are not implemented yet.
+For the supplied Steam installation, include its enabled patch:
+
+```sh
+python -m tools.slf items "/path/to/Wizardry8/Data/DATA.SLF" --patch "/path/to/Wizardry8/Patches/PATCH.001" --out local/items.json
+```
+
+Repeat `--patch` for every enabled `PATCH.NNN`; do not pass disabled `.BAK` files. Use `--loose-dir "/path/to/Wizardry8/Data"` to include loose-file overrides. Open **Items** in the client; `local/items.json` loads automatically. An external catalog can be selected with `godot --path client -- --catalog "/path/to/items.json"`. This is an equipment inspector: ownership, inventory transfer, curse removal and weapon-based combat are not implemented.
+
+`audit` reads SLF files and `PATCH.NNN` locally and produces a small inventory. The Drive connector cannot download `LEVELS.SLF` because its 497,064,244 bytes exceed the connector's 256 MiB limit. Local indexing avoids that restriction. Parallel Worlds and localization overlays remain unsupported.
 
 ## Next gates
 
 1. Obtain and validate the real `LEVELS.SLF` directory, then decode PVL geometry and collisions.
-2. Resolve patch/loose-file precedence and establish the precise installation baseline.
+2. Extend the verified ordinary patch/loose overlay to localization and special installation layouts; identify the executable baseline.
 3. Recover canonical combat/race/class/skill formulas; replace experimental rules only with evidence and regression checks.
 4. Reconstruct the real monastery, NPC dialogue and Crock event; validate solo without altering its late-game strength.
 5. Replace the temporary gold frame with the planned Wizardry visual identity and Grimrock-inspired materials/lighting.
 
 See [format report](docs/formats.md), [architecture](docs/architecture.md) and [iteration report](docs/iteration-001.md).
+Latest progress: [iteration 002](docs/iteration-002.md).
 
 The [formula research module](docs/formula-sources.md) contains a first source-backed candidate calculation; it remains separate from the experimental combat rules.

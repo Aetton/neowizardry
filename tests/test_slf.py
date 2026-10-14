@@ -80,9 +80,13 @@ class SlfTest(unittest.TestCase):
         struct.pack_into("<I", data, 0, 1)
         data[4:16] = "Dagger".encode("utf-16le")
         struct.pack_into("<H", data, 4+0x78, 4)
+        struct.pack_into("<b", data, 4+0x48, -6)
+        struct.pack_into("<HBB", data, 4+0x4A, 5, 2, 8)
+        struct.pack_into("<H", data, 4+0x8A, 45)
         fixture(self.file, [("DATABASES/ITEMS.DBS", data, 0)])
         item = item_catalog(Archive(self.file))["items"][0]
         self.assertEqual((item["name"], item["race_mask"]), ("Dagger", 4))
+        self.assertEqual((item["initiative"],item["damage_constant"],item["damage_dice"],item["damage_sides"],item["weight_tenths_lb"]),(-6,5,2,8,45))
         fixture(self.file, [("DATABASES/ITEMS.DBS", data[:-1], 0)])
         with self.assertRaises(FormatError): item_catalog(Archive(self.file))
 

@@ -6,8 +6,8 @@ The UI currently exposes 1–8 characters, with no six-character assumption in t
 
 Canonical mechanics and experimental decisions must remain distinguishable. The current combat is a deterministic test rule: stable speed order, fixed damage, first eligible target, XP pool divided over eligible survivors. It does not yet implement initiative rolls, formations, real action selection, distances inside the simulation, conditions, classes, leveling or equipment. Range is checked only in the prototype client. A future rule implementation must move authoritative spatial constraints into the core.
 
-Current dialogue is one fixed synthetic keeper response, with no LLM and no canonical NPC data. Captivity is an explicit state transition demonstrating solo recoverability. It is not a quest parser or a reproduction of Crock.
+Current dialogue is one fixed synthetic keeper response, with no LLM and no canonical NPC data. Captivity is an explicit state transition demonstrating solo recoverability. It is not a quest parser or a reproduction of Crock. The item browser now consumes imported schema-2 catalogs; equipment is an immutable metadata assignment with original restriction flags, separate from test damage.
 
-Import pipeline preserves source hashes and raw codes instead of guessing meanings. Patch precedence, loose-file overrides, parallel worlds and localization need a separate effective-resource layer before claiming fidelity to the installed game. Imported catalogs are not currently consumed by combat.
+Import pipeline preserves source hashes and raw codes instead of guessing meanings. `Resources` implements ordinary loose-file and numbered-patch precedence with source provenance; Parallel Worlds and localization remain out of scope. Imported catalogs are consumed by the equipment inspector but not yet combat.
 
 Source assets, full exported tables and local source paths must remain outside public git. Research reports may contain hashes, aggregate counts and format offsets; the actual content stays in the user's private asset storage.

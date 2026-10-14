@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 import fnmatch
 import hashlib
 import json
+import re
 from pathlib import Path, PurePosixPath
 import struct
 import sys
@@ -132,9 +133,65 @@ def stream_hash(f) -> str:
     return h.hexdigest()
 
 
-def item_catalog(archive: Archive) -> dict:
+class Resources:
+    """Ordinary installation overlay, matching Wizardry8Editor's SLFFile precedence.
+
+    Loose data files > numerically latest PATCH.NNN > base SLF.
+    Nonzero-state entries are skipped, not interpreted as overlay tombstones.
+    Parallel Worlds and fanpatch localization are deliberately unsupported.
+    """
+    def __init__(self, base: Archive, patches=(), loose: Path | None = None):
+        self.base = base
+        numbered = []
+        seen = set()
+        for patch in patches:
+            match = re.fullmatch(r"PATCH\.(\d{3})", patch.path.name, re.IGNORECASE)
+            if not match:
+                raise FormatError(f"Not an enabled numbered patch: {patch.path.name}")
+            number = int(match.group(1))
+            if number in seen:
+                raise FormatError(f"Ambiguous patch number: {number}")
+            seen.add(number)
+            numbered.append((number, patch))
+        self.patches = [p for _, p in sorted(numbered, reverse=True)]
+        self.loose = {}
+        if loose is not None:
+            root = loose.resolve()
+            if not root.is_dir():
+                raise FormatError("Loose data directory does not exist")
+            for path in root.rglob("*"):
+                if not path.is_file():
+                    continue
+                if not path.resolve().is_relative_to(root):
+                    raise FormatError("Loose file symlink escapes data directory")
+                key = canonical(path.relative_to(root).as_posix()).casefold()
+                if key in self.loose:
+                    raise FormatError(f"Ambiguous loose filename: {key}")
+                self.loose[key] = path
+
+    def resolve(self, name: str) -> tuple[bytes, dict]:
+        key = canonical(name).casefold()
+        if key in self.loose:
+            path = self.loose[key]
+            data = path.read_bytes()
+            return data, {"kind": "loose", "file": canonical(name), "sha256": hashlib.sha256(data).hexdigest()}
+        for archive in [*self.patches, self.base]:
+            if key in archive.lookup:
+                data = archive.read(name)
+                return data, {"kind": "archive", "file": archive.path.name, "sha256": hashlib.sha256(data).hexdigest()}
+        raise KeyError(name)
+
+    def read(self, name: str) -> bytes:
+        return self.resolve(name)[0]
+
+
+def item_catalog(archive: Archive | Resources) -> dict:
     """Only documented fields; unknown record bytes are not guessed."""
-    data = archive.read("DATABASES/ITEMS.DBS")
+    if isinstance(archive, Resources):
+        data, provenance = archive.resolve("DATABASES/ITEMS.DBS")
+    else:
+        data = archive.read("DATABASES/ITEMS.DBS")
+        provenance = {"kind": "archive", "file": archive.path.name, "sha256": hashlib.sha256(data).hexdigest()}
     count = struct.unpack_from("<I", data)[0]
     stride = 0x10D
     if len(data) != 4 + count * stride:
@@ -148,7 +205,16 @@ def item_catalog(archive: Archive) -> dict:
                       "profession_mask": struct.unpack_from("<H", r, 0x76)[0],
                       "race_mask": struct.unpack_from("<H", r, 0x78)[0],
                       "gender_mask": r[0x7C], "record_sha256": hashlib.sha256(r).hexdigest()})
-    return {"schema": 1, "source": "DATABASES/ITEMS.DBS", "record_size": stride,
+        items[-1].update({"usage_skill": r[0x46], "range_code": r[0x47],
+                          "initiative": struct.unpack_from("<b", r, 0x48)[0],
+                          "to_hit": struct.unpack_from("<b", r, 0x49)[0],
+                          "damage_constant": struct.unpack_from("<H", r, 0x4A)[0],
+                          "damage_dice": r[0x4C], "damage_sides": r[0x4D],
+                          "attack_modes": struct.unpack_from("<H", r, 0x4E)[0],
+                          "weight_tenths_lb": struct.unpack_from("<H", r, 0x8A)[0],
+                          "cursed": r[0x8C] == 1,
+                          "bonus_swings": struct.unpack_from("<b", r, 0xAD)[0]})
+    return {"schema": 2, "source": "DATABASES/ITEMS.DBS", "provenance": provenance, "record_size": stride,
             "count": count, "items": items}
 
 
@@ -182,6 +248,9 @@ def main() -> int:
         p = sub.add_parser(command)
         p.add_argument("archive", type=Path)
         p.add_argument("--out", required=True, type=Path)
+        if command == "items":
+            p.add_argument("--patch", action="append", type=Path, default=[])
+            p.add_argument("--loose-dir", type=Path)
         if command == "extract":
             p.add_argument("--pattern", required=True)
     p = sub.add_parser("audit")
@@ -197,7 +266,8 @@ def main() -> int:
                 result = archive.extract(args.out, args.pattern)
                 print(json.dumps({"extracted": result}, ensure_ascii=False))
                 return 0
-            result = archive.manifest() if args.command == "index" else item_catalog(archive)
+            result = archive.manifest() if args.command == "index" else item_catalog(
+                Resources(archive, [Archive(p) for p in args.patch], args.loose_dir))
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(result, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
         print(f"Written {args.out}")

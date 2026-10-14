@@ -45,4 +45,38 @@ Check(LegacyResearch.SingleClassAttackScore(125,125,100,125,15,4)>600, "Primary 
 Throws(() => LegacyResearch.SingleClassAttackScore(126,0,0,0,1,4), "Reject uncapped effective attributes");
 Throws(() => LegacyResearch.SingleClassAttackScore(0,0,0,0,0,4), "Reject invalid level");
 Throws(() => LegacyResearch.SingleClassAttackScore(0,0,0,0,1,5), "Reject unknown profession coefficient");
+var restricted = new ItemDefinition(77,"Restricted test staff",0,0,32,32,3,new string('a',64),5,0,2,1,1,2,4,7,50,false,0);
+var catalog = new ItemCatalog(2,"DATABASES/ITEMS.DBS",new Provenance("archive","PATCH.001",new string('b',64)),269,1,[restricted]);
+catalog.Validate();
+var equipped = Equipment.Equip(solo,solo.Party[0].Id,77,catalog);
+Check(equipped.Party[0].EquippedItemId==77 && solo.Party[0].EquippedItemId is null,"Equipment immutable transition");
+Check(Game.Load(Game.Save(equipped)).Party[0].EquippedItemId==77,"Equipment save roundtrip");
+Equipment.ValidateLoadedEquipment(equipped,catalog,catalog.Provenance.Sha256);
+Throws(()=>Equipment.ValidateLoadedEquipment(equipped,null,null),"Reject equipment without catalog");
+Throws(()=>Equipment.ValidateLoadedEquipment(equipped,catalog,new string('c',64)),"Reject changed source database");
+Throws(()=>Equipment.Equip(solo,solo.Party[0].Id,999,catalog),"Reject unknown item");
+Throws(()=>Equipment.Equip(Game.Create(2),"hero-2",77,catalog),"Enforce race restriction");
+Check(Equipment.Denial(solo.Party[0] with { Profession="Mage" },restricted)=="Profession restriction.","Enforce class restriction");
+Check(Equipment.Denial(solo.Party[0],restricted with { GenderMask=2 })=="Gender restriction.","Enforce gender restriction");
+Throws(()=>Equipment.Equip(Game.CaptureFirst(solo),"hero-1",77,catalog),"Captive cannot equip");
+Throws(()=> (catalog with { Items=[restricted,restricted],Count=2 }).Validate(),"Reject duplicate catalog IDs");
+Throws(()=> (catalog with { Count=2 }).Validate(),"Reject catalog count mismatch");
+Check((restricted with { DamageConstant=3,DamageDice=0,DamageSides=0 }).DamageDescription.Contains("30%"),"Zero dice encode bonus rather than flat damage");
+var snakeJson=System.Text.Json.JsonSerializer.Serialize(catalog,new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower});
+Check(ItemCatalog.Parse(snakeJson).Find(77).Name==restricted.Name,"Python/C# snake-case schema");
+var oldSave=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(solo))!;
+foreach(var member in oldSave["Party"]!.AsArray()) { member!.AsObject().Remove("Gender");member.AsObject().Remove("EquippedItemId"); }
+var migrated=Game.Load(oldSave.ToJsonString());
+Check(migrated.Party[0].Gender=="Male" && migrated.Party[0].EquippedItemId is null,"Iteration-001 saves remain readable");
+if(args.Length==2 && args[0]=="--fixture")
+    File.WriteAllText(args[1],snakeJson);
+else if(args.Length>0)
+{
+    var real=ItemCatalog.Parse(File.ReadAllText(args[0]));
+    var cane=real.Items.Single(i=>i.Name=="Cane of Corpus");
+    Check(Equipment.Denial(solo.Party[0],cane) is null,"Real faerie ninja weapon allowed");
+    Check(Equipment.Denial(Game.Create(2).Party[1],cane)=="Race restriction.","Real human denied exclusive weapon");
+    Check(real.Find(0).DamageDescription=="1d4 + 0","Real dagger dice parsed");
+    Console.WriteLine($"PASS: real imported item catalog ({real.Count} records)");
+}
 Console.WriteLine($"PASS: {checks} core checks");

@@ -14,18 +14,40 @@ public partial class Main : Node3D
     private Label _quest = null!;
     private OptionButton _size = null!;
     private float _pitch;
+    private ItemCatalog? _catalog;
+    private bool _catalogRequested;
     private readonly Vector3 _enemyPosition = new(0, 1, -7);
     private const string SavePath = "user://prototype-save.json";
-    private sealed record ClientSave(int Schema, GameState Game, float X, float Z, float Yaw, float Pitch);
+    private sealed record ClientSave(int Schema, GameState Game, float X, float Z, float Yaw, float Pitch, string? ItemDatabaseHash = null);
 
     public override void _Ready()
     {
         BuildRoom();
         BuildUi();
+        LoadCatalog();
         Refresh();
         Say("Technical slice. Synthetic room, sentinel and dialogue; combat rules are experimental.");
         Say("WASD — move · right mouse — look · Esc — release cursor · approach the sentinel to attack.");
         if (OS.GetCmdlineUserArgs().Contains("--smoke")) CallDeferred(nameof(Smoke));
+        if (OS.GetCmdlineUserArgs().Contains("--items")) Callable.From(ShowItems).CallDeferred();
+    }
+
+    private void LoadCatalog()
+    {
+        var args = OS.GetCmdlineUserArgs();
+        int index = Array.IndexOf(args,"--catalog");
+        _catalogRequested=index>=0;
+        string project = ProjectSettings.GlobalizePath("res://").TrimEnd('/', '\\');
+        string root = Directory.GetParent(project)!.FullName;
+        string? path = index>=0 && index+1<args.Length ? args[index+1] : null;
+        if(_catalogRequested && path is null) { Say("No item catalog path selected.");return; }
+        if (path is null)
+        {
+            path = Path.Combine(root,"local","items.json");
+        }
+        if(!Path.IsPathRooted(path))path=Path.GetFullPath(path,root);
+        if (!System.IO.File.Exists(path)) { Say("No original item catalog loaded. The scene still works with test rules."); return; }
+        Try(() => { _catalog=ItemCatalog.Parse(System.IO.File.ReadAllText(path)); Say($"Loaded {_catalog.Count} original items from {_catalog.Provenance.File}."); });
     }
 
     private StandardMaterial3D Material(Color color) => new() { AlbedoColor = color, Roughness = 0.92f };
@@ -109,6 +131,7 @@ public partial class Main : Node3D
         var buttons = new HBoxContainer(); buttons.AddThemeConstantOverride("separation",10); bottom.AddChild(buttons);
         Button(buttons,"Attack / next round",Attack);
         Button(buttons,"Keeper: monastery",() => Say("Test keeper: This is a synthetic corridor. The real monastery importer is still being researched."));
+        Button(buttons,"Items",ShowItems);
         Button(buttons,"Save",Save);
         Button(buttons,"Load",Load);
         Button(buttons,"Test captivity",() => Try(() => { _state=Game.CaptureFirst(_state); Refresh(); Say("Captured. Self-escape remains available even for a solo hero."); }));
@@ -122,7 +145,11 @@ public partial class Main : Node3D
     private void Refresh()
     {
         foreach (var child in _heroes.GetChildren()) { _heroes.RemoveChild(child); child.QueueFree(); }
-        foreach (var h in _state.Party) _heroes.AddChild(new Label { Text=$"{h.Name}\n{h.Race} · {h.Profession}\nHP {h.Hp}/{h.MaxHp}   XP {h.Xp}{(h.Captive ? "\nCAPTIVE" : "")}", AutowrapMode=TextServer.AutowrapMode.WordSmart });
+        foreach (var h in _state.Party)
+        {
+            string equipment = h.EquippedItemId.HasValue && _catalog is not null ? $"\n{_catalog.Find(h.EquippedItemId.Value).Name}" : "";
+            _heroes.AddChild(new Label { Text=$"{h.Name}\n{h.Race} · {h.Profession}\nHP {h.Hp}/{h.MaxHp}   XP {h.Xp}{equipment}{(h.Captive ? "\nCAPTIVE" : "")}", AutowrapMode=TextServer.AutowrapMode.WordSmart });
+        }
         _enemy.Text=$"{_state.Enemy.Id}\nHP {_state.Enemy.Hp} · Round {_state.Round}";
         _quest.Text=$"Captivity fixture: {_state.Quest}";
         _sentinel.Visible=_state.Enemy.Hp>0;
@@ -135,7 +162,7 @@ public partial class Main : Node3D
     }
     private void Save() => Try(() =>
     {
-        var s=new ClientSave(1,_state,_player.Position.X,_player.Position.Z,_player.Rotation.Y,_pitch);
+        var s=new ClientSave(1,_state,_player.Position.X,_player.Position.Z,_player.Rotation.Y,_pitch,_catalog?.Provenance.Sha256);
         using var file=Godot.FileAccess.Open(SavePath,Godot.FileAccess.ModeFlags.Write);
         if(file is null) throw new IOException("Cannot open save");
         file.StoreString(JsonSerializer.Serialize(s)); Say("Saved.");
@@ -146,10 +173,50 @@ public partial class Main : Node3D
         if(file is null) throw new IOException("No saved expedition");
         var s=JsonSerializer.Deserialize<ClientSave>(file.GetAsText()) ?? throw new IOException("Empty save");
         Game.Validate(s.Game);
+        Equipment.ValidateLoadedEquipment(s.Game,_catalog,s.ItemDatabaseHash);
         if(s.Schema!=1 || !float.IsFinite(s.X) || !float.IsFinite(s.Z) || !float.IsFinite(s.Yaw) || !float.IsFinite(s.Pitch) ||
             Math.Abs(s.X)>5 || s.Z < -16 || s.Z>4 || Math.Abs(s.Pitch)>1.2f) throw new IOException("Invalid saved camera position");
         _state=s.Game; _player.Position=new(s.X,0.9f,s.Z); _player.Rotation=new(0,s.Yaw,0); _pitch=s.Pitch; _camera.Rotation=new(_pitch,0,0); Refresh(); Say("Loaded.");
     });
+
+    private void ShowItems()
+    {
+        if (_catalog is null) { Say("Import your installation's item catalog using the README to open original items."); return; }
+        Input.MouseMode=Input.MouseModeEnum.Visible;
+        var dialog=new AcceptDialog { Title="Original items — test equipment", Size=new(920,620),Unresizable=true,WrapControls=false };
+        AddChild(dialog);
+        dialog.Confirmed+=dialog.QueueFree; dialog.CloseRequested+=dialog.QueueFree;
+        var layout=new VBoxContainer(); dialog.AddChild(layout);
+        layout.Position=new(12,12);layout.Size=new(896,550);
+        var search=new LineEdit { PlaceholderText="Search item name" };layout.AddChild(search);
+        var hero=new OptionButton();foreach(var h in _state.Party)hero.AddItem(h.Name);layout.AddChild(hero);
+        var row=new HBoxContainer { SizeFlagsVertical=Control.SizeFlags.ExpandFill };layout.AddChild(row);
+        var list=new ItemList { CustomMinimumSize=new(360,420),SizeFlagsVertical=Control.SizeFlags.ExpandFill,AutoHeight=false };row.AddChild(list);
+        var detailColumn=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };row.AddChild(detailColumn);
+        var detail=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(460,300) };detailColumn.AddChild(detail);
+        var assign=new Godot.Button { Text="Assign test melee weapon",Disabled=true };detailColumn.AddChild(assign);
+        detailColumn.AddChild(new Label { Text="Imported data; experimental battle rules.\nOwnership and curses are pending." });
+        ItemDefinition[] shown=[];
+        ItemDefinition? selected=null;
+        void Details()
+        {
+            if(selected is null) { detail.Text="Choose an item.";assign.Disabled=true;return; }
+            var h=_state.Party[hero.Selected];
+            var reason=Equipment.Denial(h,selected);
+            detail.Text=$"{selected.Name}  [ID {selected.Id}]\n\n{selected.DamageDescription}\nInitiative {selected.Initiative:+0;-0;0} · To hit {selected.ToHit:+0;-0;0}\nWeight {selected.WeightTenthsLb/10m} lb\nCursed: {selected.Cursed}\n\n{(reason ?? "Race, profession and gender permit this weapon.")}\n\nSource: {_catalog.Provenance.File}";
+            assign.Disabled=reason is not null || h.Captive || h.Hp==0;
+        }
+        void Filter(string term)
+        {
+            shown=_catalog.Items.Where(i=>i.Name.Contains(term,StringComparison.OrdinalIgnoreCase)).ToArray();
+            list.Clear();foreach(var i in shown)list.AddItem($"{i.Id}: {i.Name}");selected=null;Details();
+        }
+        search.TextChanged+=Filter;
+        list.ItemSelected+=(long i)=>{selected=shown[(int)i];Details();};
+        hero.ItemSelected+=(long _) => Details();
+        assign.Pressed+=()=>Try(()=>{if(selected is null)return;_state=Equipment.Equip(_state,_state.Party[hero.Selected].Id,selected.Id,_catalog);Refresh();Say($"Assigned {selected.Name}. Battle still uses experimental rules.");Details();});
+        Filter("");dialog.PopupCentered(new(920,620));
+    }
 
     public override void _UnhandledInput(InputEvent e)
     {
@@ -170,6 +237,7 @@ public partial class Main : Node3D
     {
         try
         {
+            if(_catalogRequested && _catalog is null) throw new Exception("Requested smoke catalog was not loaded");
             _player.Position=new(0,0.9f,-4);
             Attack();
             if(_state.Round!=1 || _state.Enemy.Hp!=25) throw new Exception("Combat/UI smoke failed");
@@ -177,6 +245,17 @@ public partial class Main : Node3D
             if(_state.Party.Length!=1 || _state.Round!=1) throw new Exception("Client save/load failed");
             _state=Game.CaptureFirst(_state); Refresh();
             _state=Game.Escape(_state); Refresh();
+            if (_catalog is not null)
+            {
+                var cane=_catalog.Items.FirstOrDefault(i=>i.Name=="Cane of Corpus") ??
+                    _catalog.Items.FirstOrDefault(i=>Equipment.Denial(_state.Party[0],i) is null);
+                if(cane is null) throw new Exception("Smoke catalog has no eligible melee weapon");
+                {
+                    _state=Equipment.Equip(_state,_state.Party[0].Id,cane.Id,_catalog); Save(); _state=Game.Create(8); Load();
+                    if(_state.Party[0].EquippedItemId!=cane.Id) throw new Exception("Imported equipment save/load failed");
+                    GD.Print($"PASS: imported catalog {_catalog.Count}, equipment and save binding");
+                }
+            }
             GD.Print("PASS: Godot C# scene, UI combat, save/load, solo escape"); GetTree().Quit();
         }
         catch(Exception e) { GD.PushError(e.ToString()); GetTree().Quit(1); }

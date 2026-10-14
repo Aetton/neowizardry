@@ -4,7 +4,8 @@ namespace NeoWizardry.Core;
 
 // These are prototype rules, NOT recovered Wizardry 8 combat formulas.
 public sealed record Hero(string Id, string Name, string Race, string Profession,
-    int Hp, int MaxHp, int Speed, int Power, int Xp = 0, bool Captive = false);
+    int Hp, int MaxHp, int Speed, int Power, int Xp = 0, bool Captive = false,
+    string Gender = "Male", int? EquippedItemId = null);
 public sealed record Enemy(string Id, int Hp, int Speed, int Power, int XpReward);
 public sealed record GameState(int Schema, Hero[] Party, Enemy Enemy, int Round = 0,
     bool RewardGranted = false, string Quest = "none");
@@ -34,7 +35,8 @@ public static class Game
         var ids = new HashSet<string>();
         foreach (var h in state.Party)
             if (h is null || string.IsNullOrWhiteSpace(h.Id) || !ids.Add(h.Id) || h.MaxHp <= 0 ||
-                h.Hp < 0 || h.Hp > h.MaxHp || h.Xp < 0 || h.Power < 0 || h.Speed < 0)
+                h.Hp < 0 || h.Hp > h.MaxHp || h.Xp < 0 || h.Power < 0 || h.Speed < 0 || h.EquippedItemId < 0 ||
+                h.Gender is not ("Male" or "Female"))
                 throw new InvalidDataException("Invalid party member");
         if (state.RewardGranted && state.Enemy.Hp != 0)
             throw new InvalidDataException("Reward before victory");
