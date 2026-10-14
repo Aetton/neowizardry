@@ -26,3 +26,15 @@ On 2026-10-14 the user confirmed basic APK operation: “Норм, пашет”
 ## Next
 
 Verify hit/penetration and complete initiative formulas against original-game evidence before adding them to combat. Magic and crafting remain dedicated roadmap stages; this increment does not implement either.
+
+## CI and Android artifact
+
+Code commit: `4d250ba780e2ed023301d16fdaf2d8c4bd340d3f`.
+
+- Core/client CI passed: https://github.com/Aetton/neowizardry/actions/runs/38623526206
+- Android export and signature verification passed: https://github.com/Aetton/neowizardry/actions/runs/38623526140
+- ARM64 debug APK artifact: https://github.com/Aetton/neowizardry/actions/runs/38623526140/artifacts/11923280658
+- APK: 103208433 bytes; SHA256 `da0cc808b183ab105c06bc039e7d65b1df35def941bb66343c9194240f4e6efa`.
+- Downloaded ZIP matched the GitHub artifact digest `5e8f72f32ec0ba990f83138afff075e9a43d90faf82a720d73b90b441450733a`. ARM64 and managed assemblies, synthetic one-item catalog and absence of SLF/DBS files checked.
+
+The workflow generates a fresh debug key. This APK requires uninstalling the previous differently signed prototype; uninstalling removes its app-local saves. Stable development signing is a separate follow-up. The new APK has not yet received device feedback.
