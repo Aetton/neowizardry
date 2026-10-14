@@ -61,6 +61,7 @@ jobs:
           New-Item -ItemType Directory -Force build/windows | Out-Null
           & $env:GODOT --headless --path client --export-debug Windows ../build/windows/NeoWizardry.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if (!(Get-ChildItem build/windows -Recurse -Filter coreclr.dll)) { throw 'Bundled .NET runtime is missing' }
           foreach ($mode in @('--smoke', '--mobile-smoke')) {
             $process = Start-Process -FilePath "$PWD/build/windows/NeoWizardry.exe" -ArgumentList "--headless -- --touch $mode" -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP/$mode.log" -RedirectStandardError "$env:RUNNER_TEMP/$mode-error.log"
             if (!$process.WaitForExit(60000)) { $process.Kill(); throw "Windows $mode timed out" }
@@ -95,4 +96,11 @@ jobs:
           gh release upload $env:PREVIEW_TAG build/neowizardry-windows-x64.zip build/neowizardry-windows-launcher.zip build/build.json --clobber
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           gh release edit $env:PREVIEW_TAG --draft=false
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Verify the published launcher's first download
+        run: |
+          $env:LOCALAPPDATA = "$env:RUNNER_TEMP/neo-launcher-live-test"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/windows/UpdateAndRun.ps1 -NoLaunch
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/windows/UpdateAndRun.ps1 -NoLaunch -Offline
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

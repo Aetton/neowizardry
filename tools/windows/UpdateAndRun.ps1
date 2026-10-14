@@ -68,7 +68,7 @@ function Update-NeoWizardry($Root, [switch]$SkipUpdate) {
         $marker = Join-Path $Root 'current.txt'
         $tempMarker = Join-Path $stage 'current.txt'
         [IO.File]::WriteAllText($tempMarker, $manifest.version)
-        if (Test-Path -LiteralPath $marker) { [IO.File]::Replace($tempMarker, $marker, $null) }
+        if (Test-Path -LiteralPath $marker) { [IO.File]::Replace($tempMarker, $marker, [NullString]::Value) }
         else { [IO.File]::Move($tempMarker, $marker) }
         Write-Host "Ready: $($manifest.version) ($($manifest.commit.Substring(0,7)))"
         return (Join-Path $destination 'NeoWizardry.exe')
