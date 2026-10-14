@@ -1,6 +1,6 @@
 # Persistent Windows build runner
 
-The user chose the main Windows computer. The repository supports this without making jobs wait on an unregistered/offline runner: hosted Windows remains the default until the repository variable below is set.
+The user chose the main Windows computer. At the user's subsequent explicit request, Windows preview now directly selects `[self-hosted, Windows, X64]`. A matching online runner must exist; otherwise the job queues. Linux/PR verification remains hosted.
 
 ## One-time prerequisites
 
@@ -24,18 +24,13 @@ Restart the terminal after installation. Check `git --version`, `pwsh --version`
 
 The runner connects outward; no inbound port forwarding is needed. Keep the machine awake and the runner process running while building.
 
-## Switch the repository
+## Workflow routing
 
-Only after the runner is online, open **Settings → Secrets and variables → Actions → Variables** and create the repository variable:
+The workflow is already routed directly to the runner. Its default labels `self-hosted`, `Windows`, `X64` are sufficient; the optional `neowizardry-windows` label can still identify this project's machine. No repository variable is needed.
 
-```text
-Name: NEOWIZARDRY_WINDOWS_RUNNER
-Value: ["self-hosted","Windows","X64","neowizardry-windows"]
-```
+Start the registered runner and check that the queued **Windows preview** job chose it, used an installed .NET 8 SDK, and reports retained Godot tools on subsequent jobs.
 
-Then manually run **Windows preview** on `main`, or push a relevant change. Check that the job chose `kirill-win`, used an installed .NET 8 SDK, and reports retained Godot tools on subsequent jobs.
-
-To return to hosted Windows, delete that variable or set its value to `"windows-latest"` (including JSON quotes). Selecting self-hosted does **not** auto-fallback while the computer is offline; GitHub queues jobs for the selected labels.
+There is no hosted fallback while the computer is offline: jobs wait for matching labels. To deliberately return to hosted Windows, edit the workflow's `runs-on` back to `windows-latest`.
 
 ## Persistent tool locations
 

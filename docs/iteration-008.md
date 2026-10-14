@@ -1,6 +1,6 @@
 # Iteration 008 — CI environment reuse
 
-The user requested faster iterations and chose the main Windows computer for a possible persistent runner. No runner has been installed or registered by the assistant; hosted Windows remains active until the user completes [runner setup](windows-runner.md) and sets the repository variable.
+The user requested faster iterations and chose the main Windows computer for a possible persistent runner. No runner has been installed or registered by the assistant. The user subsequently requested immediate self-hosted routing, committed as `c73ff4a6739149956580f9354464a4805250aa50`; Windows preview now selects `[self-hosted, Windows, X64]` without a hosted fallback. Registration/startup on the physical machine is covered by [runner setup](windows-runner.md).
 
 ## Changes
 
@@ -29,3 +29,7 @@ Optimized first run: job 116146035630, https://github.com/Aetton/neowizardry/act
 This is approximately 59% less job execution time. Queue delay is excluded; hosted machines/network conditions vary. Do not infer a guaranteed duration from one run. All required tests/export/launcher checks passed; the cache fill succeeded. The same job is being re-run to verify cache hits and publication reuse.
 
 Code commit: `38e4d4f07afca18fb409f64faa72e7eeb065c6e1`. Gameplay mechanics did not change.
+
+## Warm-cache observation
+
+Attempt 2 restored both NuGet and Godot caches; Godot preparation took 1 second and .NET client build completed in 2.66 seconds. Godot then stalled during headless editor import after an EditorSettings diagnostic, so the attempt was canceled when a newer job superseded it. A complete faster warm-run result is **not** claimed. Build/import/export were separated, each with a timeout; obsolete previews now cancel instead of holding the queue.
