@@ -33,6 +33,7 @@ Visual development starts with real-world import: Wizardry identity/frame, Grimr
 - Do not assume every item-combination system shares the same algorithm or that recipe data necessarily lives in DBS.
 
 ## Persistent gates
+- Early Android proof: touch UI, movement/look, item interaction, background saves, APK export and a separate physical-device test. iOS follows when macOS/Xcode and a test device are available.
 - Parties of 1–8 are tested throughout; final upper limit remains open.
 - No automatic solo equalization or unusual-build nerfs.
 - Main-story completion must be demonstrated with solo; a synthetic captivity fixture does not prove the original quest is fixed.

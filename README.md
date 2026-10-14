@@ -72,5 +72,6 @@ Repeat `--patch` for every enabled `PATCH.NNN`; do not pass disabled `.BAK` file
 
 See [format report](docs/formats.md), [architecture](docs/architecture.md) and [iteration report](docs/iteration-001.md).
 Latest progress: [iteration 002](docs/iteration-002.md).
+Mobile prototype: [touch controls, Android build and device checklist](docs/mobile.md). Preview on desktop with `godot --path client -- --touch`.
 
 The [formula research module](docs/formula-sources.md) contains a first source-backed candidate calculation; it remains separate from the experimental combat rules.
