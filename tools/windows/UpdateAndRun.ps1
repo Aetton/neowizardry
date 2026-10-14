@@ -5,13 +5,38 @@ $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Repository = 'Aetton/neowizardry'
 
+function Get-FeedPreview([string]$Content) {
+    $feed = New-Object System.Xml.XmlDocument
+    $feed.XmlResolver = $null
+    $feed.LoadXml($Content)
+    foreach ($entry in $feed.SelectNodes("/*[local-name()='feed']/*[local-name()='entry']")) {
+        $link = $entry.SelectSingleNode("./*[local-name()='link'][@rel='alternate']")
+        if (!$link) { continue }
+        $prefix = "https://github.com/$Repository/releases/tag/"
+        $url = $link.GetAttribute('href')
+        if (!$url.StartsWith($prefix, [StringComparison]::Ordinal)) { continue }
+        $tag = $url.Substring($prefix.Length)
+        if ($tag -notmatch '^windows-build-[0-9]+$') { continue }
+        return [PSCustomObject]@{ tag_name = $tag; assets = @(
+            [PSCustomObject]@{name='build.json';browser_download_url="https://github.com/$Repository/releases/download/$tag/build.json"},
+            [PSCustomObject]@{name='neowizardry-windows-x64.zip';browser_download_url="https://github.com/$Repository/releases/download/$tag/neowizardry-windows-x64.zip"}) }
+    }
+    throw 'No published Windows build is available in the release feed.'
+}
+
 function Get-PreviewRelease {
     $headers = @{ 'User-Agent' = 'NeoWizardry-Launcher'; 'Accept' = 'application/vnd.github+json' }
-    $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/releases?per_page=50" -Headers $headers -TimeoutSec 20
-    $release = $releases | Where-Object { !$_.draft -and $_.tag_name -match '^windows-build-[0-9]+$' } |
-        Sort-Object published_at -Descending | Select-Object -First 1
-    if (!$release) { throw 'No published Windows build is available yet.' }
-    return $release
+    try {
+        $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/releases?per_page=50" -Headers $headers -TimeoutSec 20
+        $release = $releases | Where-Object { !$_.draft -and $_.tag_name -match '^windows-build-[0-9]+$' } |
+            Sort-Object published_at -Descending | Select-Object -First 1
+        if (!$release) { throw 'No published Windows build is available yet.' }
+        return $release
+    } catch {
+        Write-Host 'Release API unavailable; checking the public release feed.'
+        $response = Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/$Repository/releases.atom" -TimeoutSec 20
+        return Get-FeedPreview $response.Content
+    }
 }
 
 function Save-Asset($Url, $Path) {

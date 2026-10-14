@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/UpdateAndRun.ps1"
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('neo-updater-test-' + [Guid]::NewGuid().ToString('N'))
 $checks = 0
+$originalDiscovery = (Get-Command Get-PreviewRelease).ScriptBlock
 function Check($Condition, $Name) {
     if (!$Condition) { throw $Name }
     $script:checks++
@@ -33,6 +34,23 @@ try {
                 ConvertTo-Json | Set-Content -LiteralPath $Path
         } else { Copy-Item -LiteralPath $fixtureZip -Destination $Path }
     }
+    $atom = @'
+<feed xmlns="http://www.w3.org/2005/Atom">
+<entry><link rel="alternate" href="https://github.com/other/repo/releases/tag/windows-build-99" /></entry>
+<entry><link rel="alternate" href="https://github.com/Aetton/neowizardry/releases/tag/android-build-9" /></entry>
+<entry><link rel="alternate" href="https://github.com/Aetton/neowizardry/releases/tag/windows-build-12" /></entry>
+<entry><link rel="alternate" href="https://github.com/Aetton/neowizardry/releases/tag/windows-build-11" /></entry>
+</feed>
+'@
+    $feedRelease = Get-FeedPreview $atom
+    Check ($feedRelease.tag_name -eq 'windows-build-12') 'Feed did not select latest matching published entry'
+    Check ($feedRelease.assets[0].browser_download_url -eq 'https://github.com/Aetton/neowizardry/releases/download/windows-build-12/build.json') 'Feed manifest URL mismatch'
+    $noWindows = $false
+    try { Get-FeedPreview '<feed xmlns="http://www.w3.org/2005/Atom" />' | Out-Null } catch { $noWindows = $true }
+    Check $noWindows 'Empty release feed silently succeeded'
+    function Invoke-RestMethod { throw 'Simulated API 403' }
+    function Invoke-WebRequest { return [PSCustomObject]@{Content=$atom} }
+    Check ((& $originalDiscovery).tag_name -eq 'windows-build-12') 'API failure did not fall back to the public feed'
     $install = Join-Path $testRoot 'installed'
     $exe = Update-NeoWizardry $install
     Check (Test-Path -LiteralPath $exe) 'First install failed'

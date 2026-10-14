@@ -8,4 +8,4 @@ The map uses the existing synthetic room's coordinates. Portraits are procedural
 
 - Client builds without warnings/errors; existing gameplay and touch smoke checks pass locally.
 - Graphical desktop inspection with eight heroes, plus magic dialog and touch-mode inspection.
-- Hosted Linux and exported Windows verification pending before completion.
+- Hosted Linux passed; Windows export and both exported EXE smoke checks passed for preview 12. Its public launcher discovery received HTTP 403 from GitHub. Added an anonymous public Atom release-feed fallback, with manifest/package SHA256 validation unchanged; final complete verification pending.

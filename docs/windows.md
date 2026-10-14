@@ -39,3 +39,5 @@ Windows previews are built automatically on relevant `main` changes. Android exp
 Windows builds reuse an installed .NET 8 SDK, cache NuGet and the Godot editor/selected Windows templates, and suppress Windows PowerShell's expensive download progress rendering. The anonymous launcher still downloads and verifies the real published package; the check was not removed. Re-running a completed source commit keeps its already-published immutable release rather than replacing assets.
 
 A local Windows runner can keep its tools on disk. At the user's explicit request, Windows preview now directly selects a self-hosted Windows x64 runner and queues if none is online. See [persistent runner setup](windows-runner.md).
+
+Release discovery tries the public GitHub API, then its public release Atom feed if API access fails. Both paths use the same fixed repository download locations and manifest/SHA256 checks. If an older launcher reports HTTP 403, replace its two launcher files from the latest launcher ZIP once to obtain this fallback; game saves remain separate.
