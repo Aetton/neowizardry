@@ -12,6 +12,7 @@ Godot 4.5.1 .NET client + independent .NET 8 core + dependency-free Python 3.10+
 - A catalog of 819 original item records: IDs, names, item type/icon indices and equipment restriction masks. Generated catalogs stay local; original assets are not bundled.
 - A synthetic 3D corridor with free movement, collisions, mouse look, party size 1–8, a training sentinel, round resolution, XP, sample dialogue and save/load.
 - A solo captivity/escape regression fixture. This proves an engine state transition, **not** that the original Crock quest has been reproduced.
+- Prototype magic with two explicitly synthetic spells, learned IDs, Fire/Divine mana, power/cost previews, round integration and saved roll continuation. Original magic formulas are still research.
 - Deterministic core transitions and versioned saves, tested independently of Godot. Imported melee damage dice and weapon initiative are active; the prototype RNG state survives saves.
 - Original-item browser with search, raw weapon statistics and a melee equipment slot backed by the shared party bag enforcing race/profession/gender restrictions. Equipped items survive saves; loading requires the same source item database.
 - Ordinary resource overlay: loose data files, then descending `PATCH.NNN`, then base archive, with source provenance.
@@ -45,6 +46,8 @@ The smoke check intentionally writes `prototype-save.json` into Godot's user dat
 
 New expeditions receive a limited **test** starter bag; the training sentinel drops one configured test item on victory. These are not original starting equipment or loot tables. In **Items**, owned items are shown by default; **Browse full catalog** is inspection only and cannot grant unowned weapons. Old saves retain equipped copies but do not receive a retroactive starter bag.
 
+New test parties can use **Magic** near the sentinel. Test Spark damages it; Test Mend heals an injured living party member. Casting replaces one hero's weapon attack for the round. Powers 1–3, costs and effects are fixtures; see [magic coverage](docs/magic.md). Existing saves do not receive retroactive learned spells or mana.
+
 ## Import your installation
 
 No originals, full exported databases or copyrighted textures belong in this repository. Put local outputs in the ignored `local/` directory.
@@ -77,7 +80,7 @@ Repeat `--patch` for every enabled `PATCH.NNN`; do not pass disabled `.BAK` file
 5. Replace the temporary gold frame with the planned Wizardry visual identity and Grimrock-inspired materials/lighting.
 
 See [format report](docs/formats.md), [architecture](docs/architecture.md) and [iteration report](docs/iteration-001.md).
-Latest progress: [iteration 006](docs/iteration-006.md).
+Latest progress: [iteration 007](docs/iteration-007.md).
 Mobile prototype: [touch controls, Android build and device checklist](docs/mobile.md). Preview on desktop with `godot --path client -- --touch`.
 
 The [formula research module](docs/formula-sources.md) contains a first source-backed candidate calculation; it remains separate from the experimental combat rules.

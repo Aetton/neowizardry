@@ -2,7 +2,7 @@
 
 `core/` contains immutable record-based transitions with no Godot dependency. It owns party state, round ordering, XP distribution, captivity and versioned serialization. `client/` references the core and owns 3D scene, collision, camera, UI and user data storage. `tools/` reads originals locally and produces inventories/catalogs/extracted assets under ignored paths.
 
-The UI currently exposes 1–8 characters, with no six-character assumption in the core. The maximum is a prototype constraint, not the final design promise. Enemy parameters are independent of party size. Renderer timing does not affect combat order.
+The UI currently exposes 1–8 characters, with no six-character assumption in the core. The maximum is a prototype constraint, not the final design promise. Enemy parameters are independent of party size. Renderer timing does not affect combat order. `Magic.cs` owns synthetic spell definitions, target/order validation and realm pool spending. A chosen spell replaces its actor's physical attack inside the shared queue; skipped/dead actions consume neither mana nor RNG.
 
 Canonical mechanics and experimental decisions must remain distinguishable. The current combat is a deterministic test rule: stable speed plus weapon initiative order, imported melee dice or unarmed fixture damage, first eligible target, XP pool divided over eligible survivors. It does not yet implement initiative rolls, formations, real action selection, distances inside the simulation, conditions, classes, leveling or item-instance state, charges or encumbrance. Range is checked only in the prototype client. A future rule implementation must move authoritative spatial constraints into the core.
 
