@@ -1,0 +1,97 @@
+name: Windows preview
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'client/**'
+      - 'core/**'
+      - 'core-checks/**'
+      - 'tools/windows/**'
+      - '.github/workflows/windows.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: windows-preview
+  cancel-in-progress: false
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Verify gameplay and updater
+        run: |
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet run --project core-checks -- --fixture client/demo-items.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/windows/TestUpdater.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Get Godot .NET and Windows templates
+        run: |
+          $editorZip = "$env:RUNNER_TEMP/godot.zip"
+          $templatesZip = "$env:RUNNER_TEMP/templates.tpz"
+          curl.exe -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_mono_win64.zip -o $editorZip
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          curl.exe -fL --retry 3 https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_mono_export_templates.tpz -o $templatesZip
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Expand-Archive -LiteralPath $editorZip -DestinationPath "$env:RUNNER_TEMP/godot"
+          python -c "import zipfile,os,pathlib; z=zipfile.ZipFile(os.environ['RUNNER_TEMP']+'/templates.tpz'); root=pathlib.Path(os.environ['APPDATA'])/'Godot/export_templates/4.5.1.stable.mono'; root.mkdir(parents=True,exist_ok=True); [(root/pathlib.PurePosixPath(n).name).write_bytes(z.read(n)) for n in z.namelist() if n.startswith('templates/windows') and not n.endswith('/')]"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $godot = Get-ChildItem "$env:RUNNER_TEMP/godot" -Recurse -Filter '*_console.exe' | Select-Object -First 1
+          if (!$godot) { throw 'Godot console executable missing' }
+          "GODOT=$($godot.FullName)" >> $env:GITHUB_ENV
+      - name: Export and run the Windows game
+        run: |
+          dotnet build client/NeoWizardry.csproj
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $env:GODOT --headless --editor --path client --import
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force build/windows | Out-Null
+          & $env:GODOT --headless --path client --export-debug Windows ../build/windows/NeoWizardry.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          foreach ($mode in @('--smoke', '--mobile-smoke')) {
+            $process = Start-Process -FilePath "$PWD/build/windows/NeoWizardry.exe" -ArgumentList "--headless -- --touch $mode" -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP/$mode.log" -RedirectStandardError "$env:RUNNER_TEMP/$mode-error.log"
+            if (!$process.WaitForExit(60000)) { $process.Kill(); throw "Windows $mode timed out" }
+            Get-Content "$env:RUNNER_TEMP/$mode.log"
+            Get-Content "$env:RUNNER_TEMP/$mode-error.log"
+            if ($process.ExitCode -ne 0) { throw "Windows $mode failed ($($process.ExitCode))" }
+            if (!(Select-String -Path "$env:RUNNER_TEMP/$mode.log" -Pattern 'PASS:')) { throw "Missing $mode success marker" }
+          }
+      - name: Package game and launcher
+        run: |
+          $tag = "windows-build-$env:GITHUB_RUN_NUMBER"
+          "PREVIEW_TAG=$tag" >> $env:GITHUB_ENV
+          Compress-Archive -Path build/windows/* -DestinationPath build/neowizardry-windows-x64.zip
+          @{schema=1;version=$tag;commit=$env:GITHUB_SHA;sha256=(Get-FileHash build/neowizardry-windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()} | ConvertTo-Json | Set-Content -Encoding utf8 build/build.json
+          Copy-Item tools/windows/RunNeoWizardry.cmd,tools/windows/UpdateAndRun.ps1 build/
+          Compress-Archive -Path build/RunNeoWizardry.cmd,build/UpdateAndRun.ps1 -DestinationPath build/neowizardry-windows-launcher.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neowizardry-windows-preview
+          path: |
+            build/neowizardry-windows-x64.zip
+            build/neowizardry-windows-launcher.zip
+            build/build.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish completed preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:PREVIEW_TAG --target $env:GITHUB_SHA --prerelease --draft --title "Windows preview $env:GITHUB_RUN_NUMBER" --notes "Portable Windows x64 test build. Download the launcher once; it checks published previews and preserves app-local saves. Original game data is excluded."
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          gh release upload $env:PREVIEW_TAG build/neowizardry-windows-x64.zip build/neowizardry-windows-launcher.zip build/build.json --clobber
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          gh release edit $env:PREVIEW_TAG --draft=false
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

@@ -18,7 +18,11 @@ Godot 4.5.1 .NET client + independent .NET 8 core + dependency-free Python 3.10+
 
 Combat numbers and starting characters are **experimental placeholders**, not recovered Wizardry 8 formulas. No enemy scaling by party size. Reward is shared between living, uncaptured heroes, so solo retains the concentration of XP.
 
-## Run
+## Windows testing
+
+Windows is the primary manual testing target. Download the launcher ZIP from a [Windows preview release](https://github.com/Aetton/neowizardry/releases), extract it once and double-click `RunNeoWizardry.cmd`. It checks for updates, verifies the downloaded package and launches the game. Game builds live under `%LOCALAPPDATA%/NeoWizardry`; saves remain in Godot's separate user-data directory. No Godot editor or .NET SDK installation is required. See [Windows preview guide](docs/windows.md).
+
+## Run from source
 
 Install .NET SDK 8 and **Godot 4.5.1 .NET** (the standard Godot binary does not run C#). From the repository root:
 
