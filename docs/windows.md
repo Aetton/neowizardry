@@ -33,3 +33,9 @@ The launcher runs in a console window and waits for the game to exit. It is an e
 The public builds package the synthetic staff catalog; original SLF/DBS resources stay outside releases. Android APK installation is needed when testing mobile-specific changes or milestone builds rather than every gameplay iteration.
 
 Windows previews are built automatically on relevant `main` changes. Android export is now manual (`workflow_dispatch`) for mobile changes and milestone checks.
+
+## CI speed and an optional persistent runner
+
+Windows builds reuse an installed .NET 8 SDK, cache NuGet and the Godot editor/selected Windows templates, and suppress Windows PowerShell's expensive download progress rendering. The anonymous launcher still downloads and verifies the real published package; the check was not removed. Re-running a completed source commit keeps its already-published immutable release rather than replacing assets.
+
+A local Windows runner can keep its tools on disk. Hosted Windows stays the default until the user registers a runner and sets a repository variable. See [persistent runner setup](windows-runner.md).
