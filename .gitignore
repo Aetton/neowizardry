@@ -1,0 +1,13 @@
+.godot/
+**/bin/
+**/obj/
+__pycache__/
+*.pyc
+local/
+legacy/
+imported/
+*.slf
+*.SLF
+*.DBS
+*.SAV
+*.CHR
