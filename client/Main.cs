@@ -50,6 +50,7 @@ public partial class Main : Node3D
         if (OS.GetCmdlineUserArgs().Contains("--smoke")) CallDeferred(nameof(Smoke));
         if (OS.GetCmdlineUserArgs().Contains("--mobile-smoke")) Callable.From(MobileSmoke).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--items")) Callable.From(ShowItems).CallDeferred();
+        if (OS.GetCmdlineUserArgs().Contains("--craft")) Callable.From(ShowCrafting).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--magic")) Callable.From(ShowMagic).CallDeferred();
     }
 
@@ -57,8 +58,13 @@ public partial class Main : Node3D
     {
         var state=Game.Create(size);
         if(_catalog is null)return state;
-        var starter=_catalog.Items.OrderBy(i=>i.Id).Where(i=>Equipment.Denial(state.Party[0],i) is null).Take(2).ToArray();
+        var starter=_catalog.Items.OrderBy(i=>i.Id).Where(i=>Equipment.Denial(state.Party[0],i) is null).Take(Crafting.UsesFixture(_catalog)?1:2).ToArray();
         foreach(var item in starter) state=Inventory.Add(state,item.Id,1,_catalog);
+        if(Crafting.UsesFixture(_catalog))
+        {
+            state=Inventory.Add(Inventory.Add(state,78,4,_catalog),79,2,_catalog);
+            state=state with { KnownRecipes=Crafting.Recipes.Select(r=>r.Id).ToArray() };
+        }
         if(starter.Length>0)state=state with { Enemy=state.Enemy with { LootItemId=starter[^1].Id } };
         return state;
     }
@@ -171,7 +177,7 @@ public partial class Main : Node3D
         _enemy=new Label();rc.AddChild(_enemy);
         _log=new RichTextLabel { CustomMinimumSize=new(200,80),ScrollFollowing=true,SizeFlagsVertical=Control.SizeFlags.ExpandFill };rc.AddChild(_log);
         _actionsPanel=Panel(_ui,Vector2.Zero,new(900,80));_actions=new GridContainer();_actions.AddThemeConstantOverride("h_separation",8);_actions.AddThemeConstantOverride("v_separation",8);_actionsPanel.AddChild(_actions);
-        Button(_actions,"Attack",Attack);Button(_actions,"Magic",ShowMagic);Button(_actions,"Items",ShowItems);Button(_actions,"Save",Save);Button(_actions,"Load",Load);
+        Button(_actions,"Attack",Attack);Button(_actions,"Magic",ShowMagic);Button(_actions,"Items",ShowItems);Button(_actions,"Craft",ShowCrafting);Button(_actions,"Save",Save);Button(_actions,"Load",Load);
         Button(_actions,"Keeper",()=>Say("Test keeper: The real monastery is still being researched."));
         Button(_actions,"Capture test",()=>Try(()=>{_state=Game.CaptureFirst(_state);Refresh();_touchInput.Reset();}));
         Button(_actions,"Escape",()=>Try(()=>{_state=Game.Escape(_state);Refresh();}));
@@ -224,10 +230,11 @@ public partial class Main : Node3D
         foreach (var h in _state.Party)
         {
             string equipment = h.EquippedItemId.HasValue && _catalog is not null ? $"\n{_catalog.Find(h.EquippedItemId.Value).Name}" : "";
+            string effects=string.Join(" · ",(h.Effects ?? []).Select(e=>$"{e.Kind} {e.Rounds}r"));
             string mana=string.Join(" · ",(h.Mana ?? []).Select(p=>$"{p.Realm} {p.Current}/{p.Max}"));
-            _heroes.AddChild(new Label { Text=$"{h.Name}\n{h.Race} · {h.Profession}\nHP {h.Hp}/{h.MaxHp}   XP {h.Xp}\n{mana}{equipment}{(h.Captive ? "\nCAPTIVE" : "")}", AutowrapMode=TextServer.AutowrapMode.WordSmart });
+            _heroes.AddChild(new Label { Text=$"{h.Name}\n{h.Race} · {h.Profession}\nHP {h.Hp}/{h.MaxHp}   XP {h.Xp}\n{mana}\n{effects}{equipment}{(h.Captive ? "\nCAPTIVE" : "")}", AutowrapMode=TextServer.AutowrapMode.WordSmart });
         }
-        _enemy.Text=$"{_state.Enemy.Id}\nHP {_state.Enemy.Hp} · Round {_state.Round}";
+        _enemy.Text=$"{_state.Enemy.Id}\nHP {_state.Enemy.Hp} · Round {_state.Round}\n"+string.Join(" · ",(_state.Enemy.Effects ?? []).Select(e=>$"{e.Kind} {e.Rounds}r"));
         _quest.Text=$"Captivity fixture: {_state.Quest}";
         _sentinel.Visible=_state.Enemy.Hp>0;
         _size.Select(_state.Party.Length-1);
@@ -239,10 +246,11 @@ public partial class Main : Node3D
     }
     private void Save() => Try(()=>{SaveTo(SavePath);Say("Saved.");});
 
-    private void Cast(SpellOrder order)
+    private void Cast(SpellOrder order) => CastOrders([order]);
+    private void CastOrders(IReadOnlyList<SpellOrder> orders)
     {
         if(_player.Position.DistanceTo(_enemyPosition)>4.5f)throw new InvalidOperationException("Too far from the sentinel.");
-        var result=Game.Cast(_state,order,_catalog);_state=result.State;
+        var result=Game.CastRound(_state,orders,_catalog);_state=result.State;
         foreach(var entry in result.Events)Say(entry);
         Refresh();
     }
@@ -260,29 +268,81 @@ public partial class Main : Node3D
         var target=new OptionButton();foreach(var h in _state.Party)target.AddItem(h.Name);body.AddChild(target);
         var details=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(400,160) };body.AddChild(details);
         var cast=new Button { Text="Cast / next round" };body.AddChild(cast);
+        var queued=new Dictionary<string,SpellOrder>();
+        var plan=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart };body.AddChild(plan);
+        var queue=new Button { Text="Queue / replace this caster's order" };body.AddChild(queue);
+        var resolve=new Button { Text="Resolve queued round",Disabled=true };body.AddChild(resolve);
+        var clear=new Button { Text="Clear orders" };body.AddChild(clear);
         body.AddChild(new Label { Text="Synthetic spells and formulas.\nOriginal success, resistance and Power Cast are pending.",AutowrapMode=TextServer.AutowrapMode.WordSmart });
         SpellOrder Order()
         {
             var s=Magic.Spells[spell.Selected];
-            return new(_state.Party[caster.Selected].Id,s.Id,power.Selected+1,s.Heals ? _state.Party[target.Selected].Id : _state.Enemy.Id);
+            return new(_state.Party[caster.Selected].Id,s.Id,power.Selected+1,Magic.TargetsParty(s) ? _state.Party[target.Selected].Id : _state.Enemy.Id);
         }
         void Details()
         {
             var s=Magic.Spells[spell.Selected];var order=Order();
-            target.Visible=s.Heals;
+            target.Visible=Magic.TargetsParty(s);
             var denial=Magic.Denial(_state,order);
             if(_player.Position.DistanceTo(_enemyPosition)>4.5f)denial="Approach the sentinel to cast in battle.";
             var h=_state.Party[caster.Selected];
             int mana=(h.Mana ?? []).FirstOrDefault(p=>p.Realm==s.Realm)?.Current ?? 0;
-            details.Text=$"{s.Name} · Power {order.Power}\n{order.Power}d6 + {order.Power} {(s.Heals ? "healing" : "damage")}\nCost: {s.CostPerPower*order.Power} {s.Realm} mana · Available: {mana}\n\n{(denial ?? "Ready. This replaces the caster's weapon attack; everyone else takes their normal turn.")}";
-            cast.Disabled=denial is not null;
+            string effect=s.Effect switch {
+                "ward"=>$"Reduce incoming sentinel damage by {2*order.Power}, 3 rounds",
+                "bind"=>"Skip the enemy action this round (if cast before it)",
+                "burn"=>$"{order.Power} damage at round end, 3 rounds",
+                _=>$"{order.Power}d6 + {order.Power} {(s.Heals ? "healing" : "damage")}" };
+            details.Text=$"{s.Name} · Power {order.Power}\n{effect}\nCost: {s.CostPerPower*order.Power} {s.Realm} mana · Available: {mana}\n\n{(denial ?? "Ready. This replaces the caster's weapon attack; everyone else takes their normal turn.")}";
+            cast.Disabled=denial is not null;queue.Disabled=denial is not null;
+            var invalid=queued.Values.Select(o=>Magic.Denial(_state,o)).FirstOrDefault(d=>d is not null);
+            resolve.Disabled=queued.Count==0 || invalid is not null || _player.Position.DistanceTo(_enemyPosition)>4.5f;
+            plan.Text="Queued: "+(queued.Count==0 ? "none" : string.Join(", ",queued.Values.Select(o=>$"{_state.Party.Single(h=>h.Id==o.HeroId).Name}: {Magic.Find(o.SpellId).Name} P{o.Power}")))+(invalid is null ? "" : $"\n{invalid}");
         }
         caster.ItemSelected+=_=>Details();spell.ItemSelected+=_=>Details();power.ItemSelected+=_=>Details();target.ItemSelected+=_=>Details();
-        cast.Pressed+=()=>Try(()=>{Cast(Order());Details();});
+        cast.Pressed+=()=>Try(()=>{Cast(Order());queued.Clear();Details();});
+        queue.Pressed+=()=>{var o=Order();queued[o.HeroId]=o;Details();};
+        clear.Pressed+=()=>{queued.Clear();Details();};
+        resolve.Pressed+=()=>Try(()=>{CastOrders(queued.Values.ToArray());queued.Clear();Details();});
         var size=GetViewport().GetVisibleRect().Size;var dimensions=new Vector2I((int)Math.Min(640,size.X-32),(int)Math.Min(530,size.Y-32));
-        body.Position=new(12,12);body.Size=new(dimensions.X-24,dimensions.Y-64);
+        var scroll=new ScrollContainer();dialog.RemoveChild(body);dialog.AddChild(scroll);scroll.AddChild(body);
+        scroll.Position=new(12,12);scroll.Size=new(dimensions.X-24,dimensions.Y-64);body.SizeFlagsHorizontal=Control.SizeFlags.ExpandFill;
+        details.CustomMinimumSize=new(Math.Min(400,dimensions.X-60),130);
         Details();dialog.PopupCentered(dimensions);
     }
+    private void ShowCrafting()
+    {
+        if(_catalog is null) { Say("No item catalog loaded.");return; }
+        if(!Crafting.UsesFixture(_catalog)) { Say("Original recipes are pending archive research; synthetic recipe IDs do not apply to this catalog.");return; }
+        Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
+        var dialog=new AcceptDialog { Title="Test crafting",Unresizable=true,WrapControls=false };
+        AddChild(dialog);dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;
+        dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
+        var scroll=new ScrollContainer();dialog.AddChild(scroll);
+        var body=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };scroll.AddChild(body);
+        var hero=new OptionButton();foreach(var h in _state.Party)hero.AddItem(h.Name);body.AddChild(hero);
+        var recipe=new OptionButton();foreach(var r in Crafting.Recipes)recipe.AddItem(r.Name);body.AddChild(recipe);
+        var detail=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart };body.AddChild(detail);
+        var craft=new Button { Text="Craft one batch",CustomMinimumSize=new(0,56) };body.AddChild(craft);
+        body.AddChild(new Label { Text="Synthetic recipes and skill gate.\nOriginal alchemy, gadgets and quest recipes are pending.",AutowrapMode=TextServer.AutowrapMode.WordSmart });
+        CraftOrder Order()=>new(_state.Party[hero.Selected].Id,Crafting.Recipes[recipe.Selected].Id);
+        void Details()
+        {
+            var r=Crafting.Recipes[recipe.Selected];var h=_state.Party[hero.Selected];
+            var reason=Crafting.Denial(_state,Order(),_catalog);
+            detail.Text=r.Name+"\n\n"+string.Join("\n",r.Ingredients.Select(i=>$"{_catalog.Find(i.ItemId).Name}: need {i.Count}, bag {Inventory.Count(_state,i.ItemId)}"))+
+                $"\n\nResult: {_catalog.Find(r.Result.ItemId).Name} ×{r.Result.Count}"+
+                (r.Skill is null ? "" : $"\n{r.Skill}: {(h.Skills ?? []).FirstOrDefault(v=>v.Id==r.Skill)?.Value ?? 0} / {r.MinimumSkill}")+
+                $"\n\n{reason ?? "Ready. Equipped copies are not ingredients."}";
+            craft.Disabled=reason is not null;
+        }
+        hero.ItemSelected+=_=>Details();recipe.ItemSelected+=_=>Details();
+        craft.Pressed+=()=>Try(()=>{_state=Crafting.Craft(_state,Order(),_catalog);Refresh();Details();Say("Crafted "+Crafting.Recipes[recipe.Selected].Name+".");});
+        var screen=GetViewport().GetVisibleRect().Size;
+        var dimensions=new Vector2I((int)Math.Min(640,screen.X-32),(int)Math.Min(520,screen.Y-32));
+        scroll.Position=new(12,12);scroll.Size=new(dimensions.X-24,dimensions.Y-64);detail.CustomMinimumSize=new(Math.Min(400,dimensions.X-60),180);
+        Details();dialog.PopupCentered(dimensions);
+    }
+
     private void SaveTo(string path)
     {
         Game.Validate(_state);
@@ -464,7 +524,24 @@ public partial class Main : Node3D
             Save();var spellContinuation=Game.Save(Game.Cast(_state,new("hero-1","test-mend",1,"hero-1"),_catalog).State);
             _state=Game.Create(8);Load();Cast(new("hero-1","test-mend",1,"hero-1"));
             if(Game.Save(_state)!=spellContinuation)throw new Exception("Client magic save continuation failed");
-            GD.Print("PASS: Godot C# scene, UI combat, save/load, solo escape and magic"); GetTree().Quit();
+            _state=CreateExpedition(2);
+            CastOrders([new("hero-1","test-ward",1,"hero-1"),new("hero-2","test-burn",1,_state.Enemy.Id)]);
+            if(_state.Party[0].Hp!=35 || _state.Enemy.Hp!=31 || _state.Party[0].Effects?.Single().Rounds!=2)throw new Exception("Client multi-caster effects failed");
+            Save();var effectContinuation=Game.Save(Game.Attack(_state,_catalog).State);Load();Attack();
+            if(Game.Save(_state)!=effectContinuation)throw new Exception("Client duration save continuation failed");
+            if(_catalog is not null && Crafting.UsesFixture(_catalog))
+            {
+                _state=CreateExpedition(1);
+                _state=Crafting.Craft(_state,new("hero-1","test-tonic"),_catalog);
+                Save();Load();
+                if(Inventory.Count(_state,80)!=1 || Inventory.Count(_state,78)!=2)throw new Exception("Client recipe/save failed");
+                _state=Crafting.Craft(_state,new("hero-1","test-staff"),_catalog);
+                if(Inventory.Count(_state,81)!=1 || Inventory.Count(_state,77)!=0)throw new Exception("Client crafting chain failed");
+                _state=Equipment.Equip(_state,"hero-1",81,_catalog);Save();Load();
+                if(_state.Party[0].EquippedItemId!=81)throw new Exception("Crafted weapon equip/save failed");
+                GD.Print("PASS: crafting chain, ingredient counts and crafted equipment save");
+            }
+            GD.Print("PASS: Godot C# scene, UI combat, save/load, solo escape, multi-caster magic and duration effects"); GetTree().Quit();
         }
         catch(Exception e) { GD.PushError(e.ToString()); GetTree().Quit(1); }
     }

@@ -35,3 +35,23 @@ Valid fixture casts always succeed, spending only the selected realm pool and dr
 | Complete original spell catalog | Not imported or claimed |
 
 The magic roadmap remains separate from inventory/crafting. Further spells should be added by verified effect mechanism and casting source rather than simply increasing a spell counter.
+
+## Iteration 009 — shared casting plans and effects
+
+The public fixture has three additional learned spells:
+
+| Fixture | Realm / cost | Target | Test effect |
+|---|---|---|---|
+| Test Ward | Divine / 2 × power | Living/free hero, including at full HP | Reduces sentinel attack damage by 2 × power, minimum damage zero; 3 rounds |
+| Test Bind | Divine / 3 × power | Enemy | Skips its action in the application round if cast before it; 1 round |
+| Test Burn | Fire / 2 × power | Enemy | Power damage at each round end; 3 rounds |
+
+Durations include the application round. Round-end burning occurs before victory/loot resolution, then durations decrement once. Effects expire at zero; finished/unavailable battles do not tick. Reapplying the same kind keeps the higher magnitude and longer remaining duration without adding stacks. These are explicit test rules; original status resistance, immunity, stacking and clock semantics require evidence. No success or resistance dice are invented for these fixtures.
+
+The Magic window supports **Queue / replace this caster's order**, **Clear orders** and **Resolve queued round**. One order per hero; heroes without orders attack normally. The whole plan validates before any state changes. Submission order does not change initiative. A caster killed before acting spends nothing; an unavailable or already fully healed target cancels that healing action without cost. Effects, mana, spell ownership and RNG retain their saved continuation. A direct Cast button still supports one selected caster.
+
+| Mechanism | Updated status |
+|---|---|
+| Duration, protection, skipped action, periodic damage | Implemented with synthetic fixtures and saved state |
+| Multiple caster orders per round | Implemented in core and UI |
+| Original timing, resistance/Power Cast and full catalogs | Still require original data and observed fixtures |

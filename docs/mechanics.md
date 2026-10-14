@@ -10,7 +10,7 @@
 | Crock captivity softlock | Fix after reproduction | User-reported original issue. Solo escape fixture passes; actual original event not reproduced. |
 | Slow battle presentation | Improve | Client resolves a round immediately. Full animation speed/QoL options pending. |
 | Skill grinding | Research before redesign | No skill gain system yet; no assumed replacement formula. |
-| Inventory/equipment/spells | Preserve depth, improve UI | Catalog, restricted test equipment and imported melee base dice; no item ownership or spell rules yet. |
+| Inventory/equipment/spells | Preserve depth, improve UI | Shared bag ownership, restricted equipment, imported melee base dice, multi-caster fixture spells/effects and atomic fixture crafting; canonical spells and recipes pending. |
 | Dialogue | Preserve keywords and deterministic knowledge | One fixed synthetic keeper line. Canonical dialogue import and semantic interface pending. |
 | Art and UI | Modernize | Grimrock-inspired material/light direction; Wizardry framing target. Current scene and frame are placeholders. |
 

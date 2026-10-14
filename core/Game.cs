@@ -5,10 +5,10 @@ namespace NeoWizardry.Core;
 // These are prototype rules, NOT recovered Wizardry 8 combat formulas.
 public sealed record Hero(string Id, string Name, string Race, string Profession,
     int Hp, int MaxHp, int Speed, int Power, int Xp = 0, bool Captive = false,
-    string Gender = "Male", int? EquippedItemId = null, ManaPool[]? Mana = null, string[]? Spellbook = null);
-public sealed record Enemy(string Id, int Hp, int Speed, int Power, int XpReward, int? LootItemId = null);
+    string Gender = "Male", int? EquippedItemId = null, ManaPool[]? Mana = null, string[]? Spellbook = null, SkillValue[]? Skills = null, StatusEffect[]? Effects = null);
+public sealed record Enemy(string Id, int Hp, int Speed, int Power, int XpReward, int? LootItemId = null, StatusEffect[]? Effects = null);
 public sealed record GameState(int Schema, Hero[] Party, Enemy Enemy, int Round = 0,
-    bool RewardGranted = false, string Quest = "none", uint RandomState = Dice.DefaultSeed, ItemStack[]? Bag = null);
+    bool RewardGranted = false, string Quest = "none", uint RandomState = Dice.DefaultSeed, ItemStack[]? Bag = null, string[]? KnownRecipes = null);
 public sealed record RoundResult(GameState State, string[] Events);
 
 public static class Game
@@ -21,7 +21,7 @@ public static class Game
         var party = Enumerable.Range(1, size).Select(i =>
             new Hero($"hero-{i}", i == 1 ? "Faerie Ninja" : $"Companion {i}",
                 i == 1 ? "Faerie" : "Human", "Ninja", 36, 36, 12-i, 7,
-                Mana: [new("Fire",12,12),new("Divine",12,12)], Spellbook: ["test-spark","test-mend"])).ToArray();
+                Mana: [new("Fire",12,12),new("Divine",12,12)], Spellbook: Magic.Spells.Select(s=>s.Id).ToArray(), Skills: [new("test-craft",25)])).ToArray();
         return new(SaveSchema, party, new("Training Sentinel", 32, 4, 3, 120), Bag: []);
     }
 
@@ -45,26 +45,52 @@ public static class Game
         foreach (var stack in state.Bag ?? [])
             if (stack is null || stack.ItemId < 0 || stack.Count <= 0 || !itemIds.Add(stack.ItemId))
                 throw new InvalidDataException("Invalid party bag");
-        foreach(var hero in state.Party) Magic.ValidateHero(hero);
+        foreach(var hero in state.Party)
+        {
+            Magic.ValidateHero(hero);
+            var skills=new HashSet<string>();
+            foreach(var skill in hero.Skills ?? [])
+                if(skill is null || string.IsNullOrWhiteSpace(skill.Id) || skill.Value<0 || !skills.Add(skill.Id))
+                    throw new InvalidDataException("Invalid skills");
+            Magic.ValidateEffects(hero.Effects,false);
+        }
+        Magic.ValidateEffects(state.Enemy.Effects,true);
+        var recipes=new HashSet<string>();
+        foreach(var recipe in state.KnownRecipes ?? [])
+            if(recipe is null || !recipes.Add(recipe) || !Crafting.Recipes.Any(r=>r.Id==recipe))
+                throw new InvalidDataException("Invalid known recipe");
     }
 
-    public static RoundResult Attack(GameState state, ItemCatalog? catalog = null) => ResolveRound(state,catalog,null);
+    public static RoundResult Attack(GameState state, ItemCatalog? catalog = null) => ResolveRound(state,catalog,[]);
 
     public static RoundResult Cast(GameState state, SpellOrder order, ItemCatalog? catalog = null)
     {
-        ArgumentNullException.ThrowIfNull(order);
-        Validate(state);
-        var denial=Magic.Denial(state,order);
-        if(denial is not null)throw new InvalidOperationException(denial);
-        return ResolveRound(state,catalog,order);
+        return CastRound(state,[order],catalog);
     }
 
-    private static RoundResult ResolveRound(GameState state, ItemCatalog? catalog, SpellOrder? cast)
+    public static RoundResult CastRound(GameState state, IReadOnlyList<SpellOrder> orders, ItemCatalog? catalog = null)
+    {
+        ArgumentNullException.ThrowIfNull(orders);
+        Validate(state);
+        if(orders.Count==0)throw new InvalidOperationException("No spell orders selected.");
+        var actors=new HashSet<string>();
+        foreach(var order in orders)
+        {
+            ArgumentNullException.ThrowIfNull(order);
+            if(!actors.Add(order.HeroId))throw new InvalidOperationException("One order per caster per round.");
+            var denial=Magic.Denial(state,order);
+            if(denial is not null)throw new InvalidOperationException(denial);
+        }
+        return ResolveRound(state,catalog,orders);
+    }
+
+    private static RoundResult ResolveRound(GameState state, ItemCatalog? catalog, IReadOnlyList<SpellOrder> casts)
     {
         Validate(state);
         if (state.Enemy.Hp == 0 || !state.Party.Any(h => h.Hp > 0 && !h.Captive))
             return new(state, ["No combat action available."]);
         Equipment.ValidateLoadedEquipment(state, catalog, catalog?.Provenance.Sha256);
+        var selected=casts.ToDictionary(c=>c.HeroId);
         var heroes = state.Party.ToArray();
         var weapons = heroes.ToDictionary(h => h.Id,
             h => h.EquippedItemId.HasValue ? catalog!.Find(h.EquippedItemId.Value) : null);
@@ -73,7 +99,7 @@ public static class Game
         var events = new List<string>();
         // Equal-speed actions have a stable key, so replay does not depend on renderer timing.
         var order = heroes.Where(h => h.Hp > 0 && !h.Captive)
-            .Select(h => (Id: h.Id, Speed: (long)h.Speed + (cast?.HeroId==h.Id ? 0 : weapons[h.Id]?.Initiative ?? 0), IsEnemy: false))
+            .Select(h => (Id: h.Id, Speed: (long)h.Speed + (selected.ContainsKey(h.Id) ? 0 : weapons[h.Id]?.Initiative ?? 0), IsEnemy: false))
             .Append((Id: "enemy", Speed: (long)enemy.Speed, IsEnemy: true))
             .OrderByDescending(a => a.Speed).ThenBy(a => a.Id, StringComparer.Ordinal).ToArray();
         foreach (var action in order)
@@ -81,10 +107,13 @@ public static class Game
             if (enemy.Hp == 0) break;
             if (action.IsEnemy)
             {
+                if((enemy.Effects ?? []).Any(e=>e.Kind=="bind"))
+                { events.Add($"{enemy.Id}: bound; action skipped.");continue; }
                 var target = Array.FindIndex(heroes, h => h.Hp > 0 && !h.Captive);
                 if (target < 0) break;
                 var h = heroes[target];
-                var damage = Math.Min(h.Hp, enemy.Power);
+                int ward=(h.Effects ?? []).FirstOrDefault(e=>e.Kind=="ward")?.Magnitude ?? 0;
+                var damage = Math.Min(h.Hp, Math.Max(0,enemy.Power-ward));
                 heroes[target] = h with { Hp = h.Hp-damage };
                 events.Add($"{enemy.Id} → {h.Name}: {damage}");
             }
@@ -92,14 +121,22 @@ public static class Game
             {
                 var h = heroes.First(h => h.Id == action.Id);
                 if (h.Hp == 0 || h.Captive) continue;
-                if(cast?.HeroId==h.Id)
+                if(selected.TryGetValue(h.Id,out var cast))
                 {
                     var spell=Magic.Find(cast.SpellId);
-                    int targetIndex=spell.Heals ? Array.FindIndex(heroes,t=>t.Id==cast.TargetId && t.Hp>0 && !t.Captive) : -1;
-                    if(spell.Heals && (targetIndex<0 || heroes[targetIndex].Hp==heroes[targetIndex].MaxHp))
+                    int targetIndex=Magic.TargetsParty(spell) ? Array.FindIndex(heroes,t=>t.Id==cast.TargetId && t.Hp>0 && !t.Captive) : -1;
+                    if(Magic.TargetsParty(spell) && (targetIndex<0 || (spell.Heals && heroes[targetIndex].Hp==heroes[targetIndex].MaxHp)))
                     { events.Add($"{h.Name}: spell target unavailable; no mana spent.");continue; }
                     int casterIndex=Array.FindIndex(heroes,c=>c.Id==h.Id);
                     heroes[casterIndex]=Magic.Spend(h,spell,cast.Power);
+                    if(spell.Effect!="direct")
+                    {
+                        var effect=new StatusEffect(spell.Effect,spell.Effect=="ward" ? 2*cast.Power : cast.Power,spell.Effect=="bind" ? 1 : 3);
+                        if(spell.Effect=="ward")heroes[targetIndex]=heroes[targetIndex] with { Effects=Magic.Apply(heroes[targetIndex].Effects,effect) };
+                        else enemy=enemy with { Effects=Magic.Apply(enemy.Effects,effect) };
+                        events.Add($"{h.Name}: {spell.Name} P{cast.Power} → {cast.TargetId} ({effect.Rounds} rounds, {spell.CostPerPower*cast.Power} {spell.Realm} mana)");
+                        continue;
+                    }
                     int amount=cast.Power;
                     for(int i=0;i<cast.Power;i++)amount+=Dice.Roll(ref randomState,6);
                     if(spell.Heals)
@@ -130,6 +167,15 @@ public static class Game
                     $" [{weapon.Name}: {weapon.DamageDescription} = {rolled}]") );
             }
         }
+        if(enemy.Hp>0 && (enemy.Effects ?? []).FirstOrDefault(e=>e.Kind=="burn") is { } burn)
+        {
+            int damage=Math.Min(enemy.Hp,burn.Magnitude);
+            enemy=enemy with { Hp=enemy.Hp-damage };
+            events.Add($"{enemy.Id}: burning {damage}.");
+        }
+        // Durations include the application round. Each resolved round advances once.
+        if(enemy.Effects is not null)enemy=enemy with { Effects=Magic.Tick(enemy.Effects) };
+        heroes=heroes.Select(h=>h.Effects is null ? h : h with { Effects=Magic.Tick(h.Effects) }).ToArray();
         bool granted = state.RewardGranted;
         if (enemy.Hp == 0 && !granted)
         {

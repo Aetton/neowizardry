@@ -135,6 +135,81 @@ var legacyBagSave=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(equipped))!;
 legacyBagSave.AsObject().Remove("Bag");
 var legacyEquipment=Game.Load(legacyBagSave.ToJsonString());
 Check(Inventory.Count(legacyEquipment,77)==0 && Inventory.Count(Equipment.Unequip(legacyEquipment,"hero-1",catalog),77)==1,"Old equipped save retains its single owned copy");
+// Synthetic crafting invariants: exact quantities, no equipped-item consumption, actor gates.
+var craftCatalog=swapCatalog with { Count=5,Items=[restricted,spare with { Name="Test herb",TypeCode=19 },restricted with { Id=79,Name="Test vial",TypeCode=19 },restricted with { Id=80,Name="Test tonic",TypeCode=15 },restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }],Provenance=catalog.Provenance with { File=Crafting.FixtureSource } };
+var craftStart=Inventory.Add(Inventory.Add(Inventory.Add(solo,78,4,craftCatalog),79,2,craftCatalog),77,1,craftCatalog) with { KnownRecipes=["test-tonic","test-staff"] };
+var tonicOrder=new CraftOrder("hero-1","test-tonic");
+var tonic=Crafting.Craft(craftStart,tonicOrder,craftCatalog);
+Check(Inventory.Count(tonic,78)==2 && Inventory.Count(tonic,79)==1 && Inventory.Count(tonic,80)==1,"Craft consumes exact recipe quantities");
+Check(Inventory.Count(craftStart,78)==4 && Inventory.Count(craftStart,80)==0,"Craft immutable source");
+Check(tonic.Round==craftStart.Round && tonic.RandomState==craftStart.RandomState,"Fixture crafting spends no combat turn or random roll");
+var improved=Crafting.Craft(tonic,new("hero-1","test-staff"),craftCatalog);
+Check(Inventory.Count(improved,77)==0 && Inventory.Count(improved,80)==0 && Inventory.Count(improved,81)==1,"Craft chain consumes intermediate and produces correct result");
+Check(Equipment.Equip(improved,"hero-1",81,craftCatalog).Party[0].EquippedItemId==81,"Crafted weapon is a real owned copy");
+var worn=Equipment.Equip(tonic,"hero-1",77,craftCatalog);
+var beforeCraft=Game.Save(worn);
+Throws(()=>Crafting.Craft(worn,new("hero-1","test-staff"),craftCatalog),"Equipped copy cannot be consumed by crafting");
+Check(Game.Save(worn)==beforeCraft,"Rejected craft preserves equipment and ingredients");
+Throws(()=>Crafting.Craft(craftStart,tonicOrder with { HeroId="unknown" },craftCatalog),"Unknown crafter rejected");
+Throws(()=>Crafting.Craft(craftStart,tonicOrder with { RecipeId="unknown" },craftCatalog),"Unknown recipe rejected");
+Throws(()=>Crafting.Craft(craftStart with { KnownRecipes=null },tonicOrder,craftCatalog),"Unlearned recipe rejected");
+Throws(()=>Crafting.Craft(Game.CaptureFirst(craftStart),tonicOrder,craftCatalog),"Captive crafter rejected");
+Throws(()=>Crafting.Craft(craftStart with { Party=[craftStart.Party[0] with { Hp=0 }] },tonicOrder,craftCatalog),"Dead crafter rejected");
+foreach(var skills in new SkillValue[]?[]{null,[],[new("test-craft",19)]})
+    Throws(()=>Crafting.Craft(tonic with { Party=[tonic.Party[0] with { Skills=skills }] },new("hero-1","test-staff"),craftCatalog),"Skill gate cannot be bypassed");
+Check(Crafting.Craft(tonic with { Party=[tonic.Party[0] with { Skills=[new("test-craft",20)] }] },new("hero-1","test-staff"),craftCatalog).Bag!.Any(i=>i.ItemId==81),"Exact skill threshold permitted");
+Throws(()=>Crafting.Craft(tonic,tonicOrder,craftCatalog with { Provenance=craftCatalog.Provenance with { File="original" } }),"Synthetic recipes cannot apply to original catalog IDs");
+Throws(()=>Crafting.Craft(Inventory.Add(craftStart,80,int.MaxValue,craftCatalog),tonicOrder,craftCatalog),"Craft rejects result overflow before ingredient loss");
+Throws(()=>Crafting.Craft(improved,new("hero-1","test-staff"),craftCatalog),"Recipe cannot duplicate result without ingredients");
+Check(Game.Save(Game.Load(Game.Save(improved)))==Game.Save(improved),"Recipes, skill gates and crafted ownership survive save");
+Throws(()=>Crafting.ValidateRecipe(Crafting.Recipes[0] with { Ingredients=[new(78,1),new(78,1)] },craftCatalog),"Duplicate recipe ingredients rejected");
+Throws(()=>Crafting.ValidateRecipe(Crafting.Recipes[0] with { Result=new(80,0) },craftCatalog),"Empty recipe result rejected");
+Throws(()=>Game.Validate(solo with { KnownRecipes=["unknown"] }),"Unknown saved recipe rejected");
+Throws(()=>Game.Validate(solo with { KnownRecipes=["test-tonic","test-tonic"] }),"Duplicate saved recipe rejected");
+Throws(()=>Game.Validate(solo with { Party=[solo.Party[0] with { Skills=[new("test-craft",-1)] }] }),"Negative skill rejected");
+for(int size=1;size<=8;size++)
+{
+    var c=craftStart with { Party=Game.Create(size).Party };
+    Check(Inventory.Count(Crafting.Craft(c,tonicOrder,craftCatalog),80)==1,$"Craft works without required companions for party {size}");
+}
+// Effect durations include the application round; only direct spells draw dice.
+var wardOrder=new SpellOrder("hero-1","test-ward",1,"hero-1");
+var warded=Game.Cast(solo,wardOrder).State;
+Check(warded.Party[0].Hp==35 && warded.Party[0].Effects!.Single().Rounds==2,"Ward reduces damage and ticks on application round");
+Check(warded.RandomState==solo.RandomState,"Status spell consumes no fabricated success dice");
+var ward2=Game.Attack(warded).State;var ward3=Game.Attack(ward2).State;var ward4=Game.Attack(ward3).State;
+Check(ward2.Party[0].Hp==34 && ward3.Party[0].Hp==33 && ward3.Party[0].Effects!.Length==0 && ward4.Party[0].Hp==30,"Ward expires after exactly three rounds");
+var bound=Game.Cast(solo,new("hero-1","test-bind",1,solo.Enemy.Id)).State;
+Check(bound.Party[0].Hp==36 && bound.Enemy.Effects!.Length==0,"Fast binding skips only this round enemy action");
+Check(Game.Attack(bound).State.Party[0].Hp==33,"Enemy acts normally after binding expires");
+var lateBind=Game.Cast(solo with { Party=[solo.Party[0] with { Speed=0 }] },new("hero-1","test-bind",1,solo.Enemy.Id)).State;
+Check(lateBind.Party[0].Hp==33 && lateBind.Enemy.Effects!.Length==0,"Late binding cannot retroactively skip an enemy action");
+var burned=Game.Cast(solo,new("hero-1","test-burn",2,solo.Enemy.Id)).State;
+Check(burned.Enemy.Hp==30 && burned.Enemy.Effects!.Single().Rounds==2,"Burn ticks at round end including cast round");
+var burn2=Game.Attack(burned).State;var burn3=Game.Attack(burn2).State;var burn4=Game.Attack(burn3).State;
+Check(burn2.Enemy.Hp==21 && burn3.Enemy.Hp==12 && burn3.Enemy.Effects!.Length==0 && burn4.Enemy.Hp==5,"Periodic damage stops after exact duration");
+var burnWin=Game.Cast(solo with { Enemy=solo.Enemy with { Hp=2 } },new("hero-1","test-burn",2,solo.Enemy.Id)).State;
+Check(burnWin.RewardGranted && burnWin.Party[0].Xp==120 && Game.Attack(burnWin).State.Party[0].Xp==120,"Periodic damage victory grants XP once");
+var dual=Game.Create(2);var orders=new[]{wardOrder,new SpellOrder("hero-2","test-burn",1,dual.Enemy.Id)};
+var dualRound=Game.CastRound(dual,orders).State;
+Check(dualRound.Party[0].Hp==35 && dualRound.Enemy.Hp==31 && dualRound.Round==1,"Both casters replace physical attacks in one round");
+Check(dualRound.Party[0].Mana!.Single(m=>m.Realm=="Divine").Current==10 && dualRound.Party[1].Mana!.Single(m=>m.Realm=="Fire").Current==10,"Each caster spends independent realm pool");
+Check(Game.Save(Game.CastRound(dual,orders.Reverse().ToArray()).State)==Game.Save(dualRound),"Order submission sequence does not change initiative");
+Check(Game.Save(Game.Attack(Game.Load(Game.Save(dualRound))).State)==Game.Save(Game.Attack(dualRound).State),"Saved effects resume exact continuation");
+Throws(()=>Game.CastRound(dual,[wardOrder,wardOrder]),"Duplicate caster orders rejected atomically");
+Throws(()=>Game.CastRound(dual,[]),"Empty casting plan rejected");
+Throws(()=>Game.CastRound(dual,[wardOrder,new("hero-2","unknown",1,dual.Enemy.Id)]),"One invalid plan order rejects entire round");
+Check(dual.Round==0 && dual.Party.All(h=>h.Mana!.All(m=>m.Current==12)),"Rejected plan spends no mana or turn");
+var refreshed=Magic.Apply([new("ward",6,1)],new("ward",2,3));
+Check(refreshed.Length==1 && refreshed[0].Magnitude==6 && refreshed[0].Rounds==3,"Repeated status refreshes duration without stacking or weakening");
+Throws(()=>Game.Validate(solo with { Party=[solo.Party[0] with { Effects=[new("burn",1,2)] }] }),"Wrong target effect rejected");
+Throws(()=>Game.Validate(solo with { Enemy=solo.Enemy with { Effects=[new("bind",1,0)] } }),"Expired effect rejected in saves");
+Throws(()=>Game.Validate(solo with { Enemy=solo.Enemy with { Effects=[new("burn",1,2),new("burn",1,2)] } }),"Duplicate saved effects rejected");
+var preFeatures=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(solo))!;
+preFeatures.AsObject().Remove("KnownRecipes");foreach(var h in preFeatures["Party"]!.AsArray()) { h!.AsObject().Remove("Skills");h.AsObject().Remove("Effects"); }
+preFeatures["Enemy"]!.AsObject().Remove("Effects");
+var preFeaturesLoaded=Game.Load(preFeatures.ToJsonString());
+Check(preFeaturesLoaded.KnownRecipes is null && preFeaturesLoaded.Party[0].Skills is null && preFeaturesLoaded.Party[0].Effects is null,"Old saves acquire no invented recipe knowledge, skills or effects");
 uint diceState = Dice.DefaultSeed;
 var diceResults = Enumerable.Range(0,6).Select(_ => Dice.Roll(ref diceState,6)).ToArray();
 Check(diceResults.SequenceEqual(new[]{5,6,3,2,1,5}) && diceState==3050220688u,"Stable prototype RNG vector");
@@ -195,7 +270,7 @@ foreach(var member in oldSave["Party"]!.AsArray()) { member!.AsObject().Remove("
 var migrated=Game.Load(oldSave.ToJsonString());
 Check(migrated.Party[0].Gender=="Male" && migrated.Party[0].EquippedItemId is null,"Iteration-001 saves remain readable");
 if(args.Length==2 && args[0]=="--fixture")
-    File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with { Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256) },new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
+    File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with { Count=5, Items=[restricted, restricted with { Id=78,Name="Test herb",TypeCode=19 }, restricted with { Id=79,Name="Test vial",TypeCode=19 }, restricted with { Id=80,Name="Test tonic",TypeCode=15 }, restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }], Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256) },new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
 else if(args.Length>0)
 {
     var real=ItemCatalog.Parse(File.ReadAllText(args[0]));

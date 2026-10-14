@@ -46,7 +46,9 @@ The smoke check intentionally writes `prototype-save.json` into Godot's user dat
 
 New expeditions receive a limited **test** starter bag; the training sentinel drops one configured test item on victory. These are not original starting equipment or loot tables. In **Items**, owned items are shown by default; **Browse full catalog** is inspection only and cannot grant unowned weapons. Old saves retain equipped copies but do not receive a retroactive starter bag.
 
-New test parties can use **Magic** near the sentinel. Test Spark damages it; Test Mend heals an injured living party member. Casting replaces one hero's weapon attack for the round. Powers 1–3, costs and effects are fixtures; see [magic coverage](docs/magic.md). Existing saves do not receive retroactive learned spells or mana.
+New test parties can use **Magic** near the sentinel. Test Spark damages it; Test Mend heals an injured living party member. Casting replaces one hero's weapon attack for the round. Powers 1–3, costs and effects are fixtures; see [magic coverage](docs/magic.md). Existing saves do not receive retroactive learned spells or mana. Test Ward, Bind and Burn add protection, action skipping and timed damage. Queue one order per caster and resolve them together in one round.
+
+New public-fixture parties can also use **Craft**: herbs and a vial make a test tonic; combine it with the unequipped test staff to make a tempered staff. The window shows quantities and skill gates. These recipes apply only to the synthetic catalog; see [crafting coverage](docs/crafting.md). Start a new party for test ingredients and recipe knowledge.
 
 ## Import your installation
 
@@ -80,7 +82,7 @@ Repeat `--patch` for every enabled `PATCH.NNN`; do not pass disabled `.BAK` file
 5. Replace the temporary gold frame with the planned Wizardry visual identity and Grimrock-inspired materials/lighting.
 
 See [format report](docs/formats.md), [architecture](docs/architecture.md) and [iteration report](docs/iteration-001.md).
-Latest progress: [iteration 007](docs/iteration-007.md).
+Latest progress: [iteration 009](docs/iteration-009.md).
 Mobile prototype: [touch controls, Android build and device checklist](docs/mobile.md). Preview on desktop with `godot --path client -- --touch`.
 
 The [formula research module](docs/formula-sources.md) contains a first source-backed candidate calculation; it remains separate from the experimental combat rules.
