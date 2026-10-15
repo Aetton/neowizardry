@@ -155,3 +155,7 @@ Iteration 019 incorrectly substituted `L` for `E` in BAR after misidentifying a 
 ## Iteration 021 resource lifecycle
 
 [Projectile evidence](original-projectile-resources.md) traces common post-contact spending, reusable thrown items, retained empty resources and continuation gates. The clean module consumes one unit per completed projectile from an explicit selected source. Full contact, compatibility, automatic refill and actor/target policy remain separate.
+
+## Iteration 023 projectile distinction
+
+[Projectile strike evidence](original-projectile-strike.md) traces actor-contact/interception status and a fresh post-contact penetration d100. The connected neutral projectile calculation does not copy melee natural 1–5/96–100 rules. It composes with one resource completion, while collision/aim and actual-target policy remain external.

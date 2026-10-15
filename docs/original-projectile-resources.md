@@ -28,7 +28,7 @@ Iteration 018 incorrectly identified `0x549EF0` as the projectile launch helper.
 
 Thrown redistribution `0x51ED30` moves or splits a matching type-2 opposite-hand stack: filling main takes ceil(n/2), filling offhand takes floor(n/2). This slot choreography is evidence, not the new inventory architecture. The 022 reserve/refill helpers cover separate ammunition and intrinsic shots; thrown opposite-hand redistribution and complete scheduling remain separate.
 
-## Clean implementation and scope (updated through 022)
+## Clean implementation and scope (updated through 023)
 
 `ProjectileSeries` owns an immutable inventory transition and one allocated swing series. `Launch` records a pending ordinal and selected source snapshot without spending. `Complete` consumes one quantity/resource unit for a supplied Hit/Miss/Blocked outcome, clears pending, advances the ordinal and stops on exhaustion, actor incapacity or unavailable continuation. A reusable source costs zero. `Stop` before launch costs nothing; it cannot discard an in-flight projectile. Final completion is marked Finished. These states do not mutate HP or calculate contact/damage.
 
@@ -39,3 +39,5 @@ The selected instance must retain its snapshot while in flight. A changed source
 `OriginalWeaponAdapter.ProjectileExpenditure` translates validated native definitions to typed cost policies for an explicitly selected shooting/throwing weapon and source. It rejects direct spell-use weapons and non-reusable nonstack type-2 throwing, whose unusual count-based continuation is not reconstructed in the clean model. Ordinary mode-1 ammo/thrown, direct resource modes, retained empty sources and reusable throwing are covered. It does not establish actor eligibility or a complete attack controller. The base series stops on selected-source depletion; 022 adds callable reserve/refill helpers that preserve the remaining allocation. No new per-swing RNG is introduced here.
 
 The playable training battle remains a fixture. No canonical actor stats, projectile contact calculation, original save import or full ranged encounter is implied by this module.
+
+Iteration 023 adds [neutral post-delivery resolution](original-projectile-strike.md) and `OriginalProjectileAttack.Complete`, composing calculated interception/penetration/damage results with resource completion. Aim/collision and actual actor/target policies remain external.
