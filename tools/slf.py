@@ -16,8 +16,7 @@ HEADER_SIZE = 532
 ENTRY_SIZE = 280
 
 
-class FormatError(ValueError):
-    pass
+from .errors import FormatError
 
 
 def canonical(name: str) -> str:
@@ -244,11 +243,11 @@ def audit_install(root: Path) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for command in ("index", "items", "extract"):
+    for command in ("index", "items", "spells", "extract"):
         p = sub.add_parser(command)
         p.add_argument("archive", type=Path)
         p.add_argument("--out", required=True, type=Path)
-        if command == "items":
+        if command in ("items", "spells"):
             p.add_argument("--patch", action="append", type=Path, default=[])
             p.add_argument("--loose-dir", type=Path)
         if command == "extract":
@@ -266,8 +265,15 @@ def main() -> int:
                 result = archive.extract(args.out, args.pattern)
                 print(json.dumps({"extracted": result}, ensure_ascii=False))
                 return 0
-            result = archive.manifest() if args.command == "index" else item_catalog(
-                Resources(archive, [Archive(p) for p in args.patch], args.loose_dir))
+            if args.command == "index":
+                result = archive.manifest()
+            else:
+                resources = Resources(archive, [Archive(p) for p in args.patch], args.loose_dir)
+                if args.command == "spells":
+                    from tools.spells import spell_catalog
+                    result = spell_catalog(resources)
+                else:
+                    result = item_catalog(resources)
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(result, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
         print(f"Written {args.out}")

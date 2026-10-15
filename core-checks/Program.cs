@@ -269,8 +269,23 @@ var oldSave=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(solo))!;
 foreach(var member in oldSave["Party"]!.AsArray()) { member!.AsObject().Remove("Gender");member.AsObject().Remove("EquippedItemId"); }
 var migrated=Game.Load(oldSave.ToJsonString());
 Check(migrated.Party[0].Gender=="Male" && migrated.Party[0].EquippedItemId is null,"Iteration-001 saves remain readable");
+var spellRaw=new string('0',1408);
+var spellHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Convert.FromHexString(spellRaw))).ToLowerInvariant();
+var reference=new OriginalSpell(1,"Fixture ember","Synthetic reference entry, not an original spell.",0,1,0,-1,3,1,[1,7,0,0],720,30,1,4,2,6,spellHash,spellRaw);
+var referenceCatalog=new SpellCatalog(1,"DATABASES/SPELLTABLES.DBS",new("loose","synthetic-spell-reference",new string('a',64)),"DATABASES/SPELLDESC.DBS",new("loose","synthetic-spell-descriptions",new string('b',64)),704,1,[reference]);
+referenceCatalog.Validate();
+var referenceJson=System.Text.Json.JsonSerializer.Serialize(referenceCatalog,new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower});
+Check(SpellCatalog.Parse(referenceJson).Spells[0].SchoolFlags[1]==7,"Spell reference preserves unknown school flag and zero cost");
+Check(reference.Realm=="Fire" && reference.Target=="One enemy","Source-backed spell code labels");
+Check((reference with { RealmCode=99 }).Realm=="Unknown code 99","Unknown original code is not guessed");
+Throws(()=> (referenceCatalog with { DescriptionProvenance=referenceCatalog.DescriptionProvenance with { Sha256="invalid" } }).Validate(),"Spell descriptions require independent valid provenance");
+Throws(()=> (referenceCatalog with { Spells=[reference with { RawRecordHex=new string('f',1408) }] }).Validate(),"Raw spell record hash mismatch rejected");
+Throws(()=> (referenceCatalog with { Count=2,Spells=[reference,reference] }).Validate(),"Duplicate spell reference IDs rejected");
 if(args.Length==2 && args[0]=="--fixture")
+{
     File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with { Count=5, Items=[restricted, restricted with { Id=78,Name="Test herb",TypeCode=19 }, restricted with { Id=79,Name="Test vial",TypeCode=19 }, restricted with { Id=80,Name="Test tonic",TypeCode=15 }, restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }], Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256) },new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
+    File.WriteAllText(Path.ChangeExtension(args[1],".spells.json"),referenceJson);
+}
 else if(args.Length>0)
 {
     var real=ItemCatalog.Parse(File.ReadAllText(args[0]));

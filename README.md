@@ -73,6 +73,17 @@ Repeat `--patch` for every enabled `PATCH.NNN`; do not pass disabled `.BAK` file
 
 `audit` reads SLF files and `PATCH.NNN` locally and produces a small inventory. The Drive connector cannot download `LEVELS.SLF` because its 497,064,244 bytes exceed the connector's 256 MiB limit. Local indexing avoids that restriction. Parallel Worlds and localization overlays remain unsupported.
 
+## Original spell reference
+
+Export a private metadata catalog from your installation (include all enabled patches and loose overrides as for items):
+
+```sh
+python -m tools.slf spells "/path/to/Wizardry8/Data/DATA.SLF" --patch "/path/to/Wizardry8/Patches/PATCH.001" --out local/spells.json
+godot --path client -- --spells local/spells.json --grimoire
+```
+
+The source client detects `local/spells.json`; packaged builds also accept `spells.json` in Godot's user-data directory, or an explicit `--spells` path. Open **Menu → Spell reference**. Public previews include only a clearly labeled synthetic entry. Reference metadata does not teach spells or enable canonical casting. See [format evidence and limits](docs/spell-format.md).
+
 ## Next gates
 
 1. Obtain and validate the real `LEVELS.SLF` directory, then decode PVL geometry and collisions.
@@ -82,7 +93,7 @@ Repeat `--patch` for every enabled `PATCH.NNN`; do not pass disabled `.BAK` file
 5. Replace the temporary gold frame with the planned Wizardry visual identity and Grimrock-inspired materials/lighting.
 
 See [format report](docs/formats.md), [architecture](docs/architecture.md) and [iteration report](docs/iteration-001.md).
-Latest progress: [iteration 010](docs/iteration-010.md). Desktop HUD: [original-layout interface](docs/interface.md).
+Latest progress: [iteration 011](docs/iteration-011.md). Desktop HUD: [original-layout interface](docs/interface.md).
 Mobile prototype: [touch controls, Android build and device checklist](docs/mobile.md). Preview on desktop with `godot --path client -- --touch`.
 
 The [formula research module](docs/formula-sources.md) contains a first source-backed candidate calculation; it remains separate from the experimental combat rules.

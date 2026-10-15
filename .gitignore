@@ -14,3 +14,5 @@ imported/
 build/
 client/demo-items.json
 *.keystore
+
+client/demo-items.spells.json

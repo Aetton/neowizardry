@@ -37,6 +37,8 @@ public partial class Main : Node3D
     private Theme _hudTheme=null!;
     private const string AutoSavePath="user://prototype-autosave.json";
     private ItemCatalog? _catalog;
+    private SpellCatalog? _spellCatalog;
+    private bool _spellsRequested;
     private bool _catalogRequested;
     private readonly Vector3 _enemyPosition = new(0, 1, -7);
     private const string SavePath = "user://prototype-save.json";
@@ -48,6 +50,7 @@ public partial class Main : Node3D
         BuildRoom();
         BuildUi();
         LoadCatalog();
+        LoadSpellCatalog();
         _state=CreateExpedition(1);
         Refresh();
         _ready=true;
@@ -59,6 +62,7 @@ public partial class Main : Node3D
         if (OS.GetCmdlineUserArgs().Contains("--smoke")) CallDeferred(nameof(Smoke));
         if (OS.GetCmdlineUserArgs().Contains("--mobile-smoke")) Callable.From(MobileSmoke).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--items")) Callable.From(ShowItems).CallDeferred();
+        if (OS.GetCmdlineUserArgs().Contains("--grimoire")) Callable.From(ShowGrimoire).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--craft")) Callable.From(ShowCrafting).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--magic")) Callable.From(ShowMagic).CallDeferred();
     }
@@ -107,6 +111,50 @@ public partial class Main : Node3D
         }
         if(!System.IO.File.Exists(path)) { Say("No original item catalog loaded. The scene still works with test rules.");return; }
         Try(()=>{_catalog=ItemCatalog.Parse(System.IO.File.ReadAllText(path));Say($"Loaded {_catalog.Count} items from {_catalog.Provenance.File}.");});
+    }
+
+    private void LoadSpellCatalog()
+    {
+        var args=OS.GetCmdlineUserArgs();int index=Array.IndexOf(args,"--spells");_spellsRequested=index>=0;
+        if(_spellsRequested && index+1>=args.Length) { Say("No spell catalog path selected.");return; }
+        string root=Directory.GetParent(ProjectSettings.GlobalizePath("res://").TrimEnd('/','\\'))!.FullName;
+        string local=Path.Combine(root,"local","spells.json");
+        string? path=_spellsRequested?args[index+1]:Godot.FileAccess.FileExists("user://spells.json")?"user://spells.json":System.IO.File.Exists(local)?local:Godot.FileAccess.FileExists("res://demo-items.spells.json")?"res://demo-items.spells.json":null;
+        if(path is null)return;
+        if(!path.StartsWith("user://") && !path.StartsWith("res://") && !Path.IsPathRooted(path))path=Path.GetFullPath(path,root);
+        Try(()=>{
+            string json=path.StartsWith("user://") || path.StartsWith("res://")?Godot.FileAccess.GetFileAsString(path):System.IO.File.ReadAllText(path);
+            _spellCatalog=SpellCatalog.Parse(json);Say($"Loaded {_spellCatalog.Count} spell reference records.");
+        });
+    }
+    private void ShowGrimoire()
+    {
+        if(_spellCatalog is null) { Say("Import a spell reference catalog as user://spells.json or select it with --spells. See the README.");return; }
+        Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
+        var dialog=new AcceptDialog { Theme=_hudTheme,Title=_spellCatalog.Provenance.File.StartsWith("synthetic-")?"Synthetic spell reference":"Original spell reference",Unresizable=true,WrapControls=false };AddChild(dialog);
+        dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
+        var body=new VBoxContainer();dialog.AddChild(body);
+        var search=new LineEdit { PlaceholderText="Search original spell name" };body.AddChild(search);
+        var dormant=new CheckButton { Text="Include level-zero entries" };body.AddChild(dormant);
+        var list=new ItemList { AutoHeight=false,CustomMinimumSize=new(0,100),SizeFlagsVertical=Control.SizeFlags.ExpandFill };body.AddChild(list);
+        var detail=new RichTextLabel { CustomMinimumSize=new(0,150),SizeFlagsVertical=Control.SizeFlags.ExpandFill };body.AddChild(detail);
+        body.AddChild(new Label { Text="Read-only reference.\nImport does not teach spells or enable casting." });
+        OriginalSpell[] shown=[];
+        void Details(int index)
+        {
+            var s=shown[index];string[] schoolNames=["Alchemy","Wizardry","Divinity","Psionics"];
+            string schools=string.Join(", ",s.SchoolFlags.Select((flag,i)=>$"{schoolNames[i]}={flag}"));
+            detail.Text=$"{s.Name} [ID {s.Id}] · {s.Realm} · Level {s.Level}\nCost field: {s.Cost} · {s.Target} · {s.Usability} · Range code {s.RangeCode}\n{schools}\nDuration raw: {s.DurationBaseRaw} + {s.DurationPerPowerRaw}/power · Damage flag {s.DamageFlagRaw}, {s.DamageDice}d{s.DamageSides}+{s.DamageConstant}\n\n{s.Description}\n\nRecords: {_spellCatalog.Provenance.File} · Descriptions: {_spellCatalog.DescriptionProvenance.File}";
+        }
+        void Filter()
+        {
+            shown=_spellCatalog.Spells.Where(s=>(dormant.ButtonPressed || s.Level>0) && s.Name.Contains(search.Text,StringComparison.OrdinalIgnoreCase)).ToArray();
+            list.Clear();foreach(var s in shown)list.AddItem($"{s.Name} · {s.Realm} · {s.Level}");
+            if(shown.Length>0) { list.Select(0);Details(0); }else detail.Text="No matching entries.";
+        }
+        search.TextChanged+=_=>Filter();dormant.Toggled+=_=>Filter();list.ItemSelected+=i=>Details((int)i);
+        var screen=GetViewport().GetVisibleRect().Size;var dimensions=new Vector2I((int)Math.Min(850,screen.X-32),(int)Math.Min(620,screen.Y-32));
+        body.Position=new(12,12);body.Size=new(dimensions.X-24,dimensions.Y-64);Filter();dialog.PopupCentered(dimensions);
     }
 
     private StandardMaterial3D Material(Color color) => new() { AlbedoColor = color, Roughness = 0.92f };
@@ -232,6 +280,7 @@ public partial class Main : Node3D
         var size=new OptionButton();for(int i=1;i<=8;i++)size.AddItem($"{i} adventurer{(i==1?"":"s")}");size.Select(_state.Party.Length-1);body.AddChild(size);
         Button(body,"New party",()=>{NewParty(size.Selected+1);dialog.QueueFree();});
         Button(body,"Save",Save);Button(body,"Load",()=>{Load();size.Select(_state.Party.Length-1);});
+        Button(body,"Spell reference",ShowGrimoire);
         Button(body,"Talk to keeper",()=>Say("Test keeper: The real monastery is still being researched."));
         Button(body,"Capture test",()=>Try(()=>{_state=Game.CaptureFirst(_state);Refresh();}));
         Button(body,"Escape",()=>Try(()=>{_state=Game.Escape(_state);Refresh();}));
@@ -579,6 +628,8 @@ public partial class Main : Node3D
     {
         try
         {
+            if(_spellsRequested && _spellCatalog is null)throw new Exception("Requested spell reference was not loaded");
+            if(_spellCatalog is not null) { _spellCatalog.Validate();GD.Print($"PASS: spell reference {_spellCatalog.Count} records with raw record hashes"); }
             if(_catalogRequested && _catalog is null) throw new Exception("Requested smoke catalog was not loaded");
             _player.Position=new(0,0.9f,-4);
             Attack();

@@ -15,3 +15,5 @@ Windows is the primary manual test platform. Its CI exports the shared client, t
 Source assets, full exported tables and local source paths must remain outside public git. Research reports may contain hashes, aggregate counts and format offsets; the actual content stays in the user's private asset storage.
 
 `Crafting.cs` provides atomic fixture recipes over the shared bag, with saved skill and knowledge gates. Fixture recipe IDs apply only to the synthetic catalog. Magic effects persist on hero/enemy records; the core ticks them at a documented round boundary and resolves periodic victory through the existing reward path. These mechanisms do not establish original crafting or status rules.
+
+`tools/spells.py` exports independently sourced table/description metadata and preserves unknown raw spell bytes. `SpellCatalog.cs` validates the read-only reference separately from `Magic.cs`: original numeric IDs do not enter the synthetic learned spellbook or execute combat rules. Public builds contain only an invented reference fixture, while full exports remain local.

@@ -52,7 +52,7 @@ No decompression is needed for the observed resources. Invalid table sizes, out-
 | INI | 1 |
 | DAT | 1 |
 
-The database directory includes encounter tables, facts, hit sounds, item descriptions, items, item tables, levels, missile tables, monsters, NPCs, spell descriptions, spell effects and spell tables. Except for ITEMS.DBS, these files have only been extracted, hashed and inspected at their headers. Their full schemas and semantics are unresolved.
+The database directory includes encounter tables, facts, hit sounds, item descriptions, items, item tables, levels, missile tables, monsters, NPCs, spell descriptions, spell effects and spell tables. ITEMS.DBS has a supported field subset. Iteration 011 also decodes native SPELLTABLES.DBS metadata and indexed SPELLDESC.DBS descriptions; see [spell format research](spell-format.md). Other database schemas and executable effect semantics remain unresolved.
 
 ## ITEMS.DBS fields implemented
 
