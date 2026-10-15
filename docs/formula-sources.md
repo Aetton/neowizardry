@@ -6,4 +6,6 @@
 
 Keep the published decimal coefficients. Exact threshold equality, intermediate rounding, multiclass accumulation and altered installations need independent evidence. Section 5.6 leaves queue details unresolved; Power Cast passages also contain conflicting conclusions. Do not turn those gaps into implicit design decisions.
 
-Next: collect original-save test fixtures immediately below, at and above attack thresholds; compare observed attack counts. Then investigate hand-specific penalties and the initiative queue.
+Iteration 017 independently traced the supplied executable: the covered free-other-hand character branch uses integer arithmetic and inclusive thresholds, resolving the level-25 discrepancy. `Rules/OriginalCombatRules` supersedes the decimal candidate inside that documented scope; `LegacyResearch` remains a faithful copy of the published source model, not a combat dependency. See [attack-budget evidence](original-combat-formulas.md).
+
+The same static pass recovered ordinary player casting-risk arithmetic, failure/backfire boundaries, Power Cast's integer bonus, a base strength helper and common resistance reduction. See [magic arithmetic evidence](original-magic-formulas.md). The guide is a map of questions, not the authority for unresolved rounding and eligibility. Actor resolution, contextual modifiers, complete effects, physical hit/penetration and original-game comparison fixtures remain required before live integration.

@@ -324,11 +324,28 @@ checks+=NativeItemChecks.Run(restricted);
 checks+=NativeInventoryChecks.Run(restricted);
 checks+=ItemInventoryChecks.Run(restricted);
 checks+=InventoryIntegrationChecks.Run(catalog,craftCatalog);
+checks+=OriginalFormulaChecks.Run();
 if(args.Length==2 && args[0]=="--fixture")
 {
     File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with { Count=5, Items=[restricted, restricted with { Id=78,Name="Test herb",TypeCode=19 }, restricted with { Id=79,Name="Test vial",TypeCode=19 }, restricted with { Id=80,Name="Test tonic",TypeCode=15 }, restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }], Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256) },new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
     File.WriteAllText(Path.ChangeExtension(args[1],".spells.json"),referenceJson);
     File.WriteAllText(Path.ChangeExtension(args[1],".recipes.json"),recipeReferenceJson);
+}
+else if(args.Length==2 && args[0]=="--spell-formulas")
+{
+    var spells=SpellCatalog.Parse(File.ReadAllText(args[1]));int scenarios=0;
+    foreach(var spell in spells.Spells.Where(s=>s.Level>0))
+    {
+        int previous=-1;
+        for(int power=1;power<=7;power++)
+        {
+            var risk=NeoWizardry.Core.Rules.OriginalMagicRules.OrdinaryCastingRisk(new(100,100,spell.Level,spell.Cost,power,20));
+            if(risk.FailureThreshold<previous)throw new Exception("Power must not lower ordinary casting risk");
+            previous=risk.FailureThreshold;scenarios++;
+        }
+    }
+    Check(scenarios>0,"Private positive-level spell metadata exercises ordinary-risk arithmetic");
+    Console.WriteLine($"PASS: {scenarios} original spell metadata/power scenarios; selected book and caster level are supplied fixtures, not actor eligibility");
 }
 else if(args.Length==2 && args[0]=="--recipes")
 {

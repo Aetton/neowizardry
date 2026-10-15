@@ -26,13 +26,13 @@ Valid fixture casts always succeed, spending only the selected realm pool and dr
 | Power and cost | Explicit fixture levels/costs; original ranges and scaling pending |
 | Offensive/support effect | Direct damage and single-target healing fixtures |
 | Round ordering | Shared action queue; full original initiative rules pending |
-| Success/fizzle/backfire | Original evidence required; fixture success is guaranteed |
-| Resistance and Power Cast | Not implemented; require source-backed formula/rounding fixtures |
+| Success/fizzle/backfire | Ordinary-risk arithmetic and strict outcome intervals recovered independently; fixture success remains guaranteed |
+| Resistance and Power Cast | Pure local arithmetic recovered from EXE; actor/effect integration and original-game comparison still required |
 | Durations, protection, states | Synthetic ward/bind/burn effects; original rules pending |
 | Area, group and non-battle targeting | Not implemented |
 | Multiple caster orders per round | One validated order per caster in a shared round; UI queue supported |
 | Books, scrolls, charges, gadgets, other casting sources | Dedicated future coverage; no assumed shared algorithm |
-| Complete original spell catalog | Not imported or claimed |
+| Original spell metadata | 150 imported reference rows; full effect execution not reconstructed |
 
 The magic roadmap remains separate from inventory/crafting. Further spells should be added by verified effect mechanism and casting source rather than simply increasing a spell counter.
 
@@ -63,3 +63,8 @@ User decision, 2026-10-15: [TOC-23](https://linear.app/tochka/issue/TOC-23/ficha
 Keep adjustable mana investment/power and add a small passive contribution from a caster attribute to the spell effect, including low-power casts. Character growth should keep economical casts useful throughout progression, while spending more mana still produces a substantial improvement. Both low-power efficiency and full-power impact should have situational value; neither should become the universally best choice.
 
 The attribute, any school-specific mapping, scaling curve, coefficients and treatment of damage/healing/control remain design questions. Do not assume Intelligence, add character level directly, or apply one formula to every effect mechanism by default. Balance in early/mid/late game against effect per mana and effect per turn, and preview the resulting effect when selecting power. Current fixture formulas are unchanged.
+
+
+## Iteration 017 — first original-formula subset
+
+[Original magic arithmetic](original-magic-formulas.md) documents the inspected executable hash, addresses, integer formulas, random-draw bounds and exclusions. `Rules/OriginalMagicRules` supplies ordinary player risk from caller-resolved skills/levels, risk colors, one-roll failure/backfire outcome, Power Cast percentage/scaling, base effect strength and resistance reduction from a resolved strength term. Special source/context modifiers and per-spell effects are not guessed. These functions are tested independently and are not yet connected to the fixture spellbook. The user's baseline decision is original formulas with a clean implementation; no passive attribute bonus was introduced by this research step.
