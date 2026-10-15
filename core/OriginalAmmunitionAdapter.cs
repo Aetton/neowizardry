@@ -43,11 +43,11 @@ public static class OriginalAmmunitionAdapter
         var fields=weapon.Instance??throw new InvalidOperationException("Native weapon metadata required");
         fields.Validate(weapon.RecordSha256);
         var source=fuel.Instance??throw new InvalidOperationException("Native fuel metadata required");
-        source.Validate(fuel.RecordSha256);
+        var compiled=source.Compile(fuel.RecordSha256);
         if(fields.Mode!=4 || FuelIcon(weapon.IconIndex) is not int icon || fuel.IconIndex!=icon || source.Mode is <1 or >4)
             throw new InvalidOperationException("Unsupported weapon/fuel refill pair");
         int capacity=checked(fields.AmountConstant+fields.AmountDice*fields.AmountSides);
         if(capacity is <1 or >255)throw new InvalidOperationException("Original shot capacity must fit in a positive byte");
-        return new(capacity,!OriginalWeaponAdapter.RetainEmpty(Convert.FromHexString(source.RawRecordHex)));
+        return new(capacity,!compiled.RetainEmpty);
     }
 }

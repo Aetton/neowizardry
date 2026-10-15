@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Collections.Immutable;
 
 namespace NeoWizardry.Core;
 
@@ -16,7 +17,7 @@ public sealed record ItemDefinition(int Id, string Name, int TypeCode, int IconI
 }
 
 public sealed record ItemCatalog(int Schema, string Source, Provenance Provenance,
-    int RecordSize, int Count, ItemDefinition[] Items)
+    int RecordSize, int Count, ImmutableArray<ItemDefinition> Items)
 {
     public static ItemCatalog Parse(string json)
     {
@@ -27,9 +28,11 @@ public sealed record ItemCatalog(int Schema, string Source, Provenance Provenanc
         return result;
     }
 
-    public void Validate()
+    public void Validate() => CompiledItemCatalog.Get(this);
+
+    internal void ValidateSource()
     {
-        if (Schema is not (2 or 3) || RecordSize != 269 || Count <= 0 || Items is null || Count != Items.Length ||
+        if (Schema is not (2 or 3) || RecordSize != 269 || Count <= 0 || Items.IsDefault || Count != Items.Length ||
             Source != "DATABASES/ITEMS.DBS" || Provenance is null || !Hash(Provenance.Sha256) ||
             Provenance.Kind is not ("archive" or "loose") || string.IsNullOrWhiteSpace(Provenance.File))
             throw new InvalidDataException("Unsupported or invalid item catalog");
@@ -44,12 +47,12 @@ public sealed record ItemCatalog(int Schema, string Source, Provenance Provenanc
                 item.WeightTenthsLb is < 0 or > 65535 || item.Initiative is < -128 or > 127 || item.ToHit is < -128 or > 127)
                 throw new InvalidDataException("Invalid item record");
             if(Schema==3 && item.Instance is null)throw new InvalidDataException("Missing native instance fields");
-            item.Instance?.Validate(item.RecordSha256);
+            SourceRecordValidation.Item(item);
         }
     }
 
     private static bool Hash(string? value) => value is { Length:64 } && value.All(Uri.IsHexDigit);
-    public ItemDefinition Find(int id) => Items.FirstOrDefault(i => i.Id == id)
+    public ItemDefinition Find(int id) => CompiledItemCatalog.Get(this).Definitions.GetValueOrDefault(id)
         ?? throw new InvalidOperationException($"Unknown item ID: {id}");
 }
 

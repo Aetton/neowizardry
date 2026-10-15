@@ -1,25 +1,37 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
+using System.Runtime.CompilerServices;
 
 namespace NeoWizardry.Core;
 
 public sealed record NativeItemFields(int Mode, int AmountConstant, int AmountDice, int AmountSides,
     int MaxStack, [property:JsonPropertyName("flags_41")] int Flags41, string RawRecordHex)
 {
-    public void Validate(string recordHash)
+    private static readonly ConditionalWeakTable<NativeItemFields,Lazy<CompiledNativeItem>> Compiled=new();
+    public void Validate(string recordHash)=>_ = Compile(recordHash);
+    internal CompiledNativeItem Compile(string recordHash)
+    {
+        var result=Compiled.GetValue(this,f=>new Lazy<CompiledNativeItem>(f.CompileSource)).Value;
+        if(!result.RecordHash.Equals(recordHash,StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Native item record hash mismatch");
+        return result;
+    }
+    private CompiledNativeItem CompileSource()
     {
         if(Mode is <0 or >255 || AmountConstant is <short.MinValue or >short.MaxValue ||
             AmountDice is <0 or >255 || AmountSides is <0 or >255 || MaxStack is <0 or >255 || Flags41 is <0 or >255 ||
             RawRecordHex is not {Length:538} || !RawRecordHex.All(Uri.IsHexDigit))
             throw new InvalidDataException("Invalid native item fields");
         var raw=Convert.FromHexString(RawRecordHex);
-        if(!Convert.ToHexString(SHA256.HashData(raw)).Equals(recordHash,StringComparison.OrdinalIgnoreCase) ||
-            raw[0x66]!=Mode || BinaryPrimitives.ReadInt16LittleEndian(raw.AsSpan(0x67))!=AmountConstant ||
+        if(raw[0x66]!=Mode || BinaryPrimitives.ReadInt16LittleEndian(raw.AsSpan(0x67))!=AmountConstant ||
             raw[0x69]!=AmountDice || raw[0x6a]!=AmountSides || raw[0x6b]!=MaxStack || raw[0x41]!=Flags41)
             throw new InvalidDataException("Native item fields disagree with source record");
+        return new(Convert.ToHexString(SHA256.HashData(raw)),unchecked((sbyte)raw[0x62]),raw[0x63],OriginalWeaponAdapter.RetainEmpty(raw));
     }
 }
+
+internal sealed record CompiledNativeItem(string RecordHash,int Armor,int SpellUse,bool RetainEmpty);
 
 // A 12-byte local item slot, not a parser for a whole character/save file.
 // Raw bytes/flags are retained even for empty slots and unrecognized values.

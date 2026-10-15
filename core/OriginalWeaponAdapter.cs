@@ -23,9 +23,8 @@ public static class OriginalWeaponAdapter
         if((weapon.AttackModes&0x110)==0)throw new InvalidOperationException("Select a shooting or throwing weapon");
         var source=ammunition??weapon;
         var fields=source.Instance??throw new InvalidOperationException("Native metadata required");
-        fields.Validate(source.RecordSha256);
-        var raw=Convert.FromHexString(fields.RawRecordHex);
-        if(ammunition is null && raw[0x63]!=0)
+        var compiled=fields.Compile(source.RecordSha256);
+        if(ammunition is null && compiled.SpellUse!=0)
             throw new InvalidOperationException("Spell-use weapon requires its separate execution path");
         if(ammunition is null && weapon.TypeCode==2 && (fields.Flags41&0x80)!=0)
             return new(source.Id,ProjectileCostKind.None);
@@ -34,7 +33,7 @@ public static class OriginalWeaponAdapter
         return fields.Mode switch {
             0=>new(source.Id,ProjectileCostKind.None),
             1=>new(source.Id,ProjectileCostKind.Quantity),
-            >=2 and <=4=>new(source.Id,ProjectileCostKind.Resource,!RetainEmpty(raw)),
+            >=2 and <=4=>new(source.Id,ProjectileCostKind.Resource,!compiled.RetainEmpty),
             _=>throw new InvalidOperationException("Unsupported projectile source mode")};
     }
     // 0x520750: capability predicate, not an inferred 'rechargeable' flag.

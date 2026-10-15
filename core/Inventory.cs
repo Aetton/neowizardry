@@ -10,9 +10,7 @@ public static class Inventory
     public static readonly ItemLocation BagLocation=new("party");
     public static IEnumerable<ItemInstance> Bag(GameState state)=>state.Items!.Items.Where(i=>i.Location==BagLocation);
     public static long Count(GameState state,int itemId)=>Bag(state).Where(i=>i.DefinitionId==itemId).Sum(i=>(long)i.Quantity);
-    public static IReadOnlyDictionary<int,ItemInventoryRule> Rules(ItemCatalog catalog)=>catalog.Items
-        .Select(d=>d.Instance is not null?OriginalItemAdapter.Rule(d):new ItemInventoryRule(d.Id,d.TypeCode is 0 or 1?1:int.MaxValue))
-        .ToDictionary(r=>r.DefinitionId);
+    public static IReadOnlyDictionary<int,ItemInventoryRule> Rules(ItemCatalog catalog)=>CompiledItemCatalog.Get(catalog).Rules;
 
     public static void ValidateStructure(GameState state)
     {
@@ -28,7 +26,7 @@ public static class Inventory
     }
     public static void Validate(GameState state,ItemCatalog catalog)
     {
-        Game.Validate(state);catalog.Validate();ItemInventory.Validate(state.Items!,Rules(catalog));
+        Game.Validate(state);ItemInventory.Validate(state.Items!,Rules(catalog));
     }
     internal static string FreshId(ref long sequence)=>$"item-{checked(sequence++):D12}";
     internal static GameState Commit(GameState state,ItemInventoryState items,long sequence,ItemCatalog catalog)

@@ -26,7 +26,6 @@ public static class OriginalDefenseAdapter
     {
         if(item is null)return 0;
         var fields=item.Instance??throw new InvalidOperationException("Native armor metadata required");
-        fields.Validate(item.RecordSha256);
-        return unchecked((sbyte)Convert.FromHexString(fields.RawRecordHex)[0x62]);
+        return fields.Compile(item.RecordSha256).Armor;
     }
 }

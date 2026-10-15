@@ -19,8 +19,8 @@ static class NativeInventoryChecks
             string name=$"Native fixture {id}";System.Text.Encoding.Unicode.GetBytes(name).CopyTo(raw,0);
             BinaryPrimitives.WriteInt32LittleEndian(raw.AsSpan(0xb9),-1);
             BinaryPrimitives.WriteInt32LittleEndian(raw.AsSpan(0xbd),-1);
-            return prototype with {Id=id,Name=name,RecordSha256=Convert.ToHexString(SHA256.HashData(raw)),
-                Instance=new(mode,0,0,0,maximum,0,Convert.ToHexString(raw))};
+            return SourceFixture.Item(prototype with {Id=id,Name=name,RecordSha256=Convert.ToHexString(SHA256.HashData(raw)),
+                Instance=new(mode,0,0,0,maximum,0,Convert.ToHexString(raw))});
         }
         var definition=Definition(0,1,5);var other=Definition(1,2,0);
         var catalog=new ItemCatalog(3,"DATABASES/ITEMS.DBS",new("loose","synthetic-native-inventory",new string('a',64)),269,2,[definition,other]);
@@ -132,7 +132,7 @@ static class NativeInventoryChecks
         Reject(()=>NativeInventory.SimulateCombination(ingredients,0,1,15,[],"crafted",[],craftCatalog,recipes with {Provenance=recipes.Provenance with {Sha256=new string('b',64)}}),"Local combination requires matching catalog provenance");
         var easierRaw=recipeRaw.ToArray();easierRaw[0xca]=0;
         var easier=outputDefinition with {Id=3,RecordSha256=Convert.ToHexString(SHA256.HashData(easierRaw)),Instance=outputDefinition.Instance! with {RawRecordHex=Convert.ToHexString(easierRaw)}};
-        var duplicateCatalog=craftCatalog with {Count=4,Items=craftCatalog.Items.Append(easier).ToArray()};
+        var duplicateCatalog=craftCatalog with {Count=4,Items=[..craftCatalog.Items,easier]};
         var duplicateRecipes=recipes with {ItemCount=4,Count=2,Recipes=[recipe,recipe with {OutputId=3,SkillThreshold=0,RecordSha256=easier.RecordSha256,RawRecordHex=Convert.ToHexString(easierRaw)}]};
         Reject(()=>NativeInventory.SimulateCombination(ingredients,0,1,14,[],"crafted",[],duplicateCatalog,duplicateRecipes),"First matched recipe's skill failure does not fall through to easier duplicate");
         Check(NativeInventory.Save(ingredients,craftCatalog)==ingredientsBefore,"Local combination and failures preserve original snapshot");

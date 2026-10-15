@@ -19,8 +19,8 @@ static class NativeItemChecks
             var raw=new byte[269];raw[0x66]=(byte)mode;raw[0x41]=(byte)flags;raw[0x6b]=(byte)maxStack;
             BinaryPrimitives.WriteInt16LittleEndian(raw.AsSpan(0x67),(short)amountBase);
             raw[0x69]=(byte)dice;raw[0x6a]=(byte)sides;
-            return prototype with {RecordSha256=Convert.ToHexString(SHA256.HashData(raw)),
-                Instance=new(mode,amountBase,dice,sides,maxStack,flags,Convert.ToHexString(raw))};
+            return SourceFixture.Item(prototype with {RecordSha256=Convert.ToHexString(SHA256.HashData(raw)),
+                Instance=new(mode,amountBase,dice,sides,maxStack,flags,Convert.ToHexString(raw))});
         }
         var bytes=new byte[]{0x12,0x34,0x56,0x78,9,17,255,128,63,7,254,31};
         var slot=NativeItemInstance.Decode(bytes);

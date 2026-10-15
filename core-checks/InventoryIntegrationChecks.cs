@@ -77,8 +77,8 @@ static class InventoryIntegrationChecks
         {
             var bytes=new byte[269];bytes[0x66]=(byte)mode;bytes[0x6b]=(byte)maximum;
             System.Buffers.Binary.BinaryPrimitives.WriteInt16LittleEndian(bytes.AsSpan(0x67),(short)amount);
-            return catalog.Find(77) with {Id=id,RecordSha256=Convert.ToHexString(SHA256.HashData(bytes)),
-                Instance=new(mode,amount,0,0,maximum,0,Convert.ToHexString(bytes))};
+            return SourceFixture.Item(catalog.Find(77) with {Id=id,RecordSha256=Convert.ToHexString(SHA256.HashData(bytes)),
+                Instance=new(mode,amount,0,0,maximum,0,Convert.ToHexString(bytes))});
         }
         var native=catalog with {Schema=3,Count=2,Items=[Native(77,1,5,0),Native(78,2,0,12)]};
         var legacyNative=Legacy(Game.Create(1));legacyNative["Bag"]=new JsonArray(new JsonObject{["ItemId"]=77,["Count"]=13},new JsonObject{["ItemId"]=78,["Count"]=2});

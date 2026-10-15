@@ -40,8 +40,10 @@ public sealed record SpellCatalog(int Schema, string Source, Provenance Provenan
                 s.DamageConstant is <0 or >65535 || s.DamageDice is <0 or >255 || s.DamageSides is <0 or >255 ||
                 !Hash(s.RecordSha256) || s.RawRecordHex is not { Length:1408 } || !s.RawRecordHex.All(Uri.IsHexDigit))
                 throw new InvalidDataException("Invalid spell record");
-            var digest=Convert.ToHexString(SHA256.HashData(Convert.FromHexString(s.RawRecordHex)));
+            var raw=Convert.FromHexString(s.RawRecordHex);
+            var digest=Convert.ToHexString(SHA256.HashData(raw));
             if(!digest.Equals(s.RecordSha256,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Spell record hash mismatch");
+            SourceRecordValidation.Spell(s,raw);
         }
     }
     private static bool Hash(string? s)=>s is {Length:64} && s.All(Uri.IsHexDigit);

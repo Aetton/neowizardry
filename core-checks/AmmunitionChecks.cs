@@ -16,8 +16,8 @@ static class AmmunitionChecks
             raw[0x47]=(byte)range;raw[0x66]=(byte)mode;raw[0x6b]=100;
             BinaryPrimitives.WriteInt16LittleEndian(raw.AsSpan(0x67),(short)capacity);raw[0x69]=(byte)dice;raw[0x6a]=(byte)sides;
             BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(0x4e),(ushort)attack);if(retain)raw[0x62]=1;
-            return new(id,"synthetic",type,icon,0,0,0,Convert.ToHexString(SHA256.HashData(raw)),0,range,0,0,0,1,4,attack,0,false,0,
-                new(mode,capacity,dice,sides,100,0,Convert.ToHexString(raw)));
+            return SourceFixture.Item(new(id,"synthetic",type,icon,0,0,0,Convert.ToHexString(SHA256.HashData(raw)),0,range,0,0,0,1,4,attack,0,false,0,
+                new(mode,capacity,dice,sides,100,0,Convert.ToHexString(raw))));
         }
         var bow=Definition(1,3,11,attack:256);var arrow=Definition(2,4,22,1);
         var otherArrow=Definition(3,4,22,1);var bolt=Definition(4,4,83,1);var slingStone=Definition(5,4,23,1);
@@ -56,7 +56,7 @@ static class AmmunitionChecks
         Reject(()=>OriginalAmmunitionAdapter.PrepareRefill(Definition(6,3,104,4,250,1,6),fuelCharge),"Capacity above byte limit rejected");
         Reject(()=>OriginalAmmunitionAdapter.PrepareRefill(gun,fuelCharge with {RecordSha256=new string('0',64)}),"Native refill metadata hash verified");
         var definitions=new[]{bow,arrow,otherArrow,bolt,slingStone,gun,fuelCharge,fuelStack,retainedFuel};
-        var catalog=new ItemCatalog(3,"DATABASES/ITEMS.DBS",new("loose","synthetic",new string('a',64)),269,definitions.Length,definitions);
+        var catalog=new ItemCatalog(3,"DATABASES/ITEMS.DBS",new("loose","synthetic",new string('a',64)),269,definitions.Length,[..definitions]);
         catalog.Validate();var rules=definitions.Select(OriginalItemAdapter.Rule).ToDictionary(r=>r.DefinitionId);
         ItemInstance Item(string id,int definition,int quantity=1,int? resource=null,bool equipped=false)=>
             new(id,definition,quantity,true,resource,false,new("hero",equipped?"main":null));
