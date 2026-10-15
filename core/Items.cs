@@ -12,7 +12,7 @@ public sealed record ItemDefinition(int Id, string Name, int TypeCode, int IconI
     // A zero-dice record stores a percentage bonus (e.g. a bow), not flat damage.
     public string DamageDescription => DamageDice == 0 && DamageSides == 0
         ? $"Damage bonus {DamageConstant*10}% (no standalone damage roll)"
-        : $"{DamageDice}d{DamageSides} + {DamageConstant}";
+        : $"{DamageDice}d{DamageSides} {(DamageConstant<0?"-":"+")} {Math.Abs((long)DamageConstant)}";
 }
 
 public sealed record ItemCatalog(int Schema, string Source, Provenance Provenance,
@@ -39,7 +39,7 @@ public sealed record ItemCatalog(int Schema, string Source, Provenance Provenanc
             if (item is null || item.Id < 0 || !ids.Add(item.Id) || item.Name is null || !Hash(item.RecordSha256) ||
                 item.TypeCode is < 0 or > 25 || item.IconIndex is < 0 or > 65535 ||
                 item.ProfessionMask is < 0 or > 32767 || item.RaceMask is < 0 or > 65535 || item.GenderMask is < 0 or > 3 ||
-                item.DamageConstant is < 0 or > 65535 || item.DamageDice is < 0 or > 255 || item.DamageSides is < 0 or > 255 ||
+                item.DamageConstant is < -32768 or > 32767 || item.DamageDice is < 0 or > 255 || item.DamageSides is < 0 or > 255 ||
                 item.UsageSkill is < 0 or > 255 || item.RangeCode is < 0 or > 255 || item.AttackModes is < 0 or > 65535 ||
                 item.WeightTenthsLb is < 0 or > 65535 || item.Initiative is < -128 or > 127 || item.ToHit is < -128 or > 127)
                 throw new InvalidDataException("Invalid item record");

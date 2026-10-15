@@ -272,6 +272,13 @@ Throws(()=>Equipment.Equip(Game.CaptureFirst(solo),"hero-1",77,catalog),"Captive
 Throws(()=> (catalog with { Items=[restricted,restricted],Count=2 }).Validate(),"Reject duplicate catalog IDs");
 Throws(()=> (catalog with { Count=2 }).Validate(),"Reject catalog count mismatch");
 Check((restricted with { DamageConstant=3,DamageDice=0,DamageSides=0 }).DamageDescription.Contains("30%"),"Zero dice encode bonus rather than flat damage");
+var negativeWeapon=restricted with { DamageConstant=-32768,DamageDice=1,DamageSides=1 };
+var negativeCatalog=catalog with { Items=[negativeWeapon] };
+negativeCatalog.Validate();
+Throws(()=>(catalog with { Items=[restricted with { DamageConstant=32768 }] }).Validate(),"Item catalog rejects the old unsigned-only damage constant domain");
+var negativeEquipped=Equipment.Equip(Inventory.Add(solo,77,1,negativeCatalog),"hero-1",77,negativeCatalog);
+Check(Game.Attack(negativeEquipped,negativeCatalog).State.Enemy.Hp==solo.Enemy.Hp-1,"Signed weapon damage cannot heal the fixture enemy");
+
 var snakeJson=System.Text.Json.JsonSerializer.Serialize(catalog,new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower});
 Check(ItemCatalog.Parse(snakeJson).Find(77).Name==restricted.Name,"Python/C# snake-case schema");
 var oldSave=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(solo))!;
@@ -333,6 +340,7 @@ checks+=ItemInventoryChecks.Run(restricted);
 checks+=InventoryIntegrationChecks.Run(catalog,craftCatalog);
 checks+=OriginalFormulaChecks.Run();
 checks+=PhysicalScoreChecks.Run();
+checks+=PhysicalDamageChecks.Run();
 if(args.Length==2 && args[0]=="--fixture")
 {
     File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with { Count=5, Items=[restricted, restricted with { Id=78,Name="Test herb",TypeCode=19 }, restricted with { Id=79,Name="Test vial",TypeCode=19 }, restricted with { Id=80,Name="Test tonic",TypeCode=15 }, restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }], Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256) },new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));

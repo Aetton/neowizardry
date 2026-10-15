@@ -207,7 +207,7 @@ def item_catalog(archive: Archive | Resources) -> dict:
         items[-1].update({"usage_skill": r[0x46], "range_code": r[0x47],
                           "initiative": struct.unpack_from("<b", r, 0x48)[0],
                           "to_hit": struct.unpack_from("<b", r, 0x49)[0],
-                          "damage_constant": struct.unpack_from("<H", r, 0x4A)[0],
+                          "damage_constant": struct.unpack_from("<h", r, 0x4A)[0],
                           "damage_dice": r[0x4C], "damage_sides": r[0x4D],
                           "attack_modes": struct.unpack_from("<H", r, 0x4E)[0],
                           "weight_tenths_lb": struct.unpack_from("<H", r, 0x8A)[0],

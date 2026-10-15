@@ -72,7 +72,7 @@ public static class OriginalCombatRules
         if(input.ModernWeapon)penalty/=2;
         int attack=checked((input.Dexterity+input.Speed)/2+experience+skill+penalty)/3;
         int swing=checked(input.Speed+10*input.WeaponInitiative+experience+skill+penalty)/3;
-        int rating=60+(input.Dexterity/2+2*skill+penalty)/3;
+        int rating=checked(60+(input.Dexterity/2+2*skill+experience)/3);
         return new(experience,skill,penalty,attack,attack>=100?3:attack>=50?2:1,swing,swing>=100?3:swing>=67?2:1,rating);
     }
 }

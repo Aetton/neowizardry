@@ -60,11 +60,15 @@ static class PhysicalScoreChecks
         Reject(()=>OriginalPhysicalScores.Penetrates(100,-1),"Negative d100 draw rejected");
         Reject(()=>OriginalPhysicalScores.Penetrates(100,100,true),"Automatic context does not permit invalid draw");
         var low=new SingleWeaponInput(0,0,0,0,[new(OriginalProfession.Mage,1)],0,4);
-        Check(OriginalCombatRules.SingleWeapon(low).BaseAttackRating==20,"Base attack rating retains load contribution inside division");
+        Check(OriginalCombatRules.SingleWeapon(low).BaseAttackRating==60,"Base attack rating uses class experience rather than load");
         var trained=low with { Dexterity=125,CombatSkill=100,WeaponSkill=100,LoadCategory=0 };
-        Check(OriginalCombatRules.SingleWeapon(trained).BaseAttackRating==147,"Free-hand base rating uses half Dexterity and twice weighted skill");
-        Check(OriginalCombatRules.SingleWeapon(trained with { History=[new(OriginalProfession.Fighter,50)] }).BaseAttackRating==147,
-            "Class combat experience does not enter ordinary base attack rating");
+        Check(OriginalCombatRules.SingleWeapon(trained).BaseAttackRating==148,"Free-hand base rating includes half Dexterity, twice weighted skill and class experience");
+        Check(OriginalCombatRules.SingleWeapon(trained with { History=[new(OriginalProfession.Fighter,50)] }).BaseAttackRating==214,
+            "Class combat experience enters base rating through the integer division");
+        Check(OriginalCombatRules.SingleWeapon(trained with { LoadCategory=4 }).BaseAttackRating==148,
+            "Load changes attack budgets but not ordinary base attack rating");
+        Reject(()=>OriginalCombatRules.SingleWeapon(new(125,125,125,125,[new(OriginalProfession.Mage,1073741673)],0)),
+            "Base rating guards overflow independently of the attack and swing metrics");
         return checks;
     }
 }

@@ -157,6 +157,7 @@ public static class Game
                     rolled = weapon.DamageConstant;
                     for (int i = 0; i < weapon.DamageDice; i++)
                         rolled += Dice.Roll(ref randomState, weapon.DamageSides);
+                    rolled=Math.Max(1,rolled);
                 }
                 var damage = Math.Min(enemy.Hp, rolled);
                 enemy = enemy with { Hp = enemy.Hp-damage };

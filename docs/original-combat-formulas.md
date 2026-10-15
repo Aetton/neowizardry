@@ -99,10 +99,10 @@ The semantic enum uses ordinals, not database flags. Selection from an item's su
 For the already-covered free-other-hand branch without dual-wield state or the special NPC/quest modifier:
 
 ```
-BAR = 60 + trunc((floor(DEX/2) + 2*S + L)/3)
+BAR = 60 + trunc((floor(DEX/2) + 2*S + E)/3)
 ```
 
-`S` and `L` are the attack-budget skill contribution and load contribution above. `0x4EE460` stores `S` in hand +0x0D; `0x4EE50D`–`0x4EE535` computes BAR and stores hand +0x11. Class-history experience `E` is not added here. `PhysicalAttackBudget.BaseAttackRating` exposes this additional result. Original dual-wield/context and special NPC/quest branches at `0x4EE4D7`–`0x4EE50B` and `0x4EE538`–`0x4EE58B` remain outside that API.
+`S` and `E` are the skill contribution and class-history combat experience above. `0x4EE460` stores `S` in hand +0x0D; `0x4EE3AD`–`0x4EE3B6` computes and stores `E` in local stack +0x14, which `0x4EE51C` reads into BAR. `0x4EE50D`–`0x4EE535` computes BAR and stores hand +0x11. Load contribution `L` is held separately in local stack +0x10 and is not added to BAR. `PhysicalAttackBudget.BaseAttackRating` exposes this additional result. Original dual-wield/context and special NPC/quest branches at `0x4EE4D7`–`0x4EE50B` and `0x4EE538`–`0x4EE58B` remain outside that API.
 
 ### Hit and penetration scores
 
@@ -122,7 +122,7 @@ Attribute sums and truncation: hit `0x541D58`–`0x541E46`; penetration `0x541F9
 
 ### Different load penalties
 
-Helper `0x52A7D0`, table `0x52A800`, returns `0,5,10,20,40` for known categories 0–4. Hit calls it at `0x541CAB`–`0x541CC4`; Modern Weapon (skill 7) halves the penalty before subtraction, e.g. category 1 gives 2. Penetration at `0x541F4A`–`0x541F6D` **skips** this penalty for skill 7. This is a second load effect, distinct from the load contribution already included in BAR and the attack/swing budgets.
+Helper `0x52A7D0`, table `0x52A800`, returns `0,5,10,20,40` for known categories 0–4. Hit calls it at `0x541CAB`–`0x541CC4`; Modern Weapon (skill 7) halves the penalty before subtraction, e.g. category 1 gives 2. Penetration at `0x541F4A`–`0x541F6D` **skips** this penalty for skill 7. This is a second load effect, distinct from the load contribution included in the attack/swing budgets; BAR itself has no load term.
 
 ### Nonlinear context-counter penalty
 
@@ -144,3 +144,10 @@ The counter has a reset at `0x4E854F` and a producer at `0x5367AB`–`0x5367B2` 
 The ordinary branch at `0x53ED37`–`0x53ED4D` passes when its one-based d100 is <= the penetration score, or an earlier automatic-penetration flag bypasses the comparison. `Penetrates` accepts the caller's existing zero-based draw and explicit automatic context; it does not generate another roll or infer automatic eligibility. Exhaustive d100 checks cover negative, zero, interior and above-100 thresholds. This comparison alone does not establish a hit or deal damage.
 
 Full hit resolution remains open: the melee path also computes a cubic fumble term from an untargeted score (`0x53E57E`–`0x53E60B`), scales it using an eligible-target list and can redirect an attack. Projectile contact has its own delivery path. Post-target condition adjustment (`0x541E4A`–`0x541E9F`), special +10 flags and final context scaling (`0x55CC00`) are excluded from `OrdinaryCharacter`; their eligibility must be resolved explicitly before expanding coverage. Do not label the unresolved global mode as difficulty without proving its meaning. Monster-side attack builders, damage, hit-location derivation and complete condition/resource flow remain separate gates in the [roadmap](roadmap.md).
+
+
+## Iteration 020 correction and connected strike
+
+Iteration 019 incorrectly substituted `L` for `E` in BAR after misidentifying a local stack slot. The executable producer/read chain above establishes `E`; the formula, implementation and regression expectations are corrected. With DEX=125, C=W=100 and Mage level 1, BAR is 148; Fighter level 50 gives 214. Changing only load leaves BAR unchanged. This correction changes score calculations when using generated budgets; manually supplied score-input tests never established the old BAR formula.
+
+[Physical damage and ordinary melee composition](original-physical-damage.md) now covers primary-hand attribute modifiers, imported weapon/ammunition preparation, repeated damage dice, percentage scaling/absorption and a neutral melee path sharing one d100 for contact and penetration. That path explicitly rejects unresolved fumble/redirection contexts and is not connected to the playable fixture battle yet.
