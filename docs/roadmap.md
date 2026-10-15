@@ -22,6 +22,14 @@ Visual development starts with real-world import: Wizardry identity/frame, Grimr
 - Distinguish tested original behavior from research candidates and redesigns; do not silently resolve unknown rounding or Power Cast behavior.
 - Track coverage by effect mechanism as well as spell count.
 
+## Planned feature: passive attribute contribution to spell effects
+
+User decision, 2026-10-15: [TOC-23](https://linear.app/tochka/issue/TOC-23/ficha-nebolshoj-passivnyj-bonus-harakteristiki-k-effektu-zaklinanij). Deferred remake design feature, separate from reconstructing original formulas.
+
+Keep adjustable mana investment/power and add a small passive contribution from a caster attribute to the spell effect, including low-power casts. Character growth should keep economical casts useful throughout progression, while spending more mana still produces a substantial improvement. Both low-power efficiency and full-power impact should have situational value; neither should become the universally best choice.
+
+The attribute, any school-specific mapping, scaling curve, coefficients and treatment of damage/healing/control remain design questions. Do not assume Intelligence, add character level directly, or apply one formula to every effect mechanism by default. Balance in early/mid/late game against effect per mana and effect per turn, and preview the resulting effect when selecting power. Current fixture formulas are unchanged.
+
 ## Crafting acceptance
 - Identify the original systems, recipe sources and requirements before choosing the implementation.
 - Check ordinary combinations, gated recipes and any required progression/quest combinations against original behavior.
