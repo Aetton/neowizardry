@@ -40,9 +40,15 @@ public static class OriginalPhysicalScores
     public static int RepetitionPenalty(int speed,int baseAttackRating,int counter)
     {
         if(speed is <0 or >125)throw new ArgumentOutOfRangeException(nameof(speed));
+        return NativeRepetitionPenalty(speed,baseAttackRating,counter);
+    }
+
+    internal static int NativeRepetitionPenalty(int speed,int rating,int counter)
+    {
+        if(speed is <0 or >255)throw new ArgumentOutOfRangeException(nameof(speed));
         if(counter<0)throw new ArgumentOutOfRangeException(nameof(counter));
         if(counter==0)return 0;
-        long reserve=Math.Max(0,(long)speed+baseAttackRating-25L*counter-50);
+        long reserve=Math.Max(0,(long)speed+rating-25L*counter-50);
         if(reserve>=185)return 0;
         long cube=reserve*reserve*reserve;
         int ceiling=0;
