@@ -1,0 +1,47 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
+namespace NeoWizardry.Core;
+
+// Only the load boundary understands obsolete aggregate ownership fields.
+public static class GameSaveMigration
+{
+    public static GameState Load(string json,ItemCatalog? catalog=null)
+    {
+        var root=JsonNode.Parse(json)?.AsObject()??throw new InvalidDataException("Empty save");
+        int schema=root["Schema"]?.GetValue<int>()??throw new InvalidDataException("Missing save version");
+        if(schema==Game.SaveSchema)
+        {
+            if(root.ContainsKey("Bag") || root["Party"] is JsonArray party && party.Any(h=>h?.AsObject().ContainsKey("EquippedItemId")==true))
+                throw new InvalidDataException("Conflicting legacy inventory fields in instance save");
+            var current=JsonSerializer.Deserialize<GameState>(json)??throw new InvalidDataException("Empty save");
+            Game.Validate(current);if(catalog is not null)Equipment.ValidateLoadedEquipment(current,catalog,catalog.Provenance.Sha256);return current;
+        }
+        if(schema!=1 || root.ContainsKey("Items") || root.ContainsKey("NextItemSequence"))throw new InvalidDataException("Unsupported or mixed save version");
+        var legacy=JsonSerializer.Deserialize<GameState>(json)??throw new InvalidDataException("Empty save");
+        var state=legacy with {Schema=Game.SaveSchema,Items=ItemInventory.Create(Inventory.DefaultCapacity),NextItemSequence=1};
+        Game.Validate(state);
+        var bag=root["Bag"]?.Deserialize<ItemStack[]>()??[];var definitions=new HashSet<int>();
+        foreach(var stack in bag)
+            if(stack is null || stack.ItemId<0 || stack.Count<1 || !definitions.Add(stack.ItemId))throw new InvalidDataException("Invalid legacy bag");
+        var equipped=new List<(string HeroId,int ItemId)>();
+        foreach(var member in root["Party"]!.AsArray())
+            if(member!["EquippedItemId"] is JsonNode id)
+            {
+                int itemId=id.GetValue<int>();if(itemId<0)throw new InvalidDataException("Invalid legacy equipment");
+                equipped.Add((member["Id"]!.GetValue<string>(),itemId));
+            }
+        if(bag.Length==0 && equipped.Count==0)
+        {
+            Equipment.ValidateLoadedEquipment(state,catalog,catalog?.Provenance.Sha256);return state;
+        }
+        if(catalog is null)throw new InvalidDataException("Legacy item migration requires the original item catalog");
+        catalog.Validate();long sequence=1;uint random=state.RandomState;var items=new List<ItemInstance>();
+        foreach(var stack in bag.OrderBy(i=>i.ItemId))
+            items.AddRange(Inventory.CreateItems(stack.ItemId,stack.Count,Inventory.BagLocation,catalog,ref sequence,ref random,state.Items!.Capacity-items.Count,migrating:true));
+        foreach(var worn in equipped)
+            items.AddRange(Inventory.CreateItems(worn.ItemId,1,new(worn.HeroId,Equipment.WeaponSlot),catalog,ref sequence,ref random,state.Items!.Capacity-items.Count,migrating:true));
+        state=Inventory.Commit(state,state.Items! with {Items=items.ToArray()},sequence,catalog);
+        Equipment.ValidateLoadedEquipment(state,catalog,catalog.Provenance.Sha256);return state;
+    }
+}

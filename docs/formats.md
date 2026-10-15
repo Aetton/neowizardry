@@ -78,3 +78,8 @@ Wizardry8Editor's [Level.cpp](https://github.com/anonidiot/Wizardry8Editor/blob/
 ## Existing tools
 
 Wizardry8Editor has a BSD-2-Clause-style file license, an existing SLF reader and documented item offsets. It is the main source consulted for this iteration. Older SLF viewers and Cosmic Forge remain useful research candidates; neither was executed in this environment. No editor code or original assets were copied into this repository.
+
+
+## Prototype save schema 2
+
+The outer client envelope remains schema 1 (camera and item database hash). Its nested game is schema 2 with `Items` (typed schema-1 instance inventory) and `NextItemSequence`. Bag ownership and weapon ownership are locations on those instances, not extra hero fields. The loader migrates game schema 1 using its `Bag` and hero `EquippedItemId`, requiring a matching catalog at the client boundary. It does not rewrite source files on load. Missing legacy resource counters become zero; unidentified/curse state was not recorded by those old prototype saves. Full original game save decoding is unrelated and remains unimplemented. See [inventory architecture](architecture.md#inventory-boundary--decision-2026-10-15).

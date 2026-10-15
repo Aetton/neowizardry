@@ -76,52 +76,53 @@ public static class Equipment
         return null;
     }
 
-    public static GameState Equip(GameState state, string heroId, int itemId, ItemCatalog catalog)
-    {
-        Game.Validate(state); catalog.Validate();
-        int index = Array.FindIndex(state.Party,h => h.Id==heroId);
-        if (index<0) throw new InvalidOperationException("Unknown hero");
-        var hero = state.Party[index];
-        if (hero.Captive || hero.Hp==0) throw new InvalidOperationException("Hero cannot change equipment");
-        var item = catalog.Find(itemId);
-        var denial = Denial(hero,item);
-        if (denial is not null) throw new InvalidOperationException(denial);
-        if (hero.EquippedItemId == itemId) return state;
-        // Work on copies: a rejected swap never consumes the replacement or removes the old weapon.
-        var result = Inventory.Remove(state,itemId,1);
-        if (hero.EquippedItemId.HasValue) result = Inventory.Add(result,hero.EquippedItemId.Value,1,catalog);
-        var party = state.Party.ToArray();
-        party[index] = hero with { EquippedItemId = itemId };
-        return result with { Party = party };
-    }
+    public const string WeaponSlot="weapon";
+    public static ItemInstance? Instance(GameState state,string heroId)=>state.Items!.Items.SingleOrDefault(i=>i.Location==new ItemLocation(heroId,WeaponSlot));
+    public static int? ItemId(GameState state,string heroId)=>Instance(state,heroId)?.DefinitionId;
 
-    public static GameState Unequip(GameState state, string heroId, ItemCatalog catalog)
+    public static GameState Equip(GameState state,string heroId,int itemId,ItemCatalog catalog)
     {
-        Game.Validate(state); catalog.Validate();
-        int index = Array.FindIndex(state.Party,h => h.Id==heroId);
-        if (index<0) throw new InvalidOperationException("Unknown hero");
-        var hero = state.Party[index];
-        if (hero.Captive || hero.Hp==0) throw new InvalidOperationException("Hero cannot change equipment");
-        if (!hero.EquippedItemId.HasValue) return state;
-        var result = Inventory.Add(state,hero.EquippedItemId.Value,1,catalog);
-        var party = state.Party.ToArray();
-        party[index] = hero with { EquippedItemId=null };
-        return result with { Party=party };
+        Inventory.Validate(state,catalog);
+        if(Instance(state,heroId) is ItemInstance current && current.DefinitionId==itemId)return EquipInstance(state,heroId,current.Id,catalog);
+        var item=Inventory.Bag(state).Where(i=>i.DefinitionId==itemId).OrderBy(i=>i.Id,StringComparer.Ordinal).FirstOrDefault()
+            ??throw new InvalidOperationException("No spare copy in the party bag.");
+        return EquipInstance(state,heroId,item.Id,catalog);
     }
-
-    public static void ValidateLoadedEquipment(GameState state, ItemCatalog? catalog, string? expectedHash)
+    public static GameState EquipInstance(GameState state,string heroId,string instanceId,ItemCatalog catalog)
+    {
+        Inventory.Validate(state,catalog);var hero=state.Party.FirstOrDefault(h=>h.Id==heroId)??throw new InvalidOperationException("Unknown hero");
+        if(hero.Captive || hero.Hp==0)throw new InvalidOperationException("Hero cannot change equipment");
+        var item=state.Items!.Items.SingleOrDefault(i=>i.Id==instanceId)??throw new InvalidOperationException("Unknown item instance");
+        var denial=Denial(hero,catalog.Find(item.DefinitionId));if(denial is not null)throw new InvalidOperationException(denial);
+        if(Instance(state,heroId)?.Id==instanceId)return state;
+        if(item.Location!=Inventory.BagLocation)throw new InvalidOperationException("Select a spare instance from the party bag.");
+        var result=state;
+        if(item.Quantity>1)
+        {
+            result=Inventory.Split(state,instanceId,1,catalog);
+            item=result.Items!.Items.Single(i=>!state.Items.Items.Any(old=>old.Id==i.Id));
+        }
+        var previous=Instance(result,heroId);var rules=Inventory.Rules(catalog);
+        var items=previous is null?ItemInventory.Move(result.Items!,item.Id,new(heroId,WeaponSlot),rules):
+            ItemInventory.SwapLocations(result.Items!,item.Id,previous.Id,rules);
+        return Inventory.Commit(result,items,result.NextItemSequence,catalog);
+    }
+    public static GameState Unequip(GameState state,string heroId,ItemCatalog catalog)
+    {
+        Inventory.Validate(state,catalog);var hero=state.Party.FirstOrDefault(h=>h.Id==heroId)??throw new InvalidOperationException("Unknown hero");
+        if(hero.Captive || hero.Hp==0)throw new InvalidOperationException("Hero cannot change equipment");
+        var item=Instance(state,heroId);if(item is null)return state;
+        return Inventory.Commit(state,ItemInventory.Move(state.Items!,item.Id,Inventory.BagLocation,Inventory.Rules(catalog)),state.NextItemSequence,catalog);
+    }
+    public static void ValidateLoadedEquipment(GameState state,ItemCatalog? catalog,string? expectedHash)
     {
         Game.Validate(state);
-        if (!state.Party.Any(h => h.EquippedItemId.HasValue) && (state.Bag?.Length ?? 0)==0 && !state.Enemy.LootItemId.HasValue) return;
-        if (catalog is null || catalog.Provenance.Sha256 != expectedHash)
+        if(state.Items!.Items.Length==0 && !state.Enemy.LootItemId.HasValue)return;
+        if(catalog is null || catalog.Provenance.Sha256!=expectedHash)
             throw new InvalidDataException("Save requires the same imported item database.");
-        catalog.Validate();
-        foreach (var stack in state.Bag ?? []) catalog.Find(stack.ItemId);
-        if (state.Enemy.LootItemId.HasValue) catalog.Find(state.Enemy.LootItemId.Value);
-        foreach (var hero in state.Party.Where(h=>h.EquippedItemId.HasValue))
-        {
-            var denial = Denial(hero,catalog.Find(hero.EquippedItemId!.Value));
-            if (denial is not null) throw new InvalidDataException(denial);
-        }
+        Inventory.Validate(state,catalog);
+        if(state.Enemy.LootItemId.HasValue)catalog.Find(state.Enemy.LootItemId.Value);
+        foreach(var hero in state.Party)
+            if(ItemId(state,hero.Id) is int id && Denial(hero,catalog.Find(id)) is string denial)throw new InvalidDataException(denial);
     }
 }

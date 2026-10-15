@@ -40,6 +40,7 @@ public partial class Main : Node3D
     private SpellCatalog? _spellCatalog;
     private bool _spellsRequested;
     private bool _catalogRequested;
+    private bool _autosaveBlocked;
     private readonly Vector3 _enemyPosition = new(0, 1, -7);
     private const string SavePath = "user://prototype-save.json";
     private sealed record ClientSave(int Schema, GameState Game, float X, float Z, float Yaw, float Pitch, string? ItemDatabaseHash = null);
@@ -278,7 +279,7 @@ public partial class Main : Node3D
     }
     private void NewParty(int size)
     {
-        _state=CreateExpedition(size);_player.Position=new(0,.9f,2);_selectedHeroId=_state.Party[0].Id;Refresh();Say("New test expedition.");
+        _state=CreateExpedition(size);_autosaveBlocked=false;_player.Position=new(0,.9f,2);_selectedHeroId=_state.Party[0].Id;Refresh();Say("New test expedition.");
     }
     private void ShowMenu()
     {
@@ -365,7 +366,7 @@ public partial class Main : Node3D
         foreach (var child in _heroes.GetChildren()) { _heroes.RemoveChild(child); child.QueueFree(); }
         foreach (var h in _state.Party)
         {
-            string equipment = h.EquippedItemId.HasValue && _catalog is not null ? $"\n{_catalog.Find(h.EquippedItemId.Value).Name}" : "";
+            string equipment = Equipment.ItemId(_state,h.Id).HasValue && _catalog is not null ? $"\n{_catalog.Find(Equipment.ItemId(_state,h.Id)!.Value).Name}" : "";
             string effects=string.Join(" · ",(h.Effects ?? []).Select(e=>$"{e.Kind} {e.Rounds}r"));
             string mana=string.Join(" · ",(h.Mana ?? []).Select(p=>$"{p.Realm} {p.Current}/{p.Max}"));
             _heroes.AddChild(new Label { Text=$"{h.Name}\n{h.Race} · {h.Profession}\nHP {h.Hp}/{h.MaxHp}   XP {h.Xp}\n{mana}\n{effects}{equipment}{(h.Captive ? "\nCAPTIVE" : "")}", AutowrapMode=TextServer.AutowrapMode.WordSmart });
@@ -379,7 +380,7 @@ public partial class Main : Node3D
             bool occupied=i<4 ? i<left : index<_state.Party.Length;
             _portraits[i].Hero=occupied?_state.Party[index]:null;_portraits[i].Selected=occupied && _portraits[i].Hero!.Id==_selectedHeroId;_portraits[i].QueueRedraw();
         }
-        _selection.Text=$"{selected.Name} · HP {selected.Hp}/{selected.MaxHp}\n"+(selected.EquippedItemId is int id && _catalog is not null?_catalog.Find(id).Name:"Unarmed");
+        _selection.Text=$"{selected.Name} · HP {selected.Hp}/{selected.MaxHp}\n"+(Equipment.ItemId(_state,selected.Id) is int id && _catalog is not null?_catalog.Find(id).Name:"Unarmed");
         _realms.Available=Magic.Spells.Where(s=>(selected.Spellbook ?? []).Contains(s.Id)).Select(s=>s.Realm).Distinct().ToArray();_realms.QueueRedraw();
         _compass.EnemyAlive=_state.Enemy.Hp>0;_compass.QueueRedraw();
         _enemy.Text=$"{_state.Enemy.Id} · HP {_state.Enemy.Hp} · Round {_state.Round}\n"+string.Join(" · ",(_state.Enemy.Effects ?? []).Select(e=>$"{e.Kind} {e.Rounds}r"));
@@ -507,13 +508,17 @@ public partial class Main : Node3D
     private void Load() => Try(()=>{LoadFrom(SavePath);Say("Loaded.");});
     private void LoadFrom(string path)
     {
+        _autosaveBlocked=true;
         using var file=Godot.FileAccess.Open(path,Godot.FileAccess.ModeFlags.Read);
         if(file is null)throw new IOException("No saved expedition");
-        var s=JsonSerializer.Deserialize<ClientSave>(file.GetAsText()) ?? throw new IOException("Empty save");
-        Game.Validate(s.Game);Equipment.ValidateLoadedEquipment(s.Game,_catalog,s.ItemDatabaseHash);
+        string json=file.GetAsText();
+        var s=JsonSerializer.Deserialize<ClientSave>(json) ?? throw new IOException("Empty save");
+        using var document=JsonDocument.Parse(json);
+        var game=Game.Load(document.RootElement.GetProperty("Game").GetRawText(),_catalog);
+        Equipment.ValidateLoadedEquipment(game,_catalog,s.ItemDatabaseHash);
         if(s.Schema!=1 || !float.IsFinite(s.X) || !float.IsFinite(s.Z) || !float.IsFinite(s.Yaw) || !float.IsFinite(s.Pitch) || Math.Abs(s.X)>5.3f || s.Z < -16.5f || s.Z>4.5f || Math.Abs(s.Pitch)>1.2f)
             throw new IOException("Invalid saved camera position");
-        _state=s.Game;_player.Position=new(s.X,0.9f,s.Z);_player.Rotation=new(0,s.Yaw,0);_pitch=s.Pitch;_camera.Rotation=new(_pitch,0,0);_touchInput.Reset();Refresh();
+        _autosaveBlocked=false;_state=game;_player.Position=new(s.X,0.9f,s.Z);_player.Rotation=new(0,s.Yaw,0);_pitch=s.Pitch;_camera.Rotation=new(_pitch,0,0);_touchInput.Reset();Refresh();
     }
     public override void _Notification(int what)
     {
@@ -521,7 +526,8 @@ public partial class Main : Node3D
         if(what==NotificationApplicationPaused)
         {
             _paused=true;_touchInput.Reset();Input.MouseMode=Input.MouseModeEnum.Visible;
-            Try(()=>SaveTo(AutoSavePath));
+            if(!_autosaveBlocked)Try(()=>SaveTo(AutoSavePath));
+            else Say("Autosave paused: load a valid save or start a new expedition to resume.");
         }
         if(what==NotificationApplicationResumed) { _paused=false;_touchInput.Reset(); }
     }
@@ -542,30 +548,53 @@ public partial class Main : Node3D
         var browse=new CheckButton { Text="Browse full catalog" };layout.AddChild(browse);
         var hero=new OptionButton();foreach(var h in _state.Party)hero.AddItem(h.Name);hero.Select(Array.FindIndex(_state.Party,h=>h.Id==_selectedHeroId));layout.AddChild(hero);
         BoxContainer row=narrow ? new VBoxContainer() : new HBoxContainer();row.SizeFlagsVertical=Control.SizeFlags.ExpandFill;layout.AddChild(row);
-        var list=new ItemList { CustomMinimumSize=new(narrow?0:Math.Min(360,dialogSize.X*0.4f),narrow?120:180),SizeFlagsVertical=Control.SizeFlags.ExpandFill,AutoHeight=false };row.AddChild(list);
+        var list=new ItemList { Name="InventoryDefinitions",CustomMinimumSize=new(narrow?0:Math.Min(360,dialogSize.X*0.4f),narrow?120:180),SizeFlagsVertical=Control.SizeFlags.ExpandFill,AutoHeight=false };row.AddChild(list);
         var detailColumn=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };row.AddChild(detailColumn);
-        var detail=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(narrow?0:Math.Max(220,dialogSize.X-410),narrow?100:180) };detailColumn.AddChild(detail);
+        var detailScroll=new ScrollContainer { SizeFlagsVertical=Control.SizeFlags.ExpandFill,CustomMinimumSize=new(0,narrow?90:160) };detailColumn.AddChild(detailScroll);
+        var detail=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart,SizeFlagsHorizontal=Control.SizeFlags.ExpandFill,CustomMinimumSize=new(narrow?0:Math.Max(220,dialogSize.X-430),0) };detailScroll.AddChild(detail);
+        var copies=new OptionButton { Name="InventoryInstances",ClipText=true };detailColumn.AddChild(copies);
+        var stackActions=new HBoxContainer();detailColumn.AddChild(stackActions);
+        var split=new Godot.Button {Name="InventorySplit",Text="Split one",Disabled=true};stackActions.AddChild(split);
+        var merge=new Godot.Button {Name="InventoryMerge",Text="Merge compatible",Disabled=true};stackActions.AddChild(merge);
         var assign=new Godot.Button { Text="Equip from party bag",Disabled=true };detailColumn.AddChild(assign);
         var remove=new Godot.Button { Text="Return weapon to bag",Disabled=true };detailColumn.AddChild(remove);
         detailColumn.AddChild(new Label { Text="Shared bag; one equipped copy per hero.\nCurse effects and removal magic are pending." });
         ItemDefinition[] shown=[];
         ItemDefinition? selected=null;
+        ItemInstance[] instances=[];
+        ItemInstance? SelectedInstance()=>copies.Selected>=0 && copies.Selected<instances.Length?instances[copies.Selected]:null;
+        string? MergeSource(ItemInstance destination)=>instances.FirstOrDefault(i=>i.Id!=destination.Id &&
+            i.Identified==destination.Identified && i.CurseRemoved==destination.CurseRemoved && i.ResourceRemaining==destination.ResourceRemaining)?.Id;
         void Details()
         {
             var h=_state.Party[hero.Selected];
-            remove.Disabled=!h.EquippedItemId.HasValue || h.Captive || h.Hp==0;
+            remove.Disabled=!Equipment.ItemId(_state,h.Id).HasValue || h.Captive || h.Hp==0;
+            var previous=SelectedInstance()?.Id;
+            instances=selected is null?[]:Inventory.Bag(_state).Where(i=>i.DefinitionId==selected.Id).OrderBy(i=>i.Id,StringComparer.Ordinal).ToArray();
+            copies.Clear();for(int i=0;i<instances.Length;i++)
+            {
+                var instance=instances[i];copies.AddItem($"Copy {i+1} · ×{instance.Quantity}"+
+                    (instance.ResourceRemaining is int remaining?$" · {Inventory.Rules(_catalog)[instance.DefinitionId].Resource}: {remaining}":"")+
+                    (instance.Identified?"":" · unidentified")+(instance.CurseRemoved?" · curse removed":""));
+            }
+            if(instances.Length>0)copies.Select(Math.Max(0,Array.FindIndex(instances,i=>i.Id==previous)));
+            var owned=SelectedInstance();copies.Disabled=instances.Length==0;
+            split.Disabled=owned is null || owned.Quantity<2;
+            merge.Disabled=owned is null || MergeSource(owned) is null || owned.Quantity>=Inventory.Rules(_catalog)[owned.DefinitionId].StackLimit;
             if(selected is null) { detail.Text="Choose an item.";assign.Disabled=true;return; }
             var reason=Equipment.Denial(h,selected);
-            int count=Inventory.Count(_state,selected.Id);
-            detail.Text=$"{selected.Name}  [ID {selected.Id}]\nIn bag: {count} · Equipped: {_state.Party.Count(p=>p.EquippedItemId==selected.Id)}\n\n{selected.DamageDescription}\nInitiative {selected.Initiative:+0;-0;0} · To hit {selected.ToHit:+0;-0;0}\nWeight {selected.WeightTenthsLb/10m} lb\nCursed: {selected.Cursed}\n\n{(reason ?? (count==0 ? "No spare copy in the party bag." : "Available to equip."))}\n\nSource: {_catalog.Provenance.File}";
-            assign.Disabled=reason is not null || h.Captive || h.Hp==0 || count==0 || h.EquippedItemId==selected.Id;
+            long count=Inventory.Count(_state,selected.Id);
+            detail.Text=$"{selected.Name}  [ID {selected.Id}]\nIn bag: {count} · Equipped: {_state.Party.Count(p=>Equipment.ItemId(_state,p.Id)==selected.Id)}\n\n{selected.DamageDescription}\nInitiative {selected.Initiative:+0;-0;0} · To hit {selected.ToHit:+0;-0;0}\nWeight {selected.WeightTenthsLb/10m} lb\nCursed: {selected.Cursed}"+
+                (owned is null?"":$"\nIdentified: {owned.Identified} · Curse removed: {owned.CurseRemoved}"+(owned.ResourceRemaining is int resource?$"\n{Inventory.Rules(_catalog)[owned.DefinitionId].Resource}: {resource}":""))+
+                $"\n\n{(reason ?? (count==0 ? "No spare copy in the party bag." : "Available to equip."))}";
+            assign.Disabled=reason is not null || h.Captive || h.Hp==0 || owned is null;
         }
         void Filter(string term)
         {
             int? selectedId=selected?.Id;
-            shown=_catalog.Items.Where(i=>(browse.ButtonPressed || Inventory.Count(_state,i.Id)>0 || _state.Party.Any(h=>h.EquippedItemId==i.Id)) && i.Name.Contains(term,StringComparison.OrdinalIgnoreCase)).ToArray();
-            list.Clear();foreach(var i in shown)list.AddItem($"{i.Name} · bag {Inventory.Count(_state,i.Id)} · worn {_state.Party.Count(h=>h.EquippedItemId==i.Id)}");
-            selected=shown.FirstOrDefault(i=>i.Id==selectedId);
+            shown=_catalog.Items.Where(i=>(browse.ButtonPressed || Inventory.Count(_state,i.Id)>0 || _state.Party.Any(h=>Equipment.ItemId(_state,h.Id)==i.Id)) && i.Name.Contains(term,StringComparison.OrdinalIgnoreCase)).ToArray();
+            list.Clear();foreach(var i in shown)list.AddItem($"{i.Name} · bag {Inventory.Count(_state,i.Id)} · worn {_state.Party.Count(h=>Equipment.ItemId(_state,h.Id)==i.Id)}");
+            selected=shown.FirstOrDefault(i=>i.Id==selectedId) ?? shown.FirstOrDefault();
             if(selected is not null)list.Select(Array.IndexOf(shown,selected));
             Details();
         }
@@ -573,8 +602,12 @@ public partial class Main : Node3D
         browse.Toggled+=_=>Filter(search.Text);
         list.ItemSelected+=(long i)=>{selected=shown[(int)i];Details();};
         hero.ItemSelected+=(long _) => Details();
-        assign.Pressed+=()=>Try(()=>{if(selected is null)return;_state=Equipment.Equip(_state,_state.Party[hero.Selected].Id,selected.Id,_catalog);Refresh();Say($"Equipped {selected.Name} from the party bag.");Filter(search.Text);});
+        assign.Pressed+=()=>Try(()=>{if(selected is null || SelectedInstance() is not ItemInstance instance)return;_state=Equipment.EquipInstance(_state,_state.Party[hero.Selected].Id,instance.Id,_catalog);Refresh();Say($"Equipped {selected.Name} from the party bag.");Filter(search.Text);});
         remove.Pressed+=()=>Try(()=>{_state=Equipment.Unequip(_state,_state.Party[hero.Selected].Id,_catalog);Refresh();Say("Weapon returned to the party bag.");Filter(search.Text);});
+        copies.ItemSelected+=_=>Details();
+        split.Pressed+=()=>Try(()=>{if(SelectedInstance() is not ItemInstance instance)return;_state=Inventory.Split(_state,instance.Id,1,_catalog);Refresh();Filter(search.Text);});
+        merge.Pressed+=()=>Try(()=>{if(SelectedInstance() is not ItemInstance instance || MergeSource(instance) is not string source)return;
+            var merged=Inventory.Merge(_state,instance.Id,source,_catalog);_state=merged.State;Say($"Merged {merged.Moved} units.");Refresh();Filter(search.Text);});
         Filter("");dialog.PopupCentered(dialogSize);
     }
 
@@ -630,9 +663,69 @@ public partial class Main : Node3D
             _state=Game.Create(8);LoadFrom(AutoSavePath);
             if(Game.Save(_state)!=saved)throw new Exception("Background autosave failed");
             _Notification((int)NotificationApplicationResumed);
-            GD.Print("PASS: multitouch movement/look, pause reset, atomic autosave and restore");GetTree().Quit();
+            string valid=Godot.FileAccess.GetFileAsString(AutoSavePath);
+            var invalid=System.Text.Json.Nodes.JsonNode.Parse(valid)!;invalid["Game"]!["Schema"]=99;
+            string blocked=invalid.ToJsonString();
+            using(var file=Godot.FileAccess.Open(AutoSavePath,Godot.FileAccess.ModeFlags.Write))file.StoreString(blocked);
+            string beforeFailedLoad=Game.Save(_state);bool rejected=false;
+            try {LoadFrom(AutoSavePath);}catch(Exception){rejected=true;}
+            _Notification((int)NotificationApplicationPaused);
+            if(!rejected || Game.Save(_state)!=beforeFailedLoad || Godot.FileAccess.GetFileAsString(AutoSavePath)!=blocked)
+                throw new Exception("Failed save migration was overwritten by autosave");
+            using(var file=Godot.FileAccess.Open(AutoSavePath,Godot.FileAccess.ModeFlags.Write))file.StoreString(valid);
+            LoadFrom(AutoSavePath);_Notification((int)NotificationApplicationResumed);
+            GD.Print("PASS: multitouch movement/look, pause reset, atomic autosave and restore; failed-load source protection");GetTree().Quit();
         }
         catch(Exception e) { GD.PushError(e.ToString());GetTree().Quit(1); }
+    }
+
+    private void CheckInventoryInterface()
+    {
+        if(_catalog is null)return;
+        var original=_state;
+        var stack=_catalog.Items.FirstOrDefault(i=>i.Instance is {Mode:1,MaxStack:>=3}) ??
+            (Crafting.UsesFixture(_catalog)?_catalog.Find(78):null);
+        if(stack is null)return;
+        _state=Inventory.Add(Game.Create(1),stack.Id,3,_catalog);
+        ShowItems();
+        var dialog=GetChildren().OfType<AcceptDialog>().Last();
+        try
+        {
+            var definitions=dialog.FindChild("InventoryDefinitions",true,false) as ItemList ??throw new Exception("Missing inventory definitions");
+            definitions.Select(0);definitions.EmitSignal(ItemList.SignalName.ItemSelected,0L);
+            var copies=dialog.FindChild("InventoryInstances",true,false) as OptionButton ??throw new Exception("Missing inventory instances");
+            var split=dialog.FindChild("InventorySplit",true,false) as Godot.Button ??throw new Exception("Missing split action");
+            var merge=dialog.FindChild("InventoryMerge",true,false) as Godot.Button ??throw new Exception("Missing merge action");
+            if(split.Disabled || copies.ItemCount!=1)throw new Exception("Stack selection unavailable");
+            split.EmitSignal(Godot.Button.SignalName.Pressed);
+            if(copies.ItemCount!=2 || Inventory.Count(_state,stack.Id)!=3)throw new Exception("Inventory split UI lost units");
+            copies.Select(1);copies.EmitSignal(OptionButton.SignalName.ItemSelected,1L);
+            if(merge.Disabled)throw new Exception("Compatible merge unavailable");
+            merge.EmitSignal(Godot.Button.SignalName.Pressed);
+            if(copies.ItemCount!=1 || Inventory.Count(_state,stack.Id)!=3)throw new Exception("Inventory merge UI lost units");
+            GD.Print("PASS: inventory instance selector, split and merge UI conserve units");
+        }
+        finally {dialog.Free();_state=original;Refresh();}
+    }
+    private void CheckLegacyClientSave()
+    {
+        if(_catalog is null)return;
+        SaveTo(SavePath);
+        string current=Godot.FileAccess.GetFileAsString(SavePath);
+        var root=System.Text.Json.Nodes.JsonNode.Parse(current)!;
+        var game=root["Game"]!;game["Schema"]=1;game.AsObject().Remove("Items");game.AsObject().Remove("NextItemSequence");
+        game["Bag"]=JsonSerializer.SerializeToNode(Inventory.Bag(_state).GroupBy(i=>i.DefinitionId)
+            .Select(g=>new ItemStack(g.Key,checked((int)g.Sum(i=>(long)i.Quantity)))).ToArray());
+        foreach(var hero in game["Party"]!.AsArray())hero!["EquippedItemId"]=Equipment.ItemId(_state,hero["Id"]!.GetValue<string>());
+        string legacy=root.ToJsonString();
+        using(var file=Godot.FileAccess.Open(SavePath,Godot.FileAccess.ModeFlags.Write))file.StoreString(legacy);
+        var expected=_state;_state=Game.Create(8);LoadFrom(SavePath);
+        if(_state.Schema!=Game.SaveSchema || _state.Party.Any(h=>Equipment.ItemId(_state,h.Id)!=Equipment.ItemId(expected,h.Id)) ||
+            Inventory.Bag(expected).Any(i=>Inventory.Count(_state,i.DefinitionId)!=Inventory.Count(expected,i.DefinitionId)) ||
+            Godot.FileAccess.GetFileAsString(SavePath)!=legacy)throw new Exception("Client legacy save migration failed or overwrote its source");
+        SaveTo(SavePath);
+        if(Godot.FileAccess.GetFileAsString(SavePath).Contains("EquippedItemId"))throw new Exception("Client persisted obsolete ownership fields");
+        GD.Print("PASS: client legacy inventory save migrates without overwriting source on load");
     }
 
     public void Smoke()
@@ -658,16 +751,17 @@ public partial class Main : Node3D
                 {
                     if(Inventory.Count(_state,cane.Id)==0)_state=Inventory.Add(_state,cane.Id,1,_catalog);
                     _state=Equipment.Equip(_state,_state.Party[0].Id,cane.Id,_catalog); Save(); _state=Game.Create(8); Load();
-                    if(_state.Party[0].EquippedItemId!=cane.Id) throw new Exception("Imported equipment save/load failed");
+                    if(Equipment.ItemId(_state,_state.Party[0].Id)!=cane.Id) throw new Exception("Imported equipment save/load failed");
                     var expected=Game.Save(Game.Attack(_state,_catalog).State);
                     Attack();
                     if(Game.Save(_state)!=expected) throw new Exception("Client did not use equipped weapon");
                     Save(); var continuation=Game.Save(Game.Attack(_state,_catalog).State);
                     _state=Game.Create(8); Load();
                     if(Game.Save(Game.Attack(_state,_catalog).State)!=continuation) throw new Exception("Weapon roll continuation failed");
-                    int copies=Inventory.Count(_state,cane.Id);
+                    long copies=Inventory.Count(_state,cane.Id);
                     _state=Equipment.Unequip(_state,_state.Party[0].Id,_catalog);Save();Load();
-                    if(_state.Party[0].EquippedItemId.HasValue || Inventory.Count(_state,cane.Id)!=copies+1)throw new Exception("Inventory unequip/save failed");
+                    if(Equipment.ItemId(_state,_state.Party[0].Id).HasValue || Inventory.Count(_state,cane.Id)!=copies+1)throw new Exception("Inventory unequip/save failed");
+                    CheckLegacyClientSave();CheckInventoryInterface();
                     GD.Print($"PASS: imported catalog {_catalog.Count}, equipment and save binding");
                 }
             }
@@ -692,7 +786,7 @@ public partial class Main : Node3D
                 _state=Crafting.Craft(_state,new("hero-1","test-staff"),_catalog);
                 if(Inventory.Count(_state,81)!=1 || Inventory.Count(_state,77)!=0)throw new Exception("Client crafting chain failed");
                 _state=Equipment.Equip(_state,"hero-1",81,_catalog);Save();Load();
-                if(_state.Party[0].EquippedItemId!=81)throw new Exception("Crafted weapon equip/save failed");
+                if(Equipment.ItemId(_state,_state.Party[0].Id)!=81)throw new Exception("Crafted weapon equip/save failed");
                 GD.Print("PASS: crafting chain, ingredient counts and crafted equipment save");
             }
             GD.Print("PASS: Godot C# scene, UI combat, save/load, solo escape, multi-caster magic and duration effects"); GetTree().Quit();

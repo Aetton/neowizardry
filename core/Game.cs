@@ -5,15 +5,15 @@ namespace NeoWizardry.Core;
 // These are prototype rules, NOT recovered Wizardry 8 combat formulas.
 public sealed record Hero(string Id, string Name, string Race, string Profession,
     int Hp, int MaxHp, int Speed, int Power, int Xp = 0, bool Captive = false,
-    string Gender = "Male", int? EquippedItemId = null, ManaPool[]? Mana = null, string[]? Spellbook = null, SkillValue[]? Skills = null, StatusEffect[]? Effects = null);
+    string Gender = "Male", ManaPool[]? Mana = null, string[]? Spellbook = null, SkillValue[]? Skills = null, StatusEffect[]? Effects = null);
 public sealed record Enemy(string Id, int Hp, int Speed, int Power, int XpReward, int? LootItemId = null, StatusEffect[]? Effects = null);
 public sealed record GameState(int Schema, Hero[] Party, Enemy Enemy, int Round = 0,
-    bool RewardGranted = false, string Quest = "none", uint RandomState = Dice.DefaultSeed, ItemStack[]? Bag = null, string[]? KnownRecipes = null);
+    bool RewardGranted = false, string Quest = "none", uint RandomState = Dice.DefaultSeed, ItemInventoryState? Items = null, string[]? KnownRecipes = null, long NextItemSequence = 1);
 public sealed record RoundResult(GameState State, string[] Events);
 
 public static class Game
 {
-    public const int SaveSchema = 1;
+    public const int SaveSchema = 2;
 
     public static GameState Create(int size)
     {
@@ -22,7 +22,7 @@ public static class Game
             new Hero($"hero-{i}", i == 1 ? "Faerie Ninja" : $"Companion {i}",
                 i == 1 ? "Faerie" : "Human", "Ninja", 36, 36, 12-i, 7,
                 Mana: [new("Fire",12,12),new("Divine",12,12)], Spellbook: Magic.Spells.Select(s=>s.Id).ToArray(), Skills: [new("test-craft",25)])).ToArray();
-        return new(SaveSchema, party, new("Training Sentinel", 32, 4, 3, 120), Bag: []);
+        return new(SaveSchema, party, new("Training Sentinel", 32, 4, 3, 120), Items: ItemInventory.Create(Inventory.DefaultCapacity));
     }
 
     public static void Validate(GameState state)
@@ -36,15 +36,12 @@ public static class Game
         var ids = new HashSet<string>();
         foreach (var h in state.Party)
             if (h is null || string.IsNullOrWhiteSpace(h.Id) || !ids.Add(h.Id) || h.MaxHp <= 0 ||
-                h.Hp < 0 || h.Hp > h.MaxHp || h.Xp < 0 || h.Power < 0 || h.Speed < 0 || h.EquippedItemId < 0 ||
+                h.Hp < 0 || h.Hp > h.MaxHp || h.Xp < 0 || h.Power < 0 || h.Speed < 0 ||
                 h.Gender is not ("Male" or "Female"))
                 throw new InvalidDataException("Invalid party member");
         if (state.RewardGranted && state.Enemy.Hp != 0)
             throw new InvalidDataException("Reward before victory");
-        var itemIds = new HashSet<int>();
-        foreach (var stack in state.Bag ?? [])
-            if (stack is null || stack.ItemId < 0 || stack.Count <= 0 || !itemIds.Add(stack.ItemId))
-                throw new InvalidDataException("Invalid party bag");
+        Inventory.ValidateStructure(state);
         foreach(var hero in state.Party)
         {
             Magic.ValidateHero(hero);
@@ -93,7 +90,7 @@ public static class Game
         var selected=casts.ToDictionary(c=>c.HeroId);
         var heroes = state.Party.ToArray();
         var weapons = heroes.ToDictionary(h => h.Id,
-            h => h.EquippedItemId.HasValue ? catalog!.Find(h.EquippedItemId.Value) : null);
+            h => Equipment.ItemId(state,h.Id) is int id ? catalog!.Find(id) : null);
         uint randomState = state.RandomState;
         var enemy = state.Enemy;
         var events = new List<string>();
@@ -227,10 +224,5 @@ public static class Game
         return JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
     }
 
-    public static GameState Load(string json)
-    {
-        var state = JsonSerializer.Deserialize<GameState>(json) ?? throw new InvalidDataException("Empty save");
-        Validate(state);
-        return state;
-    }
+    public static GameState Load(string json, ItemCatalog? catalog = null) => GameSaveMigration.Load(json,catalog);
 }

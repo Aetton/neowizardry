@@ -17,23 +17,32 @@ public static class ItemInventory
 {
     private static readonly JsonSerializerOptions Json=new(){PropertyNamingPolicy=JsonNamingPolicy.SnakeCaseLower};
     public static ItemInventoryState Create(int capacity=int.MaxValue)=>capacity>=0?new(1,capacity,[]):throw new ArgumentOutOfRangeException(nameof(capacity));
-    public static void Validate(ItemInventoryState state,IReadOnlyDictionary<int,ItemInventoryRule> rules)
+    public static void ValidateStructure(ItemInventoryState state)
     {
-        if(state.Schema!=1 || state.Capacity<0 || state.Items is null || state.Items.Length>state.Capacity ||
-            rules.Any(p=>p.Value is null || p.Key!=p.Value.DefinitionId || p.Key<0 || p.Value.StackLimit<1 ||
-                !Enum.IsDefined(p.Value.Resource) || (p.Value.Resource!=ItemResourceKind.None && p.Value.StackLimit!=1)))
-            throw new InvalidDataException("Invalid inventory or item rules");
+        ArgumentNullException.ThrowIfNull(state);
+        if(state.Schema!=1 || state.Capacity<0 || state.Items is null || state.Items.Length>state.Capacity)
+            throw new InvalidDataException("Invalid inventory");
         var ids=new HashSet<string>(StringComparer.Ordinal);var equipment=new HashSet<(string,string)>();
         foreach(var item in state.Items)
         {
-            if(item is null || string.IsNullOrWhiteSpace(item.Id) || !ids.Add(item.Id) || !rules.TryGetValue(item.DefinitionId,out var rule) ||
-                item.Quantity<1 || item.Quantity>rule.StackLimit || item.Location is null || string.IsNullOrWhiteSpace(item.Location.ContainerId) ||
-                (rule.Resource==ItemResourceKind.None?item.ResourceRemaining is not null:item.ResourceRemaining is null or <0))
+            if(item is null || string.IsNullOrWhiteSpace(item.Id) || !ids.Add(item.Id) || item.DefinitionId<0 ||
+                item.Quantity<1 || item.ResourceRemaining<0 || item.Location is null || string.IsNullOrWhiteSpace(item.Location.ContainerId))
                 throw new InvalidDataException("Invalid item instance");
             if(item.Location.EquipmentSlot is not null && (string.IsNullOrWhiteSpace(item.Location.EquipmentSlot) || item.Quantity!=1 ||
                 !equipment.Add((item.Location.ContainerId,item.Location.EquipmentSlot))))
                 throw new InvalidDataException("Equipment location is invalid or occupied");
         }
+    }
+    public static void Validate(ItemInventoryState state,IReadOnlyDictionary<int,ItemInventoryRule> rules)
+    {
+        ValidateStructure(state);
+        if(rules.Any(p=>p.Value is null || p.Key!=p.Value.DefinitionId || p.Key<0 || p.Value.StackLimit<1 ||
+            !Enum.IsDefined(p.Value.Resource) || (p.Value.Resource!=ItemResourceKind.None && p.Value.StackLimit!=1)))
+            throw new InvalidDataException("Invalid item rules");
+        foreach(var item in state.Items)
+            if(!rules.TryGetValue(item.DefinitionId,out var rule) || item.Quantity>rule.StackLimit ||
+                (rule.Resource==ItemResourceKind.None?item.ResourceRemaining is not null:item.ResourceRemaining is null))
+                throw new InvalidDataException("Instance does not match item rules");
     }
     public static string Save(ItemInventoryState state,IReadOnlyDictionary<int,ItemInventoryRule> rules)
     {
@@ -89,7 +98,7 @@ public static class ItemInventory
     // Final-state validation makes a recipe transaction atomic even at full capacity.
     // Recipe/actor/skill policies belong to the calling gameplay service.
     public static ItemInventoryState Transform(ItemInventoryState state,IReadOnlyList<ItemConsumption> consumed,
-        IReadOnlyList<ItemInstance> produced,IReadOnlyDictionary<int,ItemInventoryRule> rules)
+        IReadOnlyList<ItemInstance> produced,IReadOnlyDictionary<int,ItemInventoryRule> rules,bool mergeOutputs=false)
     {
         Validate(state,rules);var costs=new Dictionary<string,int>(StringComparer.Ordinal);
         foreach(var cost in consumed)
@@ -100,9 +109,25 @@ public static class ItemInventory
             if(item.Quantity<cost.Quantity || item.Location.EquipmentSlot is not null)throw new InvalidOperationException("Ingredient unavailable");
         }
         if(produced.Any(i=>i is null || state.Items.Any(old=>old.Id==i.Id)))throw new InvalidOperationException("Results require fresh instance IDs");
-        var items=state.Items.Where(i=>!costs.TryGetValue(i.Id,out int amount) || amount<i.Quantity)
-            .Select(i=>costs.TryGetValue(i.Id,out int amount)?i with {Quantity=i.Quantity-amount}:i).Concat(produced).ToArray();
-        return Checked(state with {Items=items},rules);
+        var remaining=state.Items.Where(i=>!costs.TryGetValue(i.Id,out int amount) || amount<i.Quantity)
+            .Select(i=>costs.TryGetValue(i.Id,out int amount)?i with {Quantity=i.Quantity-amount}:i).ToList();
+        // Validate outputs independently before optional packing. Capacity applies to the final state.
+        Validate(new(1,int.MaxValue,produced.ToArray()),rules);
+        foreach(var output in produced)
+        {
+            int quantity=output.Quantity;
+            if(mergeOutputs && output.Location.EquipmentSlot is null)
+                for(int i=0;i<remaining.Count && quantity>0;i++)
+                {
+                    var target=remaining[i];
+                    if(target.DefinitionId!=output.DefinitionId || target.Identified!=output.Identified ||
+                        target.ResourceRemaining!=output.ResourceRemaining || target.CurseRemoved!=output.CurseRemoved || target.Location!=output.Location)continue;
+                    int moved=Math.Min(rules[target.DefinitionId].StackLimit-target.Quantity,quantity);
+                    if(moved>0){remaining[i]=target with {Quantity=target.Quantity+moved};quantity-=moved;}
+                }
+            if(quantity>0)remaining.Add(output with {Quantity=quantity});
+        }
+        return Checked(state with {Items=remaining.ToArray()},rules);
     }
     public static long Count(ItemInventoryState state,int definitionId,string? container=null)=>state.Items
         .Where(i=>i.DefinitionId==definitionId && (container is null || i.Location.ContainerId==container)).Sum(i=>(long)i.Quantity);

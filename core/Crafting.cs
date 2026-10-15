@@ -46,9 +46,8 @@ public static class Crafting
         foreach(var ingredient in recipe.Ingredients)
             if(Inventory.Count(state,ingredient.ItemId)<ingredient.Count)
                 return $"Needs {catalog.Find(ingredient.ItemId).Name} ×{ingredient.Count} in the bag.";
-        long remaining=Inventory.Count(state,recipe.Result.ItemId)-
-            (recipe.Ingredients.FirstOrDefault(i=>i.ItemId==recipe.Result.ItemId)?.Count ?? 0);
-        if(remaining+recipe.Result.Count>int.MaxValue)return "Result stack is full.";
+        try { Inventory.Transform(state,recipe.Ingredients,recipe.Result,catalog); }
+        catch(InvalidOperationException error) { return error.Message; }
         return null;
     }
 
@@ -58,8 +57,6 @@ public static class Crafting
         var denial=Denial(state,order,catalog);
         if(denial is not null)throw new InvalidOperationException(denial);
         var recipe=Recipes.Single(r=>r.Id==order.RecipeId);
-        var result=state;
-        foreach(var ingredient in recipe.Ingredients)result=Inventory.Remove(result,ingredient.ItemId,ingredient.Count);
-        return Inventory.Add(result,recipe.Result.ItemId,recipe.Result.Count,catalog);
+        return Inventory.Transform(state,recipe.Ingredients,recipe.Result,catalog);
     }
 }

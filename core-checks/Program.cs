@@ -74,7 +74,7 @@ for(int size=1;size<=8;size++)
 }
 Throws(() => Game.Create(0), "No empty party");
 Throws(() => Game.Create(9), "UI limit enforced");
-Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 1", "\"Schema\": 99")), "Reject unknown save version");
+Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 2", "\"Schema\": 99")), "Reject unknown save version");
 Throws(() => Game.Validate(solo with { Party = [solo.Party[0], solo.Party[0]] }), "Reject duplicate IDs");
 Throws(() => Game.Escape(solo), "Escape requires capture");
 var fast = solo with { Party = [solo.Party[0] with { Speed = 0, Hp = 1 }] };
@@ -101,7 +101,7 @@ var equipped = Equipment.Equip(ownedSolo,solo.Party[0].Id,77,catalog);
 Check(Inventory.Count(equipped,77)==0 && Inventory.Count(ownedSolo,77)==1,"Equip moves one copy out of bag without mutation");
 Throws(()=>Equipment.Equip(solo,"hero-1",77,catalog),"Cannot equip an unowned weapon");
 var returned=Equipment.Unequip(equipped,"hero-1",catalog);
-Check(returned.Party[0].EquippedItemId is null && Inventory.Count(returned,77)==1,"Unequip returns exactly one copy");
+Check(Equipment.ItemId(returned,returned.Party[0].Id) is null && Inventory.Count(returned,77)==1,"Unequip returns exactly one copy");
 Check(Game.Save(Equipment.Unequip(returned,"hero-1",catalog))==Game.Save(returned),"Repeated unequip creates no copy");
 Check(Game.Save(Equipment.Equip(equipped,"hero-1",77,catalog))==Game.Save(equipped),"Repeated equip creates no copy");
 var common=restricted with { RaceMask=65535 };
@@ -110,20 +110,20 @@ var shared=Inventory.Add(Game.Create(2),77,1,commonCatalog);
 shared=Equipment.Equip(shared,"hero-1",77,commonCatalog);
 Throws(()=>Equipment.Equip(shared,"hero-2",77,commonCatalog),"Two heroes cannot share one equipped copy");
 shared=Equipment.Equip(Equipment.Unequip(shared,"hero-1",commonCatalog),"hero-2",77,commonCatalog);
-Check(shared.Party[0].EquippedItemId is null && shared.Party[1].EquippedItemId==77 && Inventory.Count(shared,77)==0,"Transfer through shared bag conserves copy");
+Check(Equipment.ItemId(shared,shared.Party[0].Id) is null && Equipment.ItemId(shared,shared.Party[1].Id)==77 && Inventory.Count(shared,77)==0,"Transfer through shared bag conserves copy");
 var spare=restricted with { Id=78,Name="Replacement fixture" };
 var swapCatalog=catalog with { Items=[restricted,spare],Count=2 };
 var swapped=Equipment.Equip(Inventory.Add(equipped,78,1,swapCatalog),"hero-1",78,swapCatalog);
-Check(swapped.Party[0].EquippedItemId==78 && Inventory.Count(swapped,77)==1 && Inventory.Count(swapped,78)==0,"Weapon swap returns old weapon and consumes replacement");
+Check(Equipment.ItemId(swapped,swapped.Party[0].Id)==78 && Inventory.Count(swapped,77)==1 && Inventory.Count(swapped,78)==0,"Weapon swap returns old weapon and consumes replacement");
 string beforeSwap=Game.Save(equipped);
 Throws(()=>Equipment.Equip(equipped,"hero-1",78,swapCatalog),"Unavailable replacement rejected");
 Check(Game.Save(equipped)==beforeSwap,"Rejected swap leaves original weapon and bag intact");
-Throws(()=>Inventory.Remove(ownedSolo,77,2),"Insufficient quantity rejected");
+Throws(()=>Inventory.Remove(ownedSolo,77,2,catalog),"Insufficient quantity rejected");
 Throws(()=>Inventory.Add(solo,77,0,catalog),"Zero addition rejected");
 Throws(()=>Inventory.Add(solo,999,1,catalog),"Unknown bag item rejected");
-Throws(()=>Inventory.Add(Inventory.Add(solo,77,int.MaxValue,catalog),77,1,catalog),"Quantity overflow rejected");
-Throws(()=>Game.Validate(solo with { Bag=[new(77,1),new(77,1)] }),"Duplicate bag stacks rejected");
-Throws(()=>Game.Validate(solo with { Bag=[new(77,-1)] }),"Negative bag quantity rejected");
+Throws(()=>Inventory.Add(solo,77,int.MaxValue,catalog),"Unsafe number of individual instances rejected before allocation");
+Throws(()=>Game.Validate(ownedSolo with { Items=ownedSolo.Items! with {Items=[ownedSolo.Items.Items[0],ownedSolo.Items.Items[0]]} }),"Duplicate bag stacks rejected");
+Throws(()=>Game.Validate(ownedSolo with { Items=ownedSolo.Items! with {Items=[ownedSolo.Items.Items[0] with {Quantity=-1}]} }),"Negative bag quantity rejected");
 Check(Game.Save(Game.Load(Game.Save(swapped)))==Game.Save(swapped),"Bag and equipment roundtrip together");
 Throws(()=>Equipment.ValidateLoadedEquipment(ownedSolo,null,null),"Bag-only save requires catalog");
 Throws(()=>Equipment.ValidateLoadedEquipment(ownedSolo,catalog,new string('c',64)),"Bag-only save rejects changed catalog hash");
@@ -133,8 +133,9 @@ var wonLoot=Game.Attack(lootBattle,catalog).State;
 Check(wonLoot.RewardGranted && Inventory.Count(wonLoot,77)==1,"Victory grants configured test loot");
 Check(Inventory.Count(Game.Attack(Game.Load(Game.Save(wonLoot)),catalog).State,77)==1,"Reloaded victory cannot duplicate loot");
 var legacyBagSave=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(equipped))!;
-legacyBagSave.AsObject().Remove("Bag");
-var legacyEquipment=Game.Load(legacyBagSave.ToJsonString());
+legacyBagSave["Schema"]=1;legacyBagSave.AsObject().Remove("Items");legacyBagSave.AsObject().Remove("NextItemSequence");
+legacyBagSave["Party"]![0]!["EquippedItemId"]=77;
+var legacyEquipment=Game.Load(legacyBagSave.ToJsonString(),catalog);
 Check(Inventory.Count(legacyEquipment,77)==0 && Inventory.Count(Equipment.Unequip(legacyEquipment,"hero-1",catalog),77)==1,"Old equipped save retains its single owned copy");
 // Synthetic crafting invariants: exact quantities, no equipped-item consumption, actor gates.
 var craftCatalog=swapCatalog with { Count=5,Items=[restricted,spare with { Name="Test herb",TypeCode=19 },restricted with { Id=79,Name="Test vial",TypeCode=19 },restricted with { Id=80,Name="Test tonic",TypeCode=15 },restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }],Provenance=catalog.Provenance with { File=Crafting.FixtureSource } };
@@ -146,7 +147,7 @@ Check(Inventory.Count(craftStart,78)==4 && Inventory.Count(craftStart,80)==0,"Cr
 Check(tonic.Round==craftStart.Round && tonic.RandomState==craftStart.RandomState,"Fixture crafting spends no combat turn or random roll");
 var improved=Crafting.Craft(tonic,new("hero-1","test-staff"),craftCatalog);
 Check(Inventory.Count(improved,77)==0 && Inventory.Count(improved,80)==0 && Inventory.Count(improved,81)==1,"Craft chain consumes intermediate and produces correct result");
-Check(Equipment.Equip(improved,"hero-1",81,craftCatalog).Party[0].EquippedItemId==81,"Crafted weapon is a real owned copy");
+Check(Equipment.ItemId(Equipment.Equip(improved,"hero-1",81,craftCatalog),"hero-1")==81,"Crafted weapon is a real owned copy");
 var worn=Equipment.Equip(tonic,"hero-1",77,craftCatalog);
 var beforeCraft=Game.Save(worn);
 Throws(()=>Crafting.Craft(worn,new("hero-1","test-staff"),craftCatalog),"Equipped copy cannot be consumed by crafting");
@@ -158,9 +159,9 @@ Throws(()=>Crafting.Craft(Game.CaptureFirst(craftStart),tonicOrder,craftCatalog)
 Throws(()=>Crafting.Craft(craftStart with { Party=[craftStart.Party[0] with { Hp=0 }] },tonicOrder,craftCatalog),"Dead crafter rejected");
 foreach(var skills in new SkillValue[]?[]{null,[],[new("test-craft",19)]})
     Throws(()=>Crafting.Craft(tonic with { Party=[tonic.Party[0] with { Skills=skills }] },new("hero-1","test-staff"),craftCatalog),"Skill gate cannot be bypassed");
-Check(Crafting.Craft(tonic with { Party=[tonic.Party[0] with { Skills=[new("test-craft",20)] }] },new("hero-1","test-staff"),craftCatalog).Bag!.Any(i=>i.ItemId==81),"Exact skill threshold permitted");
+Check(Inventory.Count(Crafting.Craft(tonic with { Party=[tonic.Party[0] with { Skills=[new("test-craft",20)] }] },new("hero-1","test-staff"),craftCatalog),81)==1,"Exact skill threshold permitted");
 Throws(()=>Crafting.Craft(tonic,tonicOrder,craftCatalog with { Provenance=craftCatalog.Provenance with { File="original" } }),"Synthetic recipes cannot apply to original catalog IDs");
-Throws(()=>Crafting.Craft(Inventory.Add(craftStart,80,int.MaxValue,craftCatalog),tonicOrder,craftCatalog),"Craft rejects result overflow before ingredient loss");
+Throws(()=>Crafting.Craft(craftStart with {Items=craftStart.Items! with {Capacity=craftStart.Items.Items.Length}},tonicOrder,craftCatalog),"Craft rejects full instance capacity before ingredient loss");
 Throws(()=>Crafting.Craft(improved,new("hero-1","test-staff"),craftCatalog),"Recipe cannot duplicate result without ingredients");
 Check(Game.Save(Game.Load(Game.Save(improved)))==Game.Save(improved),"Recipes, skill gates and crafted ownership survive save");
 Throws(()=>Crafting.ValidateRecipe(Crafting.Recipes[0] with { Ingredients=[new(78,1),new(78,1)] },craftCatalog),"Duplicate recipe ingredients rejected");
@@ -251,8 +252,8 @@ for(int size=1;size<=8;size++)
     for(int i=0;i<20 && partyBattle.Enemy.Hp>0;i++) partyBattle=Game.Attack(partyBattle,catalog).State;
     Check(partyBattle.Enemy.Hp==0 && partyBattle.Party.Sum(h=>h.Xp)==120,$"Weapon combat and XP conservation for party {size}");
 }
-Check(equipped.Party[0].EquippedItemId==77 && solo.Party[0].EquippedItemId is null,"Equipment immutable transition");
-Check(Game.Load(Game.Save(equipped)).Party[0].EquippedItemId==77,"Equipment save roundtrip");
+Check(Equipment.ItemId(equipped,equipped.Party[0].Id)==77 && Equipment.ItemId(solo,solo.Party[0].Id) is null,"Equipment immutable transition");
+Check(Equipment.ItemId(Game.Load(Game.Save(equipped)),"hero-1")==77,"Equipment save roundtrip");
 Equipment.ValidateLoadedEquipment(equipped,catalog,catalog.Provenance.Sha256);
 Throws(()=>Equipment.ValidateLoadedEquipment(equipped,null,null),"Reject equipment without catalog");
 Throws(()=>Equipment.ValidateLoadedEquipment(equipped,catalog,new string('c',64)),"Reject changed source database");
@@ -267,9 +268,10 @@ Check((restricted with { DamageConstant=3,DamageDice=0,DamageSides=0 }).DamageDe
 var snakeJson=System.Text.Json.JsonSerializer.Serialize(catalog,new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower});
 Check(ItemCatalog.Parse(snakeJson).Find(77).Name==restricted.Name,"Python/C# snake-case schema");
 var oldSave=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(solo))!;
+oldSave["Schema"]=1;oldSave.AsObject().Remove("Items");oldSave.AsObject().Remove("NextItemSequence");
 foreach(var member in oldSave["Party"]!.AsArray()) { member!.AsObject().Remove("Gender");member.AsObject().Remove("EquippedItemId"); }
 var migrated=Game.Load(oldSave.ToJsonString());
-Check(migrated.Party[0].Gender=="Male" && migrated.Party[0].EquippedItemId is null,"Iteration-001 saves remain readable");
+Check(migrated.Party[0].Gender=="Male" && Equipment.ItemId(migrated,migrated.Party[0].Id) is null,"Iteration-001 saves remain readable");
 var spellRaw=new string('0',1408);
 var spellHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Convert.FromHexString(spellRaw))).ToLowerInvariant();
 var reference=new OriginalSpell(1,"Fixture ember","Synthetic reference entry, not an original spell.",0,1,0,-1,3,1,[1,7,0,0],720,30,1,4,2,6,spellHash,spellRaw);
@@ -321,6 +323,7 @@ Throws(()=> (recipeReferenceCatalog with {ItemCount=4}).Validate(),"Combination 
 checks+=NativeItemChecks.Run(restricted);
 checks+=NativeInventoryChecks.Run(restricted);
 checks+=ItemInventoryChecks.Run(restricted);
+checks+=InventoryIntegrationChecks.Run(catalog,craftCatalog);
 if(args.Length==2 && args[0]=="--fixture")
 {
     File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with { Count=5, Items=[restricted, restricted with { Id=78,Name="Test herb",TypeCode=19 }, restricted with { Id=79,Name="Test vial",TypeCode=19 }, restricted with { Id=80,Name="Test tonic",TypeCode=15 }, restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }], Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256) },new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
