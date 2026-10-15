@@ -1,3 +1,8 @@
+using ProjectileSeries = ProjectileTestSeries;
+using ProjectileSeriesState = ProjectileTestContext;
+using OriginalProjectileAttack = ProjectileTestAttack;
+using OriginalProjectileReload = ProjectileTestReload;
+using AimedProjectileLaunch = ProjectileTestLaunch;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text.Json;

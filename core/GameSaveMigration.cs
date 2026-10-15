@@ -11,12 +11,32 @@ public static class GameSaveMigration
     {
         var root=JsonNode.Parse(json)?.AsObject()??throw new InvalidDataException("Empty save");
         int schema=root["Schema"]?.GetValue<int>()??throw new InvalidDataException("Missing save version");
+        if(schema is 1 or 2 && (root.ContainsKey("ProjectileActions") || root.ContainsKey("NextProjectileSequence")))
+            throw new InvalidDataException("Projectile state requires save schema 3");
+        if(schema==2)
+        {
+            if(root.ContainsKey("Bag") || root["Party"] is JsonArray oldParty && oldParty.Any(h=>h?.AsObject().ContainsKey("EquippedItemId")==true))
+                throw new InvalidDataException("Conflicting legacy inventory fields in instance save");
+            var previous=JsonSerializer.Deserialize<GameState>(json)??throw new InvalidDataException("Empty save");
+            var upgraded=previous with {Schema=Game.SaveSchema};
+            Game.Validate(upgraded);
+            if(catalog is not null)Equipment.ValidateLoadedEquipment(upgraded,catalog,catalog.Provenance.Sha256);
+            return upgraded;
+        }
         if(schema==Game.SaveSchema)
         {
             if(root.ContainsKey("Bag") || root["Party"] is JsonArray party && party.Any(h=>h?.AsObject().ContainsKey("EquippedItemId")==true))
                 throw new InvalidDataException("Conflicting legacy inventory fields in instance save");
             var current=JsonSerializer.Deserialize<GameState>(json)??throw new InvalidDataException("Empty save");
-            Game.Validate(current);if(catalog is not null)Equipment.ValidateLoadedEquipment(current,catalog,catalog.Provenance.Sha256);return current;
+            Game.Validate(current);
+            if(current.ProjectileActions is {Count:>0} && catalog is null)
+                throw new InvalidDataException("Saved projectile actions require their item catalog");
+            if(catalog is not null)
+            {
+                Equipment.ValidateLoadedEquipment(current,catalog,catalog.Provenance.Sha256);
+                ProjectileExecution.Validate(current,catalog);
+            }
+            return current;
         }
         if(schema!=1 || root.ContainsKey("Items") || root.ContainsKey("NextItemSequence"))throw new InvalidDataException("Unsupported or mixed save version");
         var legacy=JsonSerializer.Deserialize<GameState>(json)??throw new InvalidDataException("Empty save");

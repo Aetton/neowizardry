@@ -1,5 +1,6 @@
 # Original projectile aim perturbation
 
+Current ownership: [iteration 031](iteration-031.md) removes the inventory from persisted series and supplies current inventory explicitly to these helpers. ProjectileExecution commits cost, actual-target HP and action state together; pending aim/source and reload continuation are saved in GameState schema 3. Earlier iteration examples describe the recovered low-level behavior, not a second authoritative inventory.
 Iteration 024. Static reconstruction of `0x5454C0` in the supplied executable, SHA-256 `18a74ff61c65b8a2d4cfa11ffce82ad7fef022a94eaf0c2f217e479e981420d2`. Commercial version unknown. No original-game execution comparison; proprietary executable bytes and disassembly remain private.
 
 This helper changes a target point before projectile creation. It does **not** determine actor collision, interception, penetration or damage. Do not label its adjusted score or d100 branch as the final hit probability.

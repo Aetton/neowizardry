@@ -714,7 +714,7 @@ public partial class Main : Node3D
         SaveTo(SavePath);
         string current=Godot.FileAccess.GetFileAsString(SavePath);
         var root=System.Text.Json.Nodes.JsonNode.Parse(current)!;
-        var game=root["Game"]!;game["Schema"]=1;game.AsObject().Remove("Items");game.AsObject().Remove("NextItemSequence");
+        var game=root["Game"]!;game["Schema"]=1;game.AsObject().Remove("Items");game.AsObject().Remove("NextItemSequence");game.AsObject().Remove("ProjectileActions");game.AsObject().Remove("NextProjectileSequence");
         game["Bag"]=JsonSerializer.SerializeToNode(Inventory.Bag(_state).GroupBy(i=>i.DefinitionId)
             .Select(g=>new ItemStack(g.Key,checked((int)g.Sum(i=>(long)i.Quantity)))).ToArray());
         foreach(var hero in game["Party"]!.AsArray())hero!["EquippedItemId"]=Equipment.ItemId(_state,hero["Id"]!.GetValue<string>());

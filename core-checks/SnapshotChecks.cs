@@ -64,7 +64,7 @@ static class SnapshotChecks
         Game.Validate(edited);
         Check(Game.Save(original)==before && copy.Party[0].Mana![0].Current==12,"Nested persistent edits leave both prior snapshots intact");
         var loaded=Game.Load(before);
-        Check(Game.Save(loaded)==before,"Immutable collections retain schema-two JSON representation");
+        Check(Game.Save(loaded)==before,"Immutable collections retain current-schema JSON representation");
         Check(JsonNode.Parse(before)!["Party"] is JsonArray && JsonNode.Parse(before)!["Items"]!["Items"] is JsonArray,
             "Game and inventory serialize as arrays, not collection implementation objects");
         Check(loaded.Party[0].Effects!.Count==1 && loaded.Enemy.Effects!.Count==1 && loaded.KnownRecipes!.Count==1,

@@ -1,5 +1,6 @@
 # Original projectile completion and resources
 
+Current ownership: [iteration 031](iteration-031.md) removes the inventory from persisted series and supplies current inventory explicitly to these helpers. ProjectileExecution commits cost, actual-target HP and action state together; pending aim/source and reload continuation are saved in GameState schema 3. Earlier iteration examples describe the recovered low-level behavior, not a second authoritative inventory.
 Static reconstruction against the supplied `Wiz8.exe`, SHA-256 `18a74ff61c65b8a2d4cfa11ffce82ad7fef022a94eaf0c2f217e479e981420d2`. Commercial version is not established. Addresses are virtual addresses in this binary, not portable symbols. No original-game execution comparison has been made; proprietary bytes and rows stay private.
 
 ## Dispatch correction

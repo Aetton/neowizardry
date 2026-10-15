@@ -52,6 +52,22 @@ public static class OriginalProjectileAim
         return new(input,point,distance,angleDraw,draw,spread);
     }
 
+    // Saved flight metadata is checked without re-running spread/trigonometry or drawing RNG.
+    public static void ValidateSaved(ProjectileAimResult aim)
+    {
+        ArgumentNullException.ThrowIfNull(aim);ArgumentNullException.ThrowIfNull(aim.Input);
+        ValidatePoint(aim.Input.Source);ValidatePoint(aim.Input.Target);ValidatePoint(aim.AimPoint);
+        if(!Enum.IsDefined(aim.Input.Profile) || aim.Input.AttackScore==9999 || aim.AngleDraw is <0 or >=360 ||
+            !double.IsFinite(aim.Distance) || aim.Distance<0 ||
+            (aim.Distance<1 ? aim.RadiusDraw is not null || aim.Spread is not null :
+                aim.RadiusDraw is not (>=0 and <=99) || aim.Spread is null))
+            throw new InvalidDataException("Invalid saved projectile aim");
+        if(aim.Spread is { } spread && (spread.DistancePenalty<0 || !double.IsFinite(spread.NearRadius) ||
+            !double.IsFinite(spread.FarRadius) || !double.IsFinite(spread.Radius) ||
+            spread.NearRadius<0 || spread.FarRadius<0 || spread.Radius<0))
+            throw new InvalidDataException("Invalid saved projectile spread");
+    }
+
     public static ProjectileAimSpread Spread(double distance,int attackScore,ProjectileAimProfile profile,int radiusDraw)
     {
         if(!double.IsFinite(distance) || distance<1 || !Enum.IsDefined(profile) || radiusDraw is <0 or >99)

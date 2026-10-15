@@ -13,7 +13,7 @@ static class InventoryIntegrationChecks
         JsonObject Legacy(GameState source)
         {
             var node=JsonNode.Parse(Game.Save(source))!.AsObject();node["Schema"]=1;
-            node.Remove("Items");node.Remove("NextItemSequence");return node;
+            node.Remove("Items");node.Remove("NextItemSequence");node.Remove("ProjectileActions");node.Remove("NextProjectileSequence");return node;
         }
         var source=Inventory.Add(Game.Create(2),77,2,catalog);
         var first=source.Items!.Items[0] with {Identified=false,CurseRemoved=true};

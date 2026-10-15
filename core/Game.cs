@@ -9,12 +9,13 @@ public sealed record Hero(string Id, string Name, string Race, string Profession
     string Gender = "Male", ImmutableList<ManaPool>? Mana = null, ImmutableList<string>? Spellbook = null, ImmutableList<SkillValue>? Skills = null, ImmutableList<StatusEffect>? Effects = null);
 public sealed record Enemy(string Id, int Hp, int Speed, int Power, int XpReward, int? LootItemId = null, ImmutableList<StatusEffect>? Effects = null);
 public sealed record GameState(int Schema, ImmutableArray<Hero> Party, Enemy Enemy, int Round = 0,
-    bool RewardGranted = false, string Quest = "none", uint RandomState = Dice.DefaultSeed, ItemInventoryState? Items = null, ImmutableList<string>? KnownRecipes = null, long NextItemSequence = 1);
+    bool RewardGranted = false, string Quest = "none", uint RandomState = Dice.DefaultSeed, ItemInventoryState? Items = null, ImmutableList<string>? KnownRecipes = null, long NextItemSequence = 1,
+    ImmutableDictionary<string,ProjectileActionState>? ProjectileActions = null, long NextProjectileSequence = 1);
 public sealed record RoundResult(GameState State, ImmutableArray<string> Events);
 
 public static class Game
 {
-    public const int SaveSchema = 2;
+    public const int SaveSchema = 3;
 
     public static GameState Create(int size)
     {
@@ -43,6 +44,7 @@ public static class Game
         if (state.RewardGranted && state.Enemy.Hp != 0)
             throw new InvalidDataException("Reward before victory");
         Inventory.ValidateStructure(state);
+        ProjectileExecution.ValidateStructure(state);
         foreach(var hero in state.Party)
         {
             Magic.ValidateHero(hero);

@@ -1,5 +1,6 @@
 # Original ammunition compatibility and refill
 
+Current ownership: [iteration 031](iteration-031.md) removes the inventory from persisted series and supplies current inventory explicitly to these helpers. ProjectileExecution commits cost, actual-target HP and action state together; pending aim/source and reload continuation are saved in GameState schema 3. Earlier iteration examples describe the recovered low-level behavior, not a second authoritative inventory.
 Iteration 022; static inspection of the supplied executable, SHA-256 `18a74ff61c65b8a2d4cfa11ffce82ad7fef022a94eaf0c2f217e479e981420d2`. Commercial version is not established. No original runtime comparison. Addresses and numeric categories describe this executable; proprietary records and disassembly are not published.
 
 ## Definition compatibility

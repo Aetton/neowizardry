@@ -75,7 +75,7 @@ for(int size=1;size<=8;size++)
 }
 Throws(() => Game.Create(0), "No empty party");
 Throws(() => Game.Create(9), "UI limit enforced");
-Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 2", "\"Schema\": 99")), "Reject unknown save version");
+Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 3", "\"Schema\": 99")), "Reject unknown save version");
 Throws(() => Game.Validate(solo with { Party = [solo.Party[0], solo.Party[0]] }), "Reject duplicate IDs");
 Throws(() => Game.Escape(solo), "Escape requires capture");
 var fast = solo with { Party = [solo.Party[0] with { Speed = 0, Hp = 1 }] };
@@ -141,7 +141,7 @@ var wonLoot=Game.Attack(lootBattle,catalog).State;
 Check(wonLoot.RewardGranted && Inventory.Count(wonLoot,77)==1,"Victory grants configured test loot");
 Check(Inventory.Count(Game.Attack(Game.Load(Game.Save(wonLoot)),catalog).State,77)==1,"Reloaded victory cannot duplicate loot");
 var legacyBagSave=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(equipped))!;
-legacyBagSave["Schema"]=1;legacyBagSave.AsObject().Remove("Items");legacyBagSave.AsObject().Remove("NextItemSequence");
+legacyBagSave["Schema"]=1;legacyBagSave.AsObject().Remove("Items");legacyBagSave.AsObject().Remove("NextItemSequence");legacyBagSave.AsObject().Remove("ProjectileActions");legacyBagSave.AsObject().Remove("NextProjectileSequence");
 legacyBagSave["Party"]![0]!["EquippedItemId"]=77;
 var legacyEquipment=Game.Load(legacyBagSave.ToJsonString(),catalog);
 Check(Inventory.Count(legacyEquipment,77)==0 && Inventory.Count(Equipment.Unequip(legacyEquipment,"hero-1",catalog),77)==1,"Old equipped save retains its single owned copy");
@@ -283,7 +283,7 @@ Check(Game.Attack(negativeEquipped,negativeCatalog).State.Enemy.Hp==solo.Enemy.H
 var snakeJson=System.Text.Json.JsonSerializer.Serialize(catalog,new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower});
 Check(ItemCatalog.Parse(snakeJson).Find(77).Name==restricted.Name,"Python/C# snake-case schema");
 var oldSave=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(solo))!;
-oldSave["Schema"]=1;oldSave.AsObject().Remove("Items");oldSave.AsObject().Remove("NextItemSequence");
+oldSave["Schema"]=1;oldSave.AsObject().Remove("Items");oldSave.AsObject().Remove("NextItemSequence");oldSave.AsObject().Remove("ProjectileActions");oldSave.AsObject().Remove("NextProjectileSequence");
 foreach(var member in oldSave["Party"]!.AsArray()) { member!.AsObject().Remove("Gender");member.AsObject().Remove("EquippedItemId"); }
 var migrated=Game.Load(oldSave.ToJsonString());
 Check(migrated.Party[0].Gender=="Male" && Equipment.ItemId(migrated,migrated.Party[0].Id) is null,"Iteration-001 saves remain readable");
@@ -352,6 +352,7 @@ checks+=MonsterDefenseChecks.Run();
 checks+=MonsterScoreChecks.Run();
 checks+=MonsterSequenceChecks.Run();
 checks+=SnapshotChecks.Run(referenceCatalog,recipeReferenceCatalog);
+checks+=ProjectileExecutionChecks.Run(restricted);
 if(args.Length==2 && args[0]=="--fixture")
 {
     File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with { Count=5, Items=[restricted, restricted with { Id=78,Name="Test herb",TypeCode=19 }, restricted with { Id=79,Name="Test vial",TypeCode=19 }, restricted with { Id=80,Name="Test tonic",TypeCode=15 }, restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }], Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256) },new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
