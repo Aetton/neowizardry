@@ -11,7 +11,7 @@ New expeditions using the synthetic catalog receive a staff, four herbs, two via
 
 Each click makes one batch. Core validation runs before changes. Ingredients are taken only from the bag; equipped copies cannot disappear into a recipe. The result is added after exact ingredient consumption. Missing ingredients, unavailable actors, unknown/unlearned recipes, insufficient skill and output overflow reject the operation without changing the source state, RNG or round. Crafting does not advance a round in this fixture.
 
-Skills and learned recipe IDs are saved explicitly. Old saves do not receive them retroactively; start a new party to use the fixture. Imported original catalogs do not use synthetic recipe IDs. Their Craft button explains that original recipes have not been imported.
+Skills and learned recipe IDs are saved explicitly. Old saves do not receive them retroactively; start a new party to use the fixture. Imported original catalogs do not use synthetic recipe IDs. Their Craft button remains unavailable: native combination references can now be exported for inspection, but are not yet executable recipes. See [recipe format](recipe-format.md).
 
 ## Evidence gate for original crafting
 

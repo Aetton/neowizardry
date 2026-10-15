@@ -12,7 +12,7 @@ Godot 4.5.1 .NET client + independent .NET 8 core + dependency-free Python 3.10+
 - A catalog of 819 original item records: IDs, names, item type/icon indices and equipment restriction masks. Generated catalogs stay local; original assets are not bundled.
 - A synthetic 3D corridor with free movement, collisions, mouse look, party size 1–8, a training sentinel, round resolution, XP, sample dialogue and save/load.
 - A solo captivity/escape regression fixture. This proves an engine state transition, **not** that the original Crock quest has been reproduced.
-- Prototype magic with two explicitly synthetic spells, learned IDs, Fire/Divine mana, power/cost previews, round integration and saved roll continuation. Original magic formulas are still research.
+- Prototype magic with five explicitly synthetic spells, learned IDs, Fire/Divine mana, power/cost previews, round integration and saved roll continuation. Original magic formulas are still research.
 - Deterministic core transitions and versioned saves, tested independently of Godot. Imported melee damage dice and weapon initiative are active; the prototype RNG state survives saves.
 - Original-item browser with search, raw weapon statistics and a melee equipment slot backed by the shared party bag enforcing race/profession/gender restrictions. Equipped items survive saves; loading requires the same source item database.
 - Ordinary resource overlay: loose data files, then descending `PATCH.NNN`, then base archive, with source provenance.
@@ -84,6 +84,14 @@ godot --path client -- --spells local/spells.json --grimoire
 
 The source client detects `local/spells.json`; packaged builds also accept `spells.json` in Godot's user-data directory, or an explicit `--spells` path. Open **Menu → Spell reference**. Public previews include only a clearly labeled synthetic entry. Reference metadata does not teach spells or enable canonical casting. See [format evidence and limits](docs/spell-format.md).
 
+## Original combination reference
+
+```sh
+python -m tools.slf recipes "/path/to/Wizardry8/Data/DATA.SLF" --patch "/path/to/Wizardry8/Patches/PATCH.001" --out local/recipes.json
+```
+
+This private reference export reads ingredient pairs and skill thresholds from the item database, with hashes and anomaly flags. It is not loaded by the client or connected to Craft. See [native format evidence and unresolved behavior](docs/recipe-format.md).
+
 ## Next gates
 
 1. Obtain and validate the real `LEVELS.SLF` directory, then decode PVL geometry and collisions.
@@ -93,7 +101,7 @@ The source client detects `local/spells.json`; packaged builds also accept `spel
 5. Replace the temporary gold frame with the planned Wizardry visual identity and Grimrock-inspired materials/lighting.
 
 See [format report](docs/formats.md), [architecture](docs/architecture.md) and [iteration report](docs/iteration-001.md).
-Latest progress: [iteration 011](docs/iteration-011.md). Desktop HUD: [original-layout interface](docs/interface.md).
+Latest progress: [iteration 012](docs/iteration-012.md). Desktop HUD: [original-layout interface](docs/interface.md).
 Mobile prototype: [touch controls, Android build and device checklist](docs/mobile.md). Preview on desktop with `godot --path client -- --touch`.
 
 The [formula research module](docs/formula-sources.md) contains a first source-backed candidate calculation; it remains separate from the experimental combat rules.
