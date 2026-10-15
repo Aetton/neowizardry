@@ -38,6 +38,6 @@ The caller owns actual-target identity and scores, original actor/hand policies,
 
 ## Geometry and remaining gates
 
-`0x5454C0` perturbs an aim vector, calls angle/d100 RNG and adjusts a score using distance before world projectile creation. This aim threshold is not the final chance of damaging a target: collision, interception and penetration are later stages. The new implementation deliberately does not substitute a simple d100 hit gate for that geometry. Collision volumes, movement, spread, callback eligibility, interception-byte derivation, special automatic penetration, target-location/condition policy and full native end-of-attack reload ordering remain open.
+`0x5454C0` perturbs an aim vector, calls angle/d100 RNG and adjusts a score using distance before world projectile creation. This aim threshold is not the final chance of damaging a target: collision, interception and penetration are later stages. Iteration 024 reconstructs the [aim perturbation helper](original-projectile-aim.md) and an aimed pending launch; it does not substitute a simple d100 hit gate for collision. Collision volumes, movement, actor spread-profile derivation, callback eligibility, interception-byte derivation, special automatic penetration, target-location/condition policy and full native end-of-attack reload ordering remain open.
 
 The Godot training battle remains a labelled fixture. This slice supplies connected post-delivery math and resource transitions, not a complete original ranged encounter or live original character model.

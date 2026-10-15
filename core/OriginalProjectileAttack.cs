@@ -2,6 +2,7 @@ using NeoWizardry.Core.Rules;
 
 namespace NeoWizardry.Core;
 
+public sealed record AimedProjectileLaunch(ProjectileSeriesState State,ProjectileAimResult Aim);
 public sealed record ProjectileAttackCompletion(ProjectileSeriesState State,ProjectileStrikeResult Strike);
 
 // Compose ordinary post-delivery resolution with exactly one resource completion.
@@ -9,6 +10,18 @@ public sealed record ProjectileAttackCompletion(ProjectileSeriesState State,Proj
 // eligibility, RNG, HP application and committing the current immutable state once.
 public static class OriginalProjectileAttack
 {
+    // Resolve aim without spending the projectile. Persist the whole returned flight
+    // (including aim) if the caller saves during delivery. Collision remains external.
+    public static AimedProjectileLaunch Launch(ProjectileSeriesState state,ProjectileAimInput input,int angleDraw,
+        int? radiusDraw,IReadOnlyDictionary<int,ItemInventoryRule> rules)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        if(input.AttackScore==9999)throw new InvalidOperationException("Native no-spread launch uses its separate delivery path");
+        var pending=ProjectileSeries.Launch(state,rules);
+        var aim=OriginalProjectileAim.Resolve(input,angleDraw,radiusDraw);
+        return new(pending,aim);
+    }
+
     public static ProjectileAttackCompletion Complete(ProjectileSeriesState state,string seriesId,int ordinal,
         ProjectileStrikeInput input,int? penetrationDraw,IReadOnlyList<int> damageDraws,bool actorCanContinue,
         bool deliveryCanContinue,IReadOnlyDictionary<int,ItemInventoryRule> rules)
