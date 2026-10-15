@@ -281,10 +281,53 @@ Check((reference with { RealmCode=99 }).Realm=="Unknown code 99","Unknown origin
 Throws(()=> (referenceCatalog with { DescriptionProvenance=referenceCatalog.DescriptionProvenance with { Sha256="invalid" } }).Validate(),"Spell descriptions require independent valid provenance");
 Throws(()=> (referenceCatalog with { Spells=[reference with { RawRecordHex=new string('f',1408) }] }).Validate(),"Raw spell record hash mismatch rejected");
 Throws(()=> (referenceCatalog with { Count=2,Spells=[reference,reference] }).Validate(),"Duplicate spell reference IDs rejected");
+var nativeRecipe=new NativeCombination(2,0,1,1,26,15);
+var nativeA=new NativeIngredient("a",0,1,7,true);
+var nativeB=new NativeIngredient("b",1,1,3,true);
+var nativePlan=NativeCombinations.Plan(nativeRecipe,nativeA,nativeB,15);
+Check(nativePlan==new NativeCombinationPlan(2,3,3,4,0,3,"second"),"Native two-stack batch consumes minimum and replaces smaller stack");
+Check(NativeCombinations.Plan(nativeRecipe,nativeB,nativeA,15)==new NativeCombinationPlan(2,3,3,0,4,3,"first"),"Native ingredient order does not alter batch");
+Check(NativeCombinations.Plan(nativeRecipe,nativeA with {Quantity=3},nativeB,15).Destination=="second","Native equal stacks replace second slot");
+Check(NativeCombinations.Plan(nativeRecipe,nativeA,nativeB with {Mode=2,Quantity=1},15)==new NativeCombinationPlan(2,1,1,6,0,1,"second"),"Charged ingredient is consumed as one whole instance, not one charge");
+Check(NativeCombinations.Plan(nativeRecipe,nativeA with {Mode=0,Quantity=1},nativeB,15).Destination=="first","Nonstack first ingredient becomes result destination");
+Check(NativeCombinations.Plan(nativeRecipe with {OutputMode=0},nativeA,nativeB,15).OutputQuantity==1,"Nonstack result is one instance even for a larger batch");
+Check(NativeCombinations.Plan(nativeRecipe with {SkillCode=255,SkillThreshold=255},nativeA,nativeB,0).OutputQuantity==3,"Native no-skill sentinel bypasses threshold");
+Check(NativeCombinations.Plan(nativeRecipe with {FirstId=0,SecondId=0},nativeA,nativeA with {InstanceId="other"},15).OutputQuantity==7,"Repeated ingredient IDs require two instances, not different definitions");
+Throws(()=>NativeCombinations.Plan(nativeRecipe,nativeA,nativeB,14),"Native threshold boundary rejects one below");
+Throws(()=>NativeCombinations.Plan(nativeRecipe,nativeA with {Identified=false},nativeB,15),"Native unidentified first ingredient rejected");
+Throws(()=>NativeCombinations.Plan(nativeRecipe,nativeA,nativeB with {Identified=false},15),"Native unidentified second ingredient rejected");
+Throws(()=>NativeCombinations.Plan(nativeRecipe,nativeA,nativeB with {ItemId=99},15),"Native wrong ingredient rejected");
+Throws(()=>NativeCombinations.Plan(nativeRecipe with {SecondId=0},nativeA,nativeA,15),"One native instance cannot occupy both ingredient slots");
+Throws(()=>NativeCombinations.Plan(nativeRecipe,nativeA with {Quantity=0},nativeB,15),"Empty native stack rejected");
+Throws(()=>NativeCombinations.Plan(nativeRecipe,nativeA with {Quantity=256},nativeB,15),"Native byte-sized quantity bounded");
+Throws(()=>NativeCombinations.Plan(nativeRecipe,nativeA with {Mode=2},nativeB,15),"Charged item count does not stand for charge quantity");
+Throws(()=>NativeCombinations.Plan(nativeRecipe with {SkillCode=254},nativeA,nativeB,15),"Unknown signed skill code is not executed");
+Throws(()=>NativeCombinations.Plan(nativeRecipe with {OutputMode=5},nativeA,nativeB,15),"Unknown output mode is not executed");
+Check(nativeA.Quantity==7 && nativeB.Quantity==3,"Native planning preserves source instances");
+var recipeBytes=new byte[269];System.Text.Encoding.Unicode.GetBytes("Fixture compound").CopyTo(recipeBytes,0);
+System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(recipeBytes.AsSpan(0xb9),0);
+System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(recipeBytes.AsSpan(0xbd),1);
+recipeBytes[0xc9]=26;recipeBytes[0xca]=15;
+var recipeReference=new OriginalRecipe(2,"Fixture compound",[0,1],["Fixture A","Fixture B"],26,15,new string('0',16),[],
+    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(recipeBytes)),Convert.ToHexString(recipeBytes));
+var recipeReferenceCatalog=new RecipeCatalog(1,"reference_only","DATABASES/ITEMS.DBS",new("loose","synthetic-combination-reference",new string('c',64)),269,3,1,new(){{"-1",2}},[recipeReference]);
+var recipeReferenceJson=System.Text.Json.JsonSerializer.Serialize(recipeReferenceCatalog,new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower});
+Check(RecipeCatalog.Parse(recipeReferenceJson).Recipes[0].Skill=="Alchemy","Combination reference parses with source-backed skill name");
+Throws(()=> (recipeReferenceCatalog with {Recipes=[recipeReference with {SkillThreshold=16}]}).Validate(),"Combination metadata must match its raw bytes");
+Throws(()=> (recipeReferenceCatalog with {Recipes=[recipeReference with {RawRecordHex=new string('f',538)}]}).Validate(),"Combination raw record hash checked");
+Throws(()=> (recipeReferenceCatalog with {Recipes=[recipeReference with {Issues=["unnamed_output"]}]}).Validate(),"Combination anomaly flags cannot hide or invent invalid rows");
+Throws(()=> (recipeReferenceCatalog with {ItemCount=4}).Validate(),"Combination counts include inactive pairs");
 if(args.Length==2 && args[0]=="--fixture")
 {
     File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with { Count=5, Items=[restricted, restricted with { Id=78,Name="Test herb",TypeCode=19 }, restricted with { Id=79,Name="Test vial",TypeCode=19 }, restricted with { Id=80,Name="Test tonic",TypeCode=15 }, restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }], Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256) },new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
     File.WriteAllText(Path.ChangeExtension(args[1],".spells.json"),referenceJson);
+    File.WriteAllText(Path.ChangeExtension(args[1],".recipes.json"),recipeReferenceJson);
+}
+else if(args.Length==2 && args[0]=="--recipes")
+{
+    var realRecipes=RecipeCatalog.Parse(File.ReadAllText(args[1]));
+    Check(realRecipes.Recipes.Count(r=>r.Issues.Length==0)>0,"Private combination catalog has named valid references");
+    Console.WriteLine($"PASS: real imported combination catalog ({realRecipes.Count} records)");
 }
 else if(args.Length>0)
 {

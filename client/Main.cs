@@ -56,6 +56,7 @@ public partial class Main : Node3D
         BuildUi();
         LoadCatalog();
         LoadSpellCatalog();
+        LoadRecipeCatalog();
         _state=CreateExpedition(1);
         Refresh();
         _ready=true;
@@ -68,6 +69,7 @@ public partial class Main : Node3D
         if (OS.GetCmdlineUserArgs().Contains("--mobile-smoke")) Callable.From(MobileSmoke).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--items")) Callable.From(ShowItems).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--grimoire")) Callable.From(ShowGrimoire).CallDeferred();
+        if (OS.GetCmdlineUserArgs().Contains("--combinations")) Callable.From(ShowCombinations).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--craft")) Callable.From(ShowCrafting).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--magic")) Callable.From(ShowMagic).CallDeferred();
     }
@@ -288,6 +290,7 @@ public partial class Main : Node3D
         Button(body,"New party",()=>{NewParty(size.Selected+1);dialog.QueueFree();});
         Button(body,"Save",Save);Button(body,"Load",()=>{Load();size.Select(_state.Party.Length-1);});
         Button(body,"Spell reference",ShowGrimoire);
+        Button(body,"Combination reference",ShowCombinations);
         Button(body,"Talk to keeper",()=>Say("Test keeper: The real monastery is still being researched."));
         Button(body,"Capture test",()=>Try(()=>{_state=Game.CaptureFirst(_state);Refresh();}));
         Button(body,"Escape",()=>Try(()=>{_state=Game.Escape(_state);Refresh();}));
@@ -457,7 +460,7 @@ public partial class Main : Node3D
     private void ShowCrafting()
     {
         if(_catalog is null) { Say("No item catalog loaded.");return; }
-        if(!Crafting.UsesFixture(_catalog)) { Say("Original recipes are pending archive research; synthetic recipe IDs do not apply to this catalog.");return; }
+        if(!Crafting.UsesFixture(_catalog)) { ShowCombinations();return; }
         Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
         var dialog=new AcceptDialog { Theme=_hudTheme,Title="Test crafting",Unresizable=true,WrapControls=false };
         AddChild(dialog);dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;
@@ -612,6 +615,7 @@ public partial class Main : Node3D
     {
         try
         {
+            CheckRecipeReference();
             var pad=_pad.GetGlobalRect();var center=pad.GetCenter();
             _Input(new InputEventScreenTouch { Index=0,Pressed=true,Position=center });
             _Input(new InputEventScreenDrag { Index=0,Position=center+new Vector2(0,-60),Relative=new(0,-60) });
@@ -635,6 +639,7 @@ public partial class Main : Node3D
     {
         try
         {
+            CheckRecipeReference();
             if((_spellsRequested || Godot.FileAccess.FileExists("res://demo-items.spells.json")) && _spellCatalog is null)throw new Exception("Requested spell reference was not loaded");
             if(_spellCatalog is not null) { _spellCatalog.Validate();GD.Print($"PASS: spell reference {_spellCatalog.Count} records with raw record hashes"); }
             if(_catalogRequested && _catalog is null) throw new Exception("Requested smoke catalog was not loaded");

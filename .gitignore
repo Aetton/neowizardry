@@ -16,3 +16,4 @@ client/demo-items.json
 *.keystore
 
 client/demo-items.spells.json
+client/demo-items.recipes.json

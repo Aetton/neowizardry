@@ -90,7 +90,13 @@ The source client detects `local/spells.json`; packaged builds also accept `spel
 python -m tools.slf recipes "/path/to/Wizardry8/Data/DATA.SLF" --patch "/path/to/Wizardry8/Patches/PATCH.001" --out local/recipes.json
 ```
 
-This private reference export reads ingredient pairs and skill thresholds from the item database, with hashes and anomaly flags. It is not loaded by the client or connected to Craft. See [native format evidence and unresolved behavior](docs/recipe-format.md).
+Open **Menu → Combination reference** after importing. The source client detects `local/recipes.json`; exported builds accept `user://recipes.json` or an explicit path:
+
+```sh
+godot --path client -- --recipes local/recipes.json --combinations
+```
+
+Search by result or ingredient name; flagged entries are hidden by default. Public previews contain one invented combination reference only. The recovered native batch/identification/skill calculation is tested separately from the shared-bag fixture: native instance creation and inventory integration remain open. See [format evidence and unresolved behavior](docs/recipe-format.md).
 
 ## Next gates
 
@@ -101,7 +107,7 @@ This private reference export reads ingredient pairs and skill thresholds from t
 5. Replace the temporary gold frame with the planned Wizardry visual identity and Grimrock-inspired materials/lighting.
 
 See [format report](docs/formats.md), [architecture](docs/architecture.md) and [iteration report](docs/iteration-001.md).
-Latest progress: [iteration 012](docs/iteration-012.md). Desktop HUD: [original-layout interface](docs/interface.md).
+Latest progress: [iteration 013](docs/iteration-013.md). Desktop HUD: [original-layout interface](docs/interface.md).
 Mobile prototype: [touch controls, Android build and device checklist](docs/mobile.md). Preview on desktop with `godot --path client -- --touch`.
 
 The [formula research module](docs/formula-sources.md) contains a first source-backed candidate calculation; it remains separate from the experimental combat rules.

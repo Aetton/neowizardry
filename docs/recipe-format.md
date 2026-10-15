@@ -38,6 +38,33 @@ python -m tools.slf recipes /path/to/Data/DATA.SLF --patch /path/to/Patches/PATC
 
 Include all enabled patches and loose overrides, as for item/spell imports. Output contains source provenance, raw record bytes, per-record hashes, names, numeric references and anomaly flags. Out-of-range references remain inspectable with an explicit issue; malformed table sizes reject import. No original records or names are bundled in public fixtures.
 
-This is a **reference-only export**, not connected to the Craft action. It establishes ingredient matching and the direct skill threshold, but does not establish ingredient quantities, item charges, identification, equipped-item handling, failure behavior, discovery, time costs, profession gates elsewhere, or NPC crafting. The routine contains further branches for stack handling and item removal that have not yet been reconstructed. Offsets `0xC1`–`0xC8` remain raw. Existing synthetic crafting rules must not be substituted for these unresolved rules.
+The export remains **reference-only**. The client now reads it in Menu → Combination reference (`--recipes path --combinations`), searches output and ingredient names, and hides flagged records unless requested. It verifies raw hashes, decoded output fields, anomaly flags and record ordering. Public previews contain an invented reference entry only. This reference does not grant ingredients or recipe knowledge.
+
+## Recovered local operation (iteration 013)
+
+Further static analysis of the same executable establishes the following local rules. These have not yet been compared with an interactive original-game run.
+
+| Evidence in merge routine | Local rule |
+|---|---|
+| `0x51F362`–`0x51F374` | Both instance identification bytes at `+6` must be nonzero; otherwise branch directly to refusal. |
+| `0x51F403`–`0x51F410` | Below-threshold skill branches away before crafting consumption. The comparison is inclusive at the threshold. |
+| `0x51F472`–`0x51F49F` | Database byte `0x66 == 1` identifies stackable ingredients. If both stack, the batch is the minimum of their instance counts (`+4`). |
+| `0x51F4A5`–`0x51F4C7` | The smaller stack is the result destination; equal counts select the second slot. For other pairs the nonstack item is the destination; if neither stacks, the first slot is used. |
+| `0x51F4C7`–`0x51F55A` | Stack ingredients lose the batch quantity through repeated calls to `0x51E760`; nonstack ingredients are removed as whole instances. Charged items are not handled by decrementing a charge in this branch. |
+| `0x51F67C`–`0x51F68F` | A new output instance is initialized. Only stackable outputs have their count overwritten with the batch; nonstack output remains one instance. |
+
+For example, invented stacks of 7 and 3 consume 3 from each: 4 remain in the first slot, and the second slot receives a stackable output count of 3. A stack of 7 plus a nonstack ingredient consumes one from the stack and the whole second instance. For a nonstack output, even a two-stack batch creates one output instance; the planner preserves this observed branch rather than imposing a one-output-per-pair rule.
+
+The independently maintained [item reader](https://github.com/anonidiot/Wizardry8Editor/blob/4d451e8e31106cc5d6ad86b69a00b0d2a3c26c01/src/item.cpp) agrees on mode byte `0x66`: 0 single, 1 stack, 2 charges, 3 uses, 4 shots. It reads instance count at `+4`, charges at `+5`, identification at `+6`. These are different values and cannot be collapsed into one quantity.
+
+`NativeCombinations.Plan` implements this local calculation using two distinct normalized instance snapshots and an explicit combination definition. Nonstack quantity means one whole instance; it does not represent the original unused count byte or remaining charges. The plan reports both consumptions, leftovers, output quantity and destination. It does not mutate a save or create an output's charge/identification state. Rejecting malformed quantities, self-use of one instance, unknown item modes or unsupported skill indices is an implementation guard, not a recovered original-game error policy.
+
+### Remaining boundaries
+
+- The original scan stops at the first matching ingredient pair. A caller must not skip a below-threshold record to find a later easier recipe. The reference reader preserves database order; the explicit-definition planner does not perform the scan.
+- After a failed recipe lookup/skill check, identical input IDs can reach the ordinary stack-merging routine `0x51F900` through `0x51F7A4`. A denied crafting plan does not model that fallback; it must not be claimed that every failed merge command leaves all inventory slots unchanged.
+- Skill-success paths call `0x52E690` and `0x553F10` before consumption. Their side effects and progression are not reconstructed here. No random failure or skill-training formula is invented.
+- Output initialization at `0x51C020`, charge rolls, result identification, equipment/cursor/container placement, actor eligibility, time, discovery, external profession gates and NPC crafting remain open. Offsets `0xC1`–`0xC8` remain raw.
+- The current shared-bag inventory has no native instance identity/identification/charge model. The original rules therefore stay separate from `Crafting.Craft` and `GameState`. Opening Craft with an imported item catalog opens the combination reference; it does not execute a native recipe.
 
 Cosmic Forge 4.38 and its author's tutorial were also inspected. The tutorial concentrates on world/editor operations and did not supply a combination schema. The author's [feature description](https://spershin.wixsite.com/mad-god-tiny-hut/cosmic-forge) explicitly limits new spell effects because effects are largely hardcoded. That supports executable research for magic; it does not prove that all crafting data is hardcoded. This investigation found combination fields in `ITEMS.DBS` instead.
