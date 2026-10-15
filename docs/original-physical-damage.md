@@ -26,7 +26,7 @@ The native code uses icon/category codes, not item TypeCode alone, for launcher 
 
 Strength policy comes from `0x4EE75A`–`0x4EE796`: if the supported mode mask has a bit outside Throw/Lash/Shoot (`mask & ~0x190`), use Full. Otherwise codes 104,110,114,131,144 jump to `0x4EE7FE` and **skip Strength entirely**; the remaining branch jumps to `0x4EE791` and selects Half. The two exact table targets are `0x4EE7FE` and `0x4EE791`, not two different divisors. This distinction matters for Omnigun. It is original baseline behavior, not the deferred Gadgeteer rework.
 
-Preparation requires explicit ammo for launchers and rejects ammo on direct weapons. It does not choose an ammo instance, prove compatibility, check quantity/charges, consume it, reload, choose attack mode or enforce actor eligibility. Those policies must be resolved externally; the adapter's broad ammunition-category check is not a complete compatibility check. Intrinsic-shot weapons such as the inspected rocket code are not automatically treated as separate-ammo launchers merely because they shoot.
+Preparation requires explicit ammo for launchers and rejects ammo on direct weapons. Iteration 022 adds the recovered definition compatibility predicate, including Omnigun stages. Preparation rejects incompatible separate ammo. It does not choose an ammo instance, check quantity/charges, consume it, reload, choose attack mode or enforce actor eligibility. Separate [reserve/refill helpers](original-ammunition-reload.md) provide scoped resource continuation; a complete attack controller remains external. Intrinsic-shot weapons such as the inspected rocket code are not automatically treated as separate-ammo launchers merely because they shoot.
 
 ## Dice and damage scaling
 

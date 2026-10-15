@@ -10,6 +10,7 @@ public sealed record ItemInstance(string Id,int DefinitionId,int Quantity,bool I
 public sealed record ItemInventoryState(int Schema,int Capacity,ItemInstance[] Items);
 public sealed record ItemConsumption(string InstanceId,int Quantity);
 public sealed record ItemMergeResult(ItemInventoryState State,int Moved);
+public sealed record ItemRefillResult(ItemInventoryState State,int Transferred);
 
 // Canonical inventory model. Original slot layouts, repairs and byte flags do not
 // enter this state. One instance record owns its location, including equipment.
@@ -94,6 +95,24 @@ public static class ItemInventory
         Validate(state,rules);var item=Find(state,id);
         if(amount<=0 || item.ResourceRemaining is null || item.ResourceRemaining<amount)throw new InvalidOperationException("Not enough item resource");
         return Checked(state with {Items=state.Items.Select(i=>i.Id==id?i with {ResourceRemaining=i.ResourceRemaining-amount}:i).ToArray()},rules);
+    }
+    // Transfer resource units in one transaction; quantity sources disappear at zero,
+    // resource sources follow the caller's resolved keep/remove policy. No RNG.
+    public static ItemRefillResult RefillResource(ItemInventoryState state,string destinationId,string sourceId,int capacity,
+        bool removeEmptySource,IReadOnlyDictionary<int,ItemInventoryRule> rules)
+    {
+        Validate(state,rules);var destination=Find(state,destinationId);var source=Find(state,sourceId);
+        if(destinationId==sourceId || destination.ResourceRemaining is not int current || capacity<1 || current>capacity)
+            throw new InvalidOperationException("Invalid resource refill");
+        int available=source.ResourceRemaining??source.Quantity;
+        int moved=Math.Min(capacity-current,available);
+        if(moved==0)return new(state,0);
+        int remaining=available-moved;
+        bool remove=remaining==0 && (source.ResourceRemaining is null || removeEmptySource);
+        var items=state.Items.Where(i=>i.Id!=sourceId || !remove).Select(i=>
+            i.Id==destinationId?i with {ResourceRemaining=current+moved}:
+            i.Id!=sourceId?i:source.ResourceRemaining is null?i with {Quantity=remaining}:i with {ResourceRemaining=remaining}).ToArray();
+        return new(Checked(state with {Items=items},rules),moved);
     }
     // Combat/use may consume the equipped singleton as well as a bag stack. Crafting
     // keeps its own stricter equipment policy in Transform; no generic bypass flag.

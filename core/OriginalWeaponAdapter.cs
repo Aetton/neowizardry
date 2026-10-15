@@ -6,7 +6,7 @@ public sealed record PreparedPhysicalWeapon(PhysicalDamageDice Damage,int ToHit,
     PhysicalStrengthScaling StrengthScaling,bool ModernWeapon);
 
 // Original-data boundary: translate legacy weapon/icon conventions into explicit rule inputs.
-// The caller must resolve equipped instances, ammo compatibility, availability and consumption.
+// The caller must resolve equipped instances, availability, actor eligibility and consumption.
 public static class OriginalWeaponAdapter
 {
     public static bool UsesAmmunition(ItemDefinition weapon)
@@ -38,7 +38,7 @@ public static class OriginalWeaponAdapter
             _=>throw new InvalidOperationException("Unsupported projectile source mode")};
     }
     // 0x520750: capability predicate, not an inferred 'rechargeable' flag.
-    private static bool RetainEmpty(byte[] raw)=>
+    internal static bool RetainEmpty(byte[] raw)=>
         (System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(raw.AsSpan(0x4e))&0x1ff)!=0 ||
         raw[0x62]!=0 || raw[0x8c]!=0 || raw.AsSpan(0x6c,9).ContainsAnyExcept((byte)0);
 
@@ -51,6 +51,8 @@ public static class OriginalWeaponAdapter
         if(!launcher && ammunition is not null)throw new ArgumentException("This weapon does not use separate ammunition");
         if(ammunition is not null && ammunition.TypeCode!=4 && !(weapon.IconIndex==131 && ammunition.TypeCode==2))
             throw new ArgumentException("Unsupported ammunition hand category");
+        if(ammunition is not null && !OriginalAmmunitionAdapter.Compatible(weapon,ammunition))
+            throw new ArgumentException("Ammunition is incompatible with this launcher stage");
         var source=ammunition??weapon;
         var strength=(weapon.AttackModes & ~0x190)!=0?PhysicalStrengthScaling.Full:
             weapon.IconIndex is 104 or 110 or 114 or 131 or 144?PhysicalStrengthScaling.None:PhysicalStrengthScaling.Half;

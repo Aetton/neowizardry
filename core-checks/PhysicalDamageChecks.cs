@@ -33,7 +33,7 @@ static class PhysicalDamageChecks
         Reject(()=>OriginalPhysicalDamage.Roll(new(32768,1,6),1,0,0,0,[0]),"Unsigned-only damage constant rejected");
         Reject(()=>OriginalPhysicalDamage.Roll(dice,1,int.MaxValue,0,0,[0]),"Damage scaling overflow rejected");
         var weapon=new ItemDefinition(1,"synthetic weapon",0,0,32767,65535,3,new string('a',64),0,0,0,2,2,1,6,1,10,false,0);
-        var ammo=weapon with { Id=2,Name="synthetic ammo",TypeCode=4,ToHit=3,DamageConstant=1,DamageDice=1,DamageSides=4 };
+        var ammo=weapon with { Id=2,Name="synthetic ammo",TypeCode=4,IconIndex=22,ToHit=3,DamageConstant=1,DamageDice=1,DamageSides=4 };
         var melee=OriginalWeaponAdapter.PreparePrimary(weapon);
         Check(melee==new PreparedPhysicalWeapon(dice,2,0,PhysicalStrengthScaling.Full,false),"Ordinary weapon adapter exposes explicit semantic damage inputs");
         var bow=weapon with { IconIndex=11,TypeCode=3,UsageSkill=8,RangeCode=3,DamageConstant=3,DamageDice=0,DamageSides=0,AttackModes=256 };
@@ -42,7 +42,7 @@ static class PhysicalDamageChecks
             "Launcher uses ammo dice, adds ammo accuracy and keeps its own constant as a percentage");
         foreach(int icon in new[]{104,110,114,131,144})
         {
-            var native=weapon with { IconIndex=icon,AttackModes=256 };
+            var native=weapon with { Id=icon==131?606:weapon.Id,IconIndex=icon,AttackModes=256 };
             var prepared=OriginalWeaponAdapter.PreparePrimary(native,icon==131?ammo:null);
             Check(prepared.StrengthScaling==PhysicalStrengthScaling.None,"Native no-strength exception isolated in import adapter");
         }

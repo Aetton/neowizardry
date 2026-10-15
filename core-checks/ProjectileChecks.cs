@@ -92,7 +92,7 @@ static class ProjectileChecks
                 new(mode,0,0,0,100,flags,Convert.ToHexString(raw)));
         }
         var bow=Definition(10,1,11,0,attack:0x100);
-        var arrow=Definition(11,4,0,1);
+        var arrow=Definition(11,4,22,1);
         Check(OriginalWeaponAdapter.ProjectileExpenditure(bow,arrow)==new ProjectileCost(11,ProjectileCostKind.Quantity),"Launcher consumes explicitly selected ammunition");
         var knife=Definition(12,2,0,1,attack:0x10);
         Check(OriginalWeaponAdapter.ProjectileExpenditure(knife).Kind==ProjectileCostKind.Quantity,"Ordinary throwing consumes quantity");
@@ -100,14 +100,14 @@ static class ProjectileChecks
         Throws(()=>OriginalWeaponAdapter.ProjectileExpenditure(Definition(12,2,0,1,spell:98,attack:0x10)),"Spell-use throwing path explicitly excluded");
         Throws(()=>OriginalWeaponAdapter.ProjectileExpenditure(Definition(12,2,0,2,attack:0x10)),"Nonstack throwing continuation is explicitly excluded");
         Throws(()=>OriginalWeaponAdapter.ProjectileExpenditure(Definition(12,0,0,0,attack:1)),"Melee-only weapon is not a projectile source");
-        Check(OriginalWeaponAdapter.ProjectileExpenditure(Definition(13,3,131,0,attack:0x100),Definition(12,2,0,1,0x80)).Kind==ProjectileCostKind.Quantity,"Reusable throwing flag does not suppress separate Omnigun ammunition cost");
+        Check(OriginalWeaponAdapter.ProjectileExpenditure(Definition(606,3,131,0,attack:0x100),Definition(12,2,0,1,0x80)).Kind==ProjectileCostKind.Quantity,"Reusable throwing flag does not suppress separate Omnigun ammunition cost");
         for(int bit=0;bit<9;bit++)
-            Check(!OriginalWeaponAdapter.ProjectileExpenditure(bow,Definition(11,4,0,2,attack:1<<bit)).RemoveWhenEmpty,"Each attack capability retains empty resource");
+            Check(!OriginalWeaponAdapter.ProjectileExpenditure(bow,Definition(11,4,22,2,attack:1<<bit)).RemoveWhenEmpty,"Each attack capability retains empty resource");
         Check(OriginalWeaponAdapter.ProjectileExpenditure(Definition(12,3,104,4,attack:0x100)).RemoveWhenEmpty==false,"Weapon attack capability retains empty source");
-        Check(OriginalWeaponAdapter.ProjectileExpenditure(bow,Definition(11,4,0,2)).RemoveWhenEmpty,"Capability-free fuel is discarded when empty");
+        Check(OriginalWeaponAdapter.ProjectileExpenditure(bow,Definition(11,4,22,2)).RemoveWhenEmpty,"Capability-free fuel is discarded when empty");
         foreach(int offset in new[]{0x62,0x6c,0x6d,0x6e,0x6f,0x70,0x71,0x72,0x73,0x74,0x8c})
-            Check(!OriginalWeaponAdapter.ProjectileExpenditure(bow,Definition(11,4,0,2,capability:offset)).RemoveWhenEmpty,"Recovered retain-empty capability branch");
-        Check(OriginalWeaponAdapter.ProjectileExpenditure(bow,Definition(11,4,0,2,capability:0x75)).RemoveWhenEmpty,"Adjacent unknown byte is not a retain-empty capability");
+            Check(!OriginalWeaponAdapter.ProjectileExpenditure(bow,Definition(11,4,22,2,capability:offset)).RemoveWhenEmpty,"Recovered retain-empty capability branch");
+        Check(OriginalWeaponAdapter.ProjectileExpenditure(bow,Definition(11,4,22,2,capability:0x75)).RemoveWhenEmpty,"Adjacent unknown byte is not a retain-empty capability");
         return checks;
     }
 }

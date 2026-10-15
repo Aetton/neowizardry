@@ -59,11 +59,24 @@ public static class ProjectileSeries
         var next=state with {Inventory=inventory,Remaining=state.Remaining-1,Completed=ordinal,Pending=null};
         var reason=next.Remaining==0?ProjectileStopReason.Finished:
             !actorCanContinue?ProjectileStopReason.ActorUnavailable:
-            !Available(next)?ProjectileStopReason.Depleted:
-            !deliveryCanContinue?ProjectileStopReason.ContinuationUnavailable:ProjectileStopReason.None;
+            !deliveryCanContinue?ProjectileStopReason.ContinuationUnavailable:
+            !Available(next)?ProjectileStopReason.Depleted:ProjectileStopReason.None;
         next=next with {StopReason=reason};
         Validate(next,rules);
         return new(next,outcome);
+    }
+
+    // Replacement/refill preserves the allocation and event ordinal. Actor/target
+    // interruption is terminal here and cannot be undone by adding ammunition.
+    public static ProjectileSeriesState ReplaceDepletedSource(ProjectileSeriesState state,string sourceId,ProjectileCost cost,
+        IReadOnlyDictionary<int,ItemInventoryRule> rules)
+    {
+        Validate(state,rules);
+        if(state.StopReason!=ProjectileStopReason.Depleted || state.Pending is not null)
+            throw new InvalidOperationException("Only resource depletion can resume after reload");
+        var next=state with {SourceId=sourceId,Cost=cost,StopReason=ProjectileStopReason.None};
+        Validate(next,rules);
+        return next;
     }
 
     public static void Validate(ProjectileSeriesState state,IReadOnlyDictionary<int,ItemInventoryRule> rules)
