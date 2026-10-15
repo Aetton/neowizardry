@@ -64,4 +64,16 @@ The factory accepts already-resolved **zero-based die results**, not a replaceme
 
 The combination call passes zero for all three initializer flags at `0x51F670`–`0x51F674`. The initializer runs before `0x51F681`–`0x51F68F` overwrites a stackable output's count with the batch. `CreateCombinationOutput` retains that sequence: it still requires initialization dice even when the count will be replaced. Charged outputs keep the newly initialized charge amount. The local identification value follows the definition flag; later identification/inventory side effects are outside this model.
 
-This closes local slot decoding and amount initialization, not original crafting in `GameState`. Persistent instance identity, whole-save import, inventory placement/merging, charge spending/recharge, actor eligibility, skill progression and time still need their own verified implementations. Deferred crafting, magic and Gadgeteer rework features do not change these recovered baseline rules.
+This closes local slot decoding and amount initialization, not original crafting in `GameState`. The clean instance core now supplies identity, placement, quantity merging, resource spending and atomic consumption/production independently of the original byte layout. Gameplay integration, whole-save import, recharge, actor eligibility, skill progression and time still need their own verified implementations. Deferred crafting, magic and Gadgeteer rework features do not change these recovered baseline rules.
+
+
+## Recovered stack helpers (iteration 015)
+
+Evidence: the same executable hash recorded above, inspected without executing it.
+
+- `0x51F900` merges stacks after normalizing the destination via `0x51FB40`. It requires mode 1, matching definition IDs and exact equality of identification byte +6. It transfers the smaller of free room and source quantity. AL is true only when the source is completely consumed; partial transfer mutates both slots while returning false (`0x51FB20`–`0x51FB31`). Other metadata is not compared.
+- `0x51FB40` repairs misplaced counters: modes 2–4 move count to charges only when charges are zero, then clear count; mode 1 moves charges to count only when count is zero, then clears charges. Mode 0 is left alone. Overflow produces chunks up to definition maximum, keeping the original at maximum. A 13-count stack with maximum 5 becomes 5 + 5 + 3.
+- The original bag overflow path tests 500 entries (`0x51FC1A`–`0x51FC26`). When no space remains, it can clamp the source without preserving all remaining quantity (`0x51FCEA`–`0x51FD00`). The research utility instead rejects insufficient capacity before returning any mutation. A zero maximum is also rejected, rather than clearing the stack.
+- `0x51FE30` clears source byte +10 before copying the 12-byte slot (`0x51FEA6`–`0x51FEB5`) and empties the source afterward. Owner, cursor and compaction side effects are outside the local model. This does not establish that ordinary movement should clear the remake's semantic curse state.
+
+These are import/research findings, not requirements to reproduce inventory bugs. The research snapshot refuses merges with differing non-count metadata; the canonical typed inventory has its own explicit compatibility and capacity validation. No original source bytes or fixed slot layout enter canonical runtime saves.

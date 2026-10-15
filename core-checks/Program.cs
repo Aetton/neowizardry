@@ -1,3 +1,4 @@
+using NeoWizardry.Core.Research;
 using NeoWizardry.Core;
 
 int checks = 0;
@@ -318,6 +319,8 @@ Throws(()=> (recipeReferenceCatalog with {Recipes=[recipeReference with {RawReco
 Throws(()=> (recipeReferenceCatalog with {Recipes=[recipeReference with {Issues=["unnamed_output"]}]}).Validate(),"Combination anomaly flags cannot hide or invent invalid rows");
 Throws(()=> (recipeReferenceCatalog with {ItemCount=4}).Validate(),"Combination counts include inactive pairs");
 checks+=NativeItemChecks.Run(restricted);
+checks+=NativeInventoryChecks.Run(restricted);
+checks+=ItemInventoryChecks.Run(restricted);
 if(args.Length==2 && args[0]=="--fixture")
 {
     File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with { Count=5, Items=[restricted, restricted with { Id=78,Name="Test herb",TypeCode=19 }, restricted with { Id=79,Name="Test vial",TypeCode=19 }, restricted with { Id=80,Name="Test tonic",TypeCode=15 }, restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }], Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256) },new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
@@ -330,6 +333,44 @@ else if(args.Length==2 && args[0]=="--recipes")
     Check(realRecipes.Recipes.Count(r=>r.Issues.Length==0)>0,"Private combination catalog has named valid references");
     Console.WriteLine($"PASS: real imported combination catalog ({realRecipes.Count} records)");
 }
+else if(args.Length==3 && args[0]=="--native-flow")
+{
+    var items=ItemCatalog.Parse(File.ReadAllText(args[1]));var recipes=RecipeCatalog.Parse(File.ReadAllText(args[2]));
+    int simulated=0;
+    foreach(var recipe in recipes.Recipes.Where(r=>r.Issues.Length==0))
+    {
+        var inventory=NativeInventory.Create(items,10);
+        for(int i=0;i<2;i++)
+        {
+            var definition=items.Find(recipe.IngredientIds[i]);
+            var instance=NativeItemFactory.Create(definition,[],useMaximum:true,forceIdentified:true);
+            if(definition.Instance!.Mode==1)instance=instance with {CountRaw=1};
+            inventory=NativeInventory.Add(inventory,i,$"ingredient-{i}",instance,items);
+        }
+        string before=NativeInventory.Save(inventory,items);var output=items.Find(recipe.OutputId);
+        var draws=Enumerable.Repeat(0,output.Instance!.AmountSides>0?output.Instance.AmountDice:0).ToArray();
+        var result=NativeInventory.SimulateCombination(inventory,0,1,recipe.SkillThreshold,draws,"result",[],items,recipes);
+        if(result.State.Entries.Length!=1 || result.State.Entries[0].Item.ItemId!=recipe.OutputId || NativeInventory.Save(inventory,items)!=before)
+            throw new Exception("Original local combination simulation failed");
+        var restored=NativeInventory.Load(NativeInventory.Save(result.State,items),items);
+        if(restored.Entries[0]!=result.State.Entries[0])throw new Exception("Original local result snapshot changed after save/load");
+        var rules=recipe.IngredientIds.Append(recipe.OutputId).Distinct()
+            .Select(id=>OriginalItemAdapter.Rule(items.Find(id))).ToDictionary(rule=>rule.DefinitionId);
+        var typed=ItemInventory.Create(2);var location=new ItemLocation("party");
+        foreach(var entry in inventory.Entries)
+            typed=ItemInventory.Add(typed,OriginalItemAdapter.Convert(items.Find(entry.Item.ItemId),entry.Item,entry.InstanceId,location).Item,rules);
+        string typedBefore=ItemInventory.Save(typed,rules);
+        var typedOutput=OriginalItemAdapter.Convert(output,result.State.Entries[0].Item,"result",location).Item;
+        var typedResult=ItemInventory.Transform(typed,[new("ingredient-0",result.Plan.FirstConsumed),new("ingredient-1",result.Plan.SecondConsumed)],
+            [typedOutput],rules);
+        if(typedResult.Items.Single()!=typedOutput || ItemInventory.Save(typed,rules)!=typedBefore ||
+            ItemInventory.Save(ItemInventory.Load(ItemInventory.Save(typedResult,rules),rules),rules)!=ItemInventory.Save(typedResult,rules))
+            throw new Exception("Clean inventory combination transaction or save/load failed");
+        simulated++;
+    }
+    Check(simulated>0,"Original local recipe flow covered named references");
+    Console.WriteLine($"PASS: local native simulation, clean inventory transaction and save/load for {simulated} original combinations (actor/time/progression excluded)");
+}
 else if(args.Length>0)
 {
     var real=ItemCatalog.Parse(File.ReadAllText(args[0]));
@@ -338,6 +379,15 @@ else if(args.Length>0)
         Check(real.Items.All(i=>i.Instance is not null),"Real item records include native instance fields");
         var generated=real.Items.Select(i=>NativeItemFactory.Create(i,[],useMaximum:true)).ToArray();
         Check(generated.All(i=>NativeItemInstance.Decode(i.Encode())==i),"All imported native creation maxima roundtrip through 12-byte slots");
+        var stackDefinitions=real.Items.Where(i=>i.Instance!.Mode==1).ToArray();
+        bool stackConservation=stackDefinitions.All(i=>{
+            var oversized=NativeItemFactory.Create(i,[],useMaximum:true) with {CountRaw=255};
+            var normalized=NativeStacks.Normalize(oversized,i,254);
+            return normalized.Kept.CountRaw+normalized.Overflow.Sum(s=>(int)s.CountRaw)==255 &&
+                normalized.Kept.CountRaw<=i.Instance!.MaxStack && normalized.Overflow.All(s=>s.CountRaw>0 && s.CountRaw<=i.Instance!.MaxStack);
+        });
+        Check(stackConservation,"All imported stack definitions split without losing units");
+        Console.WriteLine($"PASS: stack overflow conservation for {stackDefinitions.Length} original definitions");
         Console.WriteLine($"PASS: native fields and local maximum creation for {generated.Length} original definitions");
     }
     var cane=real.Items.Single(i=>i.Name=="Cane of Corpus");

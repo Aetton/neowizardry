@@ -73,3 +73,8 @@ LEVELS.SLF is 497064244 bytes and exceeds the Drive connector's 268435456-byte l
 
 ## Original-data research progress
 Iteration 011 decodes 150 native spell metadata records and 160 indexed description entries, preserving provenance and unknown raw bytes. A separate read-only reference is available in the client. This does not establish original effect execution, learning, success/resistance, timing or recipe rules; see [spell format evidence](spell-format.md).
+
+
+## Inventory implementation decision
+
+User decision, 2026-10-15: preserve inventory functionality on a clean instance model, without carrying original storage hacks into gameplay. The new typed core supports identity, quantity, resource counters, identification, equipment locations, atomic transfers/splits/merges and consumption/production. Raw original slots and recovery rules remain in the import/research boundary. Next: replace the prototype aggregate bag across gameplay, equipment, crafting and saves together; do not maintain two authoritative inventories. See [architecture](architecture.md#inventory-boundary--decision-2026-10-15).
