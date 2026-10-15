@@ -52,6 +52,14 @@ User decision, 2026-10-15: [TOC-22](https://linear.app/tochka/issue/TOC-22/ficha
 
 Detailed UX and balance are to be designed when implementing the feature. Recovering the original rules does not commit the remake to reproducing the original interface or every awkward interaction.
 
+## Planned feature: Gadgeteer progression and Omnigun rework
+
+User decision, 2026-10-15: [TOC-24](https://linear.app/tochka/issue/TOC-24/ficha-revork-mehanika-krivoj-razvitiya-i-pozdnego-omnigana). Deferred remake design feature, related to the crafting rework (TOC-22).
+
+Preserve the Gadgeteer's engineering/gadget identity while reworking its progression curve. The user's reported pain points are uneven/unrewarding development and an unsatisfactory high-level Omnigun, the class's main weapon. Specific mechanical causes are to be investigated rather than assumed.
+
+Review early/mid/late-game contribution, gadget/component availability and useful upgrade pacing. Examine Omnigun stages for damage, accuracy, added effects and tactical value; late upgrades should feel desirable and should not force a loss of useful earlier capabilities. Assess the class in different party sizes, including solo, and coordinate gadget/crafting changes. Exact mechanics, upgrade choices and numerical balance remain open; no implementation changes are made with this backlog decision.
+
 ## Persistent gates
 - Early Android proof: touch UI, movement/look, item interaction, background saves, APK export and a separate physical-device test. iOS follows when macOS/Xcode and a test device are available.
 - Parties of 1–8 are tested throughout; final upper limit remains open.
