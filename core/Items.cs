@@ -124,6 +124,10 @@ public static class Equipment
             throw new InvalidDataException("Save requires the same imported item database.");
         Inventory.Validate(state,catalog);
         if(state.Enemy.LootItemId.HasValue)catalog.Find(state.Enemy.LootItemId.Value);
+        ValidateSelection(state,catalog);
+    }
+    internal static void ValidateSelection(GameState state,ItemCatalog catalog)
+    {
         foreach(var hero in state.Party)
             if(ItemId(state,hero.Id) is int id && Denial(hero,catalog.Find(id)) is string denial)throw new InvalidDataException(denial);
     }

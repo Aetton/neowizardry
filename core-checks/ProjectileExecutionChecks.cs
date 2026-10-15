@@ -130,9 +130,12 @@ static class ProjectileExecutionChecks
         }
         Check(disposableState.Items!.Items.All(i=>i.Id!="fuel") && Series(disposableState,disposable.ActionId).StopReason==ProjectileStopReason.Finished,
             "Disposable resource is removed only after its last completed shot");
-        var thrown=Begin(Start() with {Items=new(1,4,[new("ammo",1,1,true,null,false,new("hero-1",Equipment.WeaponSlot))])},swings:1);
-        var throwDone=Finish(Launch(thrown),thrown.ActionId);
+        var thrown=Begin(Start() with {Items=new(1,4,[new("ammo",5,1,true,null,false,new("hero-1",Equipment.WeaponSlot))])},swings:1,cost:new(5,ProjectileCostKind.Quantity));
+        var thrownPending=Game.Load(Game.Save(Launch(thrown)),catalog);
+        var throwDone=Finish(thrownPending,thrown.ActionId);
         Check(throwDone.State.Items!.Items.Length==0 && throwDone.AppliedDamage==6,"Equipped singleton removal and HP damage commit atomically");
+        Reject(()=>Begin(Start() with {Items=new(1,4,[new("ammo",1,1,true,null,false,new("hero-1",Equipment.WeaponSlot))])}),
+            "Executor rejects equipment outside the current fixture save/load contract");
         var enemyShot=Begin(Start(),actor:enemy,source:"other");
         var enemyHit=Finish(Launch(enemyShot),enemyShot.ActionId,target:hero);
         Check(enemyHit.State.Party[0].Hp==30 && enemyHit.State.Enemy.Hp==32 && enemyHit.State.Items!.Items.Single(i=>i.Id=="other").Quantity==3,

@@ -96,6 +96,7 @@ public static class ProjectileExecution
     public static void Validate(GameState state,ItemCatalog catalog)
     {
         Game.Validate(state);var rules=Inventory.Rules(catalog);ItemInventory.Validate(state.Items!,rules);
+        Equipment.ValidateSelection(state,catalog);
         foreach(var action in Actions(state).Values)
         {
             if(!action.ItemDatabaseHash.Equals(catalog.Provenance.Sha256,StringComparison.OrdinalIgnoreCase))
