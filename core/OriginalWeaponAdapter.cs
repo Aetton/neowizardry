@@ -15,6 +15,33 @@ public static class OriginalWeaponAdapter
         return weapon.IconIndex is 11 or 12 or 13 or 37 or 131;
     }
 
+    // The caller selects an available compatible source. Spell-use weapons, actor
+    // gates and automatic replacement/reloading are separate execution paths.
+    public static ProjectileCost ProjectileExpenditure(ItemDefinition weapon,ItemDefinition? ammunition=null)
+    {
+        _=PreparePrimary(weapon,ammunition);
+        if((weapon.AttackModes&0x110)==0)throw new InvalidOperationException("Select a shooting or throwing weapon");
+        var source=ammunition??weapon;
+        var fields=source.Instance??throw new InvalidOperationException("Native metadata required");
+        fields.Validate(source.RecordSha256);
+        var raw=Convert.FromHexString(fields.RawRecordHex);
+        if(ammunition is null && raw[0x63]!=0)
+            throw new InvalidOperationException("Spell-use weapon requires its separate execution path");
+        if(ammunition is null && weapon.TypeCode==2 && (fields.Flags41&0x80)!=0)
+            return new(source.Id,ProjectileCostKind.None);
+        if(ammunition is null && weapon.TypeCode==2 && fields.Mode!=1)
+            throw new InvalidOperationException("Nonstack throwing continuation requires separate reconstruction");
+        return fields.Mode switch {
+            0=>new(source.Id,ProjectileCostKind.None),
+            1=>new(source.Id,ProjectileCostKind.Quantity),
+            >=2 and <=4=>new(source.Id,ProjectileCostKind.Resource,!RetainEmpty(raw)),
+            _=>throw new InvalidOperationException("Unsupported projectile source mode")};
+    }
+    // 0x520750: capability predicate, not an inferred 'rechargeable' flag.
+    private static bool RetainEmpty(byte[] raw)=>
+        (System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(raw.AsSpan(0x4e))&0x1ff)!=0 ||
+        raw[0x62]!=0 || raw[0x8c]!=0 || raw.AsSpan(0x6c,9).ContainsAnyExcept((byte)0);
+
     public static PreparedPhysicalWeapon PreparePrimary(ItemDefinition weapon,ItemDefinition? ammunition=null)
     {
         ArgumentNullException.ThrowIfNull(weapon);

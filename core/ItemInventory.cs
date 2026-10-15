@@ -95,6 +95,14 @@ public static class ItemInventory
         if(amount<=0 || item.ResourceRemaining is null || item.ResourceRemaining<amount)throw new InvalidOperationException("Not enough item resource");
         return Checked(state with {Items=state.Items.Select(i=>i.Id==id?i with {ResourceRemaining=i.ResourceRemaining-amount}:i).ToArray()},rules);
     }
+    // Combat/use may consume the equipped singleton as well as a bag stack. Crafting
+    // keeps its own stricter equipment policy in Transform; no generic bypass flag.
+    public static ItemInventoryState ConsumeUnit(ItemInventoryState state,string id,IReadOnlyDictionary<int,ItemInventoryRule> rules)
+    {
+        Validate(state,rules);var item=Find(state,id);
+        return Checked(state with {Items=state.Items.Where(i=>i.Id!=id || item.Quantity>1)
+            .Select(i=>i.Id==id?i with {Quantity=i.Quantity-1}:i).ToArray()},rules);
+    }
     // Final-state validation makes a recipe transaction atomic even at full capacity.
     // Recipe/actor/skill policies belong to the calling gameplay service.
     public static ItemInventoryState Transform(ItemInventoryState state,IReadOnlyList<ItemConsumption> consumed,
