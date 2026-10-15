@@ -62,7 +62,147 @@ Throws(()=>Game.Validate(solo with { Party=[solo.Party[0] with { Spellbook=["tes
 var preMagic=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(solo))!;
 foreach(var h in preMagic["Party"]!.AsArray()){h!.AsObject().Remove("Mana");h.AsObject().Remove("Spellbook");}
 var oldMagic=Game.Load(preMagic.ToJsonString());
-Check(oldMagic.P…3578 tokens truncated…Single(m=>m.Realm=="Fire").Current==10,"Each caster spends independent realm pool");
+Check(oldMagic.Party[0].Mana is null && oldMagic.Party[0].Spellbook is null,"Old saves do not gain retroactive spells or mana");
+for(int size=1;size<=8;size++)
+{
+    var magicParty=Game.Create(size);
+    magicParty=magicParty with { Party=magicParty.Party.Select(h=>h with { Profession="Mage" }).ToArray() };
+    for(int i=0;i<20 && magicParty.Enemy.Hp>0;i++)
+        magicParty=magicParty.Party[0].Mana!.Single(p=>p.Realm=="Fire").Current>=2
+            ? Game.Cast(magicParty,new("hero-1","test-spark",1,magicParty.Enemy.Id)).State : Game.Attack(magicParty).State;
+    Check(magicParty.Enemy.Hp==0 && magicParty.Party.Sum(h=>h.Xp)==120,$"Magic-oriented party {size} retains conserved XP");
+}
+Throws(() => Game.Create(0), "No empty party");
+Throws(() => Game.Create(9), "UI limit enforced");
+Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 2", "\"Schema\": 99")), "Reject unknown save version");
+Throws(() => Game.Validate(solo with { Party = [solo.Party[0], solo.Party[0]] }), "Reject duplicate IDs");
+Throws(() => Game.Escape(solo), "Escape requires capture");
+var fast = solo with { Party = [solo.Party[0] with { Speed = 0, Hp = 1 }] };
+var dead = Game.Attack(fast).State;
+Check(dead.Party[0].Hp == 0 && dead.Enemy.Hp == 32, "Dead actor cannot execute queued attack");
+// These validate the published model and reported level breakpoints, not the original executable.
+foreach (var (multiplier, lower, upper) in new[] { (4,18,19), (3,24,26), (2,37,38) })
+{
+    Check(LegacyResearch.SingleClassAttackScore(125,125,100,100,lower,multiplier)<600, "Candidate score below breakpoint");
+    Check(LegacyResearch.SingleClassAttackScore(125,125,100,100,upper,multiplier)>600, "Candidate score above breakpoint");
+}
+Check(LegacyResearch.SingleClassAttackScore(125,125,100,100,25,3)==599.9999m,
+    "Published decimal approximation straddles reported level-25 threshold");
+Check(LegacyResearch.SingleClassAttackScore(125,125,100,125,14,4)<600, "Primary weapon candidate below breakpoint");
+Check(LegacyResearch.SingleClassAttackScore(125,125,100,125,15,4)>600, "Primary weapon candidate above breakpoint");
+Throws(() => LegacyResearch.SingleClassAttackScore(126,0,0,0,1,4), "Reject uncapped effective attributes");
+Throws(() => LegacyResearch.SingleClassAttackScore(0,0,0,0,0,4), "Reject invalid level");
+Throws(() => LegacyResearch.SingleClassAttackScore(0,0,0,0,1,5), "Reject unknown profession coefficient");
+var restricted = new ItemDefinition(77,"Restricted test staff",0,0,32,32,3,new string('a',64),5,0,2,1,1,2,4,7,50,false,0);
+var catalog = new ItemCatalog(2,"DATABASES/ITEMS.DBS",new Provenance("archive","PATCH.001",new string('b',64)),269,1,[restricted]);
+catalog.Validate();
+foreach(int bonus in new[]{256,-257,int.MaxValue,int.MinValue})
+{
+    var wideBonus=catalog with { Items=[restricted with { BonusSwings=bonus }] };
+    Check(ItemCatalog.Parse(System.Text.Json.JsonSerializer.Serialize(wideBonus,
+        new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower })).Items[0].BonusSwings==bonus,
+        "Item catalogs retain signed dword bonus independently of executable allocation validation");
+}
+var ownedSolo=Inventory.Add(solo,77,1,catalog);
+var equipped = Equipment.Equip(ownedSolo,solo.Party[0].Id,77,catalog);
+Check(Inventory.Count(equipped,77)==0 && Inventory.Count(ownedSolo,77)==1,"Equip moves one copy out of bag without mutation");
+Throws(()=>Equipment.Equip(solo,"hero-1",77,catalog),"Cannot equip an unowned weapon");
+var returned=Equipment.Unequip(equipped,"hero-1",catalog);
+Check(Equipment.ItemId(returned,returned.Party[0].Id) is null && Inventory.Count(returned,77)==1,"Unequip returns exactly one copy");
+Check(Game.Save(Equipment.Unequip(returned,"hero-1",catalog))==Game.Save(returned),"Repeated unequip creates no copy");
+Check(Game.Save(Equipment.Equip(equipped,"hero-1",77,catalog))==Game.Save(equipped),"Repeated equip creates no copy");
+var common=restricted with { RaceMask=65535 };
+var commonCatalog=catalog with { Items=[common] };
+var shared=Inventory.Add(Game.Create(2),77,1,commonCatalog);
+shared=Equipment.Equip(shared,"hero-1",77,commonCatalog);
+Throws(()=>Equipment.Equip(shared,"hero-2",77,commonCatalog),"Two heroes cannot share one equipped copy");
+shared=Equipment.Equip(Equipment.Unequip(shared,"hero-1",commonCatalog),"hero-2",77,commonCatalog);
+Check(Equipment.ItemId(shared,shared.Party[0].Id) is null && Equipment.ItemId(shared,shared.Party[1].Id)==77 && Inventory.Count(shared,77)==0,"Transfer through shared bag conserves copy");
+var spare=restricted with { Id=78,Name="Replacement fixture" };
+var swapCatalog=catalog with { Items=[restricted,spare],Count=2 };
+var swapped=Equipment.Equip(Inventory.Add(equipped,78,1,swapCatalog),"hero-1",78,swapCatalog);
+Check(Equipment.ItemId(swapped,swapped.Party[0].Id)==78 && Inventory.Count(swapped,77)==1 && Inventory.Count(swapped,78)==0,"Weapon swap returns old weapon and consumes replacement");
+string beforeSwap=Game.Save(equipped);
+Throws(()=>Equipment.Equip(equipped,"hero-1",78,swapCatalog),"Unavailable replacement rejected");
+Check(Game.Save(equipped)==beforeSwap,"Rejected swap leaves original weapon and bag intact");
+Throws(()=>Inventory.Remove(ownedSolo,77,2,catalog),"Insufficient quantity rejected");
+Throws(()=>Inventory.Add(solo,77,0,catalog),"Zero addition rejected");
+Throws(()=>Inventory.Add(solo,999,1,catalog),"Unknown bag item rejected");
+Throws(()=>Inventory.Add(solo,77,int.MaxValue,catalog),"Unsafe number of individual instances rejected before allocation");
+Throws(()=>Game.Validate(ownedSolo with { Items=ownedSolo.Items! with {Items=[ownedSolo.Items.Items[0],ownedSolo.Items.Items[0]]} }),"Duplicate bag stacks rejected");
+Throws(()=>Game.Validate(ownedSolo with { Items=ownedSolo.Items! with {Items=[ownedSolo.Items.Items[0] with {Quantity=-1}]} }),"Negative bag quantity rejected");
+Check(Game.Save(Game.Load(Game.Save(swapped)))==Game.Save(swapped),"Bag and equipment roundtrip together");
+Throws(()=>Equipment.ValidateLoadedEquipment(ownedSolo,null,null),"Bag-only save requires catalog");
+Throws(()=>Equipment.ValidateLoadedEquipment(ownedSolo,catalog,new string('c',64)),"Bag-only save rejects changed catalog hash");
+Throws(()=>Game.Attack(solo with { Enemy=solo.Enemy with { LootItemId=999 } },catalog),"Unknown configured loot rejected before battle");
+var lootBattle=solo with { Enemy=solo.Enemy with { Hp=1,LootItemId=77 } };
+var wonLoot=Game.Attack(lootBattle,catalog).State;
+Check(wonLoot.RewardGranted && Inventory.Count(wonLoot,77)==1,"Victory grants configured test loot");
+Check(Inventory.Count(Game.Attack(Game.Load(Game.Save(wonLoot)),catalog).State,77)==1,"Reloaded victory cannot duplicate loot");
+var legacyBagSave=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(equipped))!;
+legacyBagSave["Schema"]=1;legacyBagSave.AsObject().Remove("Items");legacyBagSave.AsObject().Remove("NextItemSequence");
+legacyBagSave["Party"]![0]!["EquippedItemId"]=77;
+var legacyEquipment=Game.Load(legacyBagSave.ToJsonString(),catalog);
+Check(Inventory.Count(legacyEquipment,77)==0 && Inventory.Count(Equipment.Unequip(legacyEquipment,"hero-1",catalog),77)==1,"Old equipped save retains its single owned copy");
+// Synthetic crafting invariants: exact quantities, no equipped-item consumption, actor gates.
+var craftCatalog=swapCatalog with { Count=5,Items=[restricted,spare with { Name="Test herb",TypeCode=19 },restricted with { Id=79,Name="Test vial",TypeCode=19 },restricted with { Id=80,Name="Test tonic",TypeCode=15 },restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }],Provenance=catalog.Provenance with { File=Crafting.FixtureSource } };
+var craftStart=Inventory.Add(Inventory.Add(Inventory.Add(solo,78,4,craftCatalog),79,2,craftCatalog),77,1,craftCatalog) with { KnownRecipes=["test-tonic","test-staff"] };
+var tonicOrder=new CraftOrder("hero-1","test-tonic");
+var tonic=Crafting.Craft(craftStart,tonicOrder,craftCatalog);
+Check(Inventory.Count(tonic,78)==2 && Inventory.Count(tonic,79)==1 && Inventory.Count(tonic,80)==1,"Craft consumes exact recipe quantities");
+Check(Inventory.Count(craftStart,78)==4 && Inventory.Count(craftStart,80)==0,"Craft immutable source");
+Check(tonic.Round==craftStart.Round && tonic.RandomState==craftStart.RandomState,"Fixture crafting spends no combat turn or random roll");
+var improved=Crafting.Craft(tonic,new("hero-1","test-staff"),craftCatalog);
+Check(Inventory.Count(improved,77)==0 && Inventory.Count(improved,80)==0 && Inventory.Count(improved,81)==1,"Craft chain consumes intermediate and produces correct result");
+Check(Equipment.ItemId(Equipment.Equip(improved,"hero-1",81,craftCatalog),"hero-1")==81,"Crafted weapon is a real owned copy");
+var worn=Equipment.Equip(tonic,"hero-1",77,craftCatalog);
+var beforeCraft=Game.Save(worn);
+Throws(()=>Crafting.Craft(worn,new("hero-1","test-staff"),craftCatalog),"Equipped copy cannot be consumed by crafting");
+Check(Game.Save(worn)==beforeCraft,"Rejected craft preserves equipment and ingredients");
+Throws(()=>Crafting.Craft(craftStart,tonicOrder with { HeroId="unknown" },craftCatalog),"Unknown crafter rejected");
+Throws(()=>Crafting.Craft(craftStart,tonicOrder with { RecipeId="unknown" },craftCatalog),"Unknown recipe rejected");
+Throws(()=>Crafting.Craft(craftStart with { KnownRecipes=null },tonicOrder,craftCatalog),"Unlearned recipe rejected");
+Throws(()=>Crafting.Craft(Game.CaptureFirst(craftStart),tonicOrder,craftCatalog),"Captive crafter rejected");
+Throws(()=>Crafting.Craft(craftStart with { Party=[craftStart.Party[0] with { Hp=0 }] },tonicOrder,craftCatalog),"Dead crafter rejected");
+foreach(var skills in new SkillValue[]?[]{null,[],[new("test-craft",19)]})
+    Throws(()=>Crafting.Craft(tonic with { Party=[tonic.Party[0] with { Skills=skills }] },new("hero-1","test-staff"),craftCatalog),"Skill gate cannot be bypassed");
+Check(Inventory.Count(Crafting.Craft(tonic with { Party=[tonic.Party[0] with { Skills=[new("test-craft",20)] }] },new("hero-1","test-staff"),craftCatalog),81)==1,"Exact skill threshold permitted");
+Throws(()=>Crafting.Craft(tonic,tonicOrder,craftCatalog with { Provenance=craftCatalog.Provenance with { File="original" } }),"Synthetic recipes cannot apply to original catalog IDs");
+Throws(()=>Crafting.Craft(craftStart with {Items=craftStart.Items! with {Capacity=craftStart.Items.Items.Length}},tonicOrder,craftCatalog),"Craft rejects full instance capacity before ingredient loss");
+Throws(()=>Crafting.Craft(improved,new("hero-1","test-staff"),craftCatalog),"Recipe cannot duplicate result without ingredients");
+Check(Game.Save(Game.Load(Game.Save(improved)))==Game.Save(improved),"Recipes, skill gates and crafted ownership survive save");
+Throws(()=>Crafting.ValidateRecipe(Crafting.Recipes[0] with { Ingredients=[new(78,1),new(78,1)] },craftCatalog),"Duplicate recipe ingredients rejected");
+Throws(()=>Crafting.ValidateRecipe(Crafting.Recipes[0] with { Result=new(80,0) },craftCatalog),"Empty recipe result rejected");
+Throws(()=>Game.Validate(solo with { KnownRecipes=["unknown"] }),"Unknown saved recipe rejected");
+Throws(()=>Game.Validate(solo with { KnownRecipes=["test-tonic","test-tonic"] }),"Duplicate saved recipe rejected");
+Throws(()=>Game.Validate(solo with { Party=[solo.Party[0] with { Skills=[new("test-craft",-1)] }] }),"Negative skill rejected");
+for(int size=1;size<=8;size++)
+{
+    var c=craftStart with { Party=Game.Create(size).Party };
+    Check(Inventory.Count(Crafting.Craft(c,tonicOrder,craftCatalog),80)==1,$"Craft works without required companions for party {size}");
+}
+// Effect durations include the application round; only direct spells draw dice.
+var wardOrder=new SpellOrder("hero-1","test-ward",1,"hero-1");
+var warded=Game.Cast(solo,wardOrder).State;
+Check(warded.Party[0].Hp==35 && warded.Party[0].Effects!.Single().Rounds==2,"Ward reduces damage and ticks on application round");
+Check(warded.RandomState==solo.RandomState,"Status spell consumes no fabricated success dice");
+var ward2=Game.Attack(warded).State;var ward3=Game.Attack(ward2).State;var ward4=Game.Attack(ward3).State;
+Check(ward2.Party[0].Hp==34 && ward3.Party[0].Hp==33 && ward3.Party[0].Effects!.Length==0 && ward4.Party[0].Hp==30,"Ward expires after exactly three rounds");
+var bound=Game.Cast(solo,new("hero-1","test-bind",1,solo.Enemy.Id)).State;
+Check(bound.Party[0].Hp==36 && bound.Enemy.Effects!.Length==0,"Fast binding skips only this round enemy action");
+Check(Game.Attack(bound).State.Party[0].Hp==33,"Enemy acts normally after binding expires");
+var lateBind=Game.Cast(solo with { Party=[solo.Party[0] with { Speed=0 }] },new("hero-1","test-bind",1,solo.Enemy.Id)).State;
+Check(lateBind.Party[0].Hp==33 && lateBind.Enemy.Effects!.Length==0,"Late binding cannot retroactively skip an enemy action");
+var burned=Game.Cast(solo,new("hero-1","test-burn",2,solo.Enemy.Id)).State;
+Check(burned.Enemy.Hp==30 && burned.Enemy.Effects!.Single().Rounds==2,"Burn ticks at round end including cast round");
+var burn2=Game.Attack(burned).State;var burn3=Game.Attack(burn2).State;var burn4=Game.Attack(burn3).State;
+Check(burn2.Enemy.Hp==21 && burn3.Enemy.Hp==12 && burn3.Enemy.Effects!.Length==0 && burn4.Enemy.Hp==5,"Periodic damage stops after exact duration");
+var burnWin=Game.Cast(solo with { Enemy=solo.Enemy with { Hp=2 } },new("hero-1","test-burn",2,solo.Enemy.Id)).State;
+Check(burnWin.RewardGranted && burnWin.Party[0].Xp==120 && Game.Attack(burnWin).State.Party[0].Xp==120,"Periodic damage victory grants XP once");
+var dual=Game.Create(2);var orders=new[]{wardOrder,new SpellOrder("hero-2","test-burn",1,dual.Enemy.Id)};
+var dualRound=Game.CastRound(dual,orders).State;
+Check(dualRound.Party[0].Hp==35 && dualRound.Enemy.Hp==31 && dualRound.Round==1,"Both casters replace physical attacks in one round");
+Check(dualRound.Party[0].Mana!.Single(m=>m.Realm=="Divine").Current==10 && dualRound.Party[1].Mana!.Single(m=>m.Realm=="Fire").Current==10,"Each caster spends independent realm pool");
 Check(Game.Save(Game.CastRound(dual,orders.Reverse().ToArray()).State)==Game.Save(dualRound),"Order submission sequence does not change initiative");
 Check(Game.Save(Game.Attack(Game.Load(Game.Save(dualRound))).State)==Game.Save(Game.Attack(dualRound).State),"Saved effects resume exact continuation");
 Throws(()=>Game.CastRound(dual,[wardOrder,wardOrder]),"Duplicate caster orders rejected atomically");
