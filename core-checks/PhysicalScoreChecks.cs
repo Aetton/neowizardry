@@ -13,14 +13,14 @@ static class PhysicalScoreChecks
         var score=OriginalPhysicalScores.OrdinaryCharacter(input);
         Check(score==new PhysicalScoreBreakdown(8,20,20,0,85,73,93),"Hand, effect, mode, defense and attributes combine in the native order");
         var modern=OriginalPhysicalScores.OrdinaryCharacter(input with { ModernWeapon=true });
-        Check(modern.HitLoadPenalty==10 && modern.PenetrationLoadPenalty==0 && modern.HitScore==83 && modern.PenetrationScore==113,
-            "Modern weapons halve hit load penalty and bypass penetration load penalty");
-        Check(OriginalPhysicalScores.OrdinaryCharacter(input with { LoadCategory=1,ModernWeapon=true }).HitLoadPenalty==2,
-            "Odd modern hit load penalty truncates before subtraction");
+        Check(modern.HitFatiguePenalty==10 && modern.PenetrationFatiguePenalty==0 && modern.HitScore==83 && modern.PenetrationScore==113,
+            "Modern weapons halve hit fatigue penalty and bypass penetration fatigue penalty");
+        Check(OriginalPhysicalScores.OrdinaryCharacter(input with { FatigueCategory=1,ModernWeapon=true }).HitFatiguePenalty==2,
+            "Odd modern hit fatigue penalty truncates before subtraction");
         var repeated=OriginalPhysicalScores.OrdinaryCharacter(input with { ActionPenaltyCounter=1 });
         Check(repeated.RepetitionPenalty==12 && repeated.HitScore==61 && repeated.PenetrationScore==93,
             "Context counter penalty affects hit builder but not penetration builder");
-        var equal=input with { Attacker=target,Target=target,LoadCategory=0 };
+        var equal=input with { Attacker=target,Target=target,FatigueCategory=0 };
         var near=OriginalPhysicalScores.OrdinaryCharacter(equal with { Attacker=target with { Intelligence=71 } });
         var negative=OriginalPhysicalScores.OrdinaryCharacter(equal with { Attacker=target with { Intelligence=70 } });
         Check(near.AttributeContribution==0 && negative.AttributeContribution==-1,"Negative attribute difference truncates toward zero rather than floor");
@@ -35,7 +35,7 @@ static class PhysicalScoreChecks
         Reject(()=>OriginalPhysicalScores.OrdinaryCharacter(input with { Attacker=actor with { Speed=126 } }),"Player attributes require resolved cap");
         Reject(()=>OriginalPhysicalScores.OrdinaryCharacter(input with { Target=target with { Intelligence=256 } }),"Target attributes cannot exceed native byte");
         Reject(()=>OriginalPhysicalScores.OrdinaryCharacter(input with { AccuracyAdjustment=128 }),"Effect adjustment preserves signed byte domain");
-        Reject(()=>OriginalPhysicalScores.OrdinaryCharacter(input with { LoadCategory=5 }),"Unknown load category rejected");
+        Reject(()=>OriginalPhysicalScores.OrdinaryCharacter(input with { FatigueCategory=5 }),"Unknown fatigue category rejected");
         Reject(()=>OriginalPhysicalScores.OrdinaryCharacter(input with { HandToHit=int.MaxValue }),"Score overflow rejected without machine wrapping");
         Reject(()=>OriginalPhysicalScores.OrdinaryCharacter(input with { Mode=(OriginalAttackMode)99 }),"Unknown attack mode rejected in builder");
         foreach(var row in new[]{(75,50),(76,49),(91,42),(156,23),(259,0),(260,0)})

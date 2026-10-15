@@ -3,8 +3,8 @@ namespace NeoWizardry.Core.Rules;
 public sealed record PhysicalCombatAttributes(int Intelligence,int Dexterity,int Speed,int Senses);
 public sealed record OrdinaryPhysicalScoreInput(int BaseAttackRating,int HandToHit,int HandPenetration,
     int AccuracyAdjustment,int PenetrationAdjustment,PhysicalCombatAttributes Attacker,PhysicalCombatAttributes Target,
-    OriginalAttackMode Mode,int Defense,int ArmorDefense,int LoadCategory=0,bool ModernWeapon=false,int ActionPenaltyCounter=0);
-public sealed record PhysicalScoreBreakdown(int AttributeContribution,int HitLoadPenalty,int PenetrationLoadPenalty,
+    OriginalAttackMode Mode,int Defense,int ArmorDefense,int FatigueCategory=0,bool ModernWeapon=false,int ActionPenaltyCounter=0);
+public sealed record PhysicalScoreBreakdown(int AttributeContribution,int HitFatiguePenalty,int PenetrationFatiguePenalty,
     int RepetitionPenalty,int UntargetedHitScore,int HitScore,int PenetrationScore);
 
 // Character-side builders in ordinary context: no special +10 flags, post-target condition adjustment or final context scaling.
@@ -15,22 +15,22 @@ public static class OriginalPhysicalScores
     {
         ArgumentNullException.ThrowIfNull(input);
         ValidateAttributes(input.Attacker,125);ValidateAttributes(input.Target,255);
-        if(input.LoadCategory is <0 or >4)throw new ArgumentOutOfRangeException(nameof(input));
+        if(input.FatigueCategory is <0 or >4)throw new ArgumentOutOfRangeException(nameof(input));
         foreach(int value in new[]{input.AccuracyAdjustment,input.PenetrationAdjustment})
             if(value is <-128 or >127)throw new ArgumentOutOfRangeException(nameof(input));
         var mode=OriginalCombatRules.ModeModifiers(input.Mode);
-        int load=new[]{0,5,10,20,40}[input.LoadCategory];
-        int hitLoad=input.ModernWeapon?load/2:load;
-        int penLoad=input.ModernWeapon?0:load;
+        int fatigue=OriginalFatigueRules.ScorePenalty(input.FatigueCategory);
+        int hitFatigue=input.ModernWeapon?fatigue/2:fatigue;
+        int penFatigue=input.ModernWeapon?0:fatigue;
         int repetition=RepetitionPenalty(input.Attacker.Speed,input.BaseAttackRating,input.ActionPenaltyCounter);
         int attributes=(Sum(input.Attacker)-Sum(input.Target))/10;
         checked
         {
             int common=input.BaseAttackRating+5*input.HandToHit+5*input.AccuracyAdjustment;
-            int untargeted=common+mode.Hit-hitLoad-repetition;
+            int untargeted=common+mode.Hit-hitFatigue-repetition;
             int hit=untargeted-5*input.Defense+attributes;
-            int penetration=common+5*input.HandPenetration+5*input.PenetrationAdjustment+mode.Penetration-penLoad-5*input.ArmorDefense+attributes;
-            return new(attributes,hitLoad,penLoad,repetition,untargeted,hit,penetration);
+            int penetration=common+5*input.HandPenetration+5*input.PenetrationAdjustment+mode.Penetration-penFatigue-5*input.ArmorDefense+attributes;
+            return new(attributes,hitFatigue,penFatigue,repetition,untargeted,hit,penetration);
         }
     }
 

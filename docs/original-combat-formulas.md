@@ -92,7 +92,7 @@ The semantic enum uses ordinals, not database flags. Selection from an item's su
 
 ## Ordinary character score builders (iteration 019)
 
-`OriginalPhysicalScores.OrdinaryCharacter` takes explicit effective attributes, resolved hand bonuses, attack mode, load category and resolved defenses. It covers the ordinary arithmetic of `0x541C00` and `0x541EC0` with the two special +10 hit flags inactive, no post-target condition modification and neutral final context scaling. It returns **raw scores**, not final probabilities. It neither chooses equipment/targets/hit locations nor spends RNG/resources. The `PhysicalCombatAttributes` value is a calculation input, not a completed character/progression model.
+`OriginalPhysicalScores.OrdinaryCharacter` takes explicit effective attributes, resolved hand bonuses, attack mode, fatigue category and resolved defenses. It covers the ordinary arithmetic of `0x541C00` and `0x541EC0` with the two special +10 hit flags inactive, no post-target condition modification and neutral final context scaling. It returns **raw scores**, not final probabilities. It neither chooses equipment/targets/hit locations nor spends RNG/resources. The `PhysicalCombatAttributes` value is a calculation input, not a completed character/progression model.
 
 ### Base attack rating
 
@@ -111,18 +111,18 @@ Let `T` be the resolved hand ToHit term, `P` the additional resolved hand penetr
 ```
 attributeTerm = trunc(((INT+DEX+SPD+SEN)attacker - (INT+DEX+SPD+SEN)target)/10)
 common = BAR + 5*T + 5*Q
-hitBeforeTarget = common + modeHit - hitLoadPenalty - repetitionPenalty
+hitBeforeTarget = common + modeHit - hitFatiguePenalty - repetitionPenalty
 hitScore = hitBeforeTarget - 5*D + attributeTerm
-penetrationScore = common + 5*P + 5*U + modePenetration - penetrationLoadPenalty - 5*B + attributeTerm
+penetrationScore = common + 5*P + 5*U + modePenetration - penetrationFatiguePenalty - 5*B + attributeTerm
 ```
 
-Hit hand/accuracy/mode arithmetic: `0x541C47`–`0x541C82`. Penetration hand terms (+0x21/+0x25), adjustments and mode: `0x541EFA`–`0x541F46`. The two target-defense helpers are `0x542EE0` and `0x542FC0`. Their outputs are multiplied by -5 at `0x541D45`–`0x541D54` and `0x541F87`–`0x541F96`. They include conditional and location/mode calculations not reconstructed by this API; the caller must supply their resolved results rather than inventing an armor lookup.
+Hit hand/accuracy/mode arithmetic: `0x541C47`–`0x541C82`. Penetration hand terms (+0x21/+0x25), adjustments and mode: `0x541EFA`–`0x541F46`. The two target-defense helpers are `0x542EE0` and `0x542FC0`. Their outputs are multiplied by -5 at `0x541D45`–`0x541D54` and `0x541F87`–`0x541F96`. Iteration 025 reconstructs the character base/location producer and resolved-context thresholds in [character defense](original-character-defense.md), including twice-applied penetration context. The score API still takes their explicit outputs; monster-side defense and state/action producers remain separate.
 
 Attribute sums and truncation: hit `0x541D58`–`0x541E46`; penetration `0x541F9A`–`0x542092`. Character attributes come from effective fields; monster target attributes are unsigned bytes at runtime +0x248..+0x24B. Input validation distinguishes the player effective cap 125 from monster byte range 255. A difference of -9 contributes 0, not -1; -10 contributes -1. Neither raw score is clamped to [0,100].
 
-### Different load penalties
+### Fatigue penalties (identification corrected in 025)
 
-Helper `0x52A7D0`, table `0x52A800`, returns `0,5,10,20,40` for known categories 0–4. Hit calls it at `0x541CAB`–`0x541CC4`; Modern Weapon (skill 7) halves the penalty before subtraction, e.g. category 1 gives 2. Penetration at `0x541F4A`–`0x541F6D` **skips** this penalty for skill 7. This is a second load effect, distinct from the load contribution included in the attack/swing budgets; BAR itself has no load term.
+Helper `0x52A7D0`, table `0x52A800`, returns `0,5,10,20,40` for fatigue categories 0–4. Hit calls it at `0x541CAB`–`0x541CC4`; Modern Weapon (skill 7) halves the penalty before subtraction, e.g. category 1 gives 2. Penetration at `0x541F4A`–`0x541F6D` skips this penalty for skill 7. Both read character +0x169E, the stamina-derived fatigue category. Earlier documentation/API incorrectly called this LoadCategory. Equipment encumbrance is +0xBC9 and separately affects attack/swing budgets and primary-hand bonuses. The score arithmetic is unchanged; the input is now FatigueCategory. See [fatigue and defense evidence](original-character-defense.md).
 
 ### Nonlinear context-counter penalty
 
