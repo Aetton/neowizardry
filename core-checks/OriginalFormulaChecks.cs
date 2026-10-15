@@ -29,6 +29,36 @@ static class OriginalFormulaChecks
         Reject(()=>OriginalCombatRules.CombatExperience([new(OriginalProfession.Fighter,1),new(OriginalProfession.Fighter,2)]),"Repeated class entries rejected");
         Reject(()=>OriginalCombatRules.CombatExperience([new(OriginalProfession.Mage,0)]),"Empty class level entry rejected");
 
+        for(int max=1;max<=3;max++)
+        {
+            var allocated=Enumerable.Range(0,max).Select(draw=>OriginalCombatRules.AllocateSwings(max,0,draw)).ToArray();
+            Check(allocated.Select(a=>a.AllocatedSwings).SequenceEqual(Enumerable.Range(1,max)),"Every exclusive draw yields one through maximum base swings");
+            Check(allocated.Sum(a=>a.AllocatedSwings)==max*(max+1)/2,"Base swing expectation is (maximum+1)/2");
+        }
+        Check(OriginalCombatRules.AllocateSwings(3,2,0)==new PhysicalSwingAllocation(1,2,3) &&
+            OriginalCombatRules.AllocateSwings(3,2,2)==new PhysicalSwingAllocation(3,2,5),"Weapon bonus is added after random base and can exceed three swings");
+        var rangedBudget=Budget(19,OriginalProfession.Fighter,100,100,125,125,10);
+        Check(rangedBudget.Attacks==3 && rangedBudget.MaximumSwings==3 &&
+            Enumerable.Range(0,rangedBudget.Attacks).Sum(_=>OriginalCombatRules.AllocateSwings(rangedBudget.MaximumSwings,2,2).AllocatedSwings)==15,
+            "Three attacks can allocate fifteen projectiles with plus-two weapon; not fifteen guaranteed hits");
+        Check(Budget(19,OriginalProfession.Fighter,100,100,0,125,10).Attacks==2 && rangedBudget.Attacks==3,
+            "Dexterity can cross attack threshold without changing speed or skills");
+        Check(OriginalCombatRules.AllocateSwings(3,-1,2).AllocatedSwings==2,"Signed adjustment is preserved when allocation remains executable");
+        Reject(()=>OriginalCombatRules.AllocateSwings(1,-2,0),"Invalid nonpositive allocation rejected rather than wrapped to unsigned count");
+        Reject(()=>OriginalCombatRules.AllocateSwings(0,0,0),"Missing hand budget rejected");
+        Reject(()=>OriginalCombatRules.AllocateSwings(4,0,0),"Special bonus must not be folded into base random bound");
+        Reject(()=>OriginalCombatRules.AllocateSwings(3,0,-1),"Negative swing draw rejected");
+        Reject(()=>OriginalCombatRules.AllocateSwings(3,0,3),"Exclusive swing draw boundary enforced");
+        Reject(()=>OriginalCombatRules.AllocateSwings(1,0,1),"One-swing attack still requires zero-based draw");
+        Reject(()=>OriginalCombatRules.AllocateSwings(3,int.MaxValue,2),"Allocation overflow rejected rather than wrapped");
+        var modeRows=new[]{(OriginalAttackMode.Swing,0,0),(OriginalAttackMode.Thrust,-10,10),(OriginalAttackMode.Bash,0,-5),
+            (OriginalAttackMode.Berserk,-30,-30),(OriginalAttackMode.Throw,-5,5),(OriginalAttackMode.Punch,5,-5),
+            (OriginalAttackMode.Kick,-10,0),(OriginalAttackMode.Lash,10,-10),(OriginalAttackMode.Shoot,0,10)};
+        foreach(var (mode,hit,penetration) in modeRows)
+            Check(OriginalCombatRules.ModeModifiers(mode)==new PhysicalModeModifiers(hit,penetration),"Native attack-mode hit and penetration table");
+        Reject(()=>OriginalCombatRules.ModeModifiers((OriginalAttackMode)9),"Unknown mode rejected");
+        Reject(()=>OriginalCombatRules.ModeModifiers((OriginalAttackMode)256),"Database shoot bitmask cannot be passed as ordinal mode");
+
         var safe=new CastingRiskInput(100,100,1,2,1,20);
         var risk=OriginalMagicRules.OrdinaryCastingRisk(safe);
         Check(risk.EffectiveSkill==100 && risk.RequiredSkill==7 && risk.FailureThreshold==0,"Casting skill and threshold use original integer weights");

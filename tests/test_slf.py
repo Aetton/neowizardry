@@ -102,6 +102,14 @@ class SlfTest(unittest.TestCase):
         self.assertEqual(bytes.fromhex(fields['raw_record_hex']),data[4:])
         self.assertEqual(item['record_sha256'],hashlib.sha256(data[4:]).hexdigest())
 
+    def test_bonus_swings_preserves_full_signed_dword(self):
+        for amount in (0, 1, 2, 256, -257, 2147483647, -2147483648):
+            data = bytearray(4+269)
+            struct.pack_into('<I', data, 0, 1)
+            struct.pack_into('<i', data, 4+0xAD, amount)
+            fixture(self.file, [("DATABASES/ITEMS.DBS", data, 0)])
+            self.assertEqual(item_catalog(Archive(self.file))["items"][0]["bonus_swings"], amount)
+
     def test_audit_reports_failures(self):
         fixture(self.file, [("one", b"x", 0)])
         (self.root/"broken.slf").write_bytes(b"bad")

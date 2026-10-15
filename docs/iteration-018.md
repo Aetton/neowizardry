@@ -1,0 +1,13 @@
+# Iteration 018 — repeated melee, ranged and thrown attacks
+
+Recovered the common per-attack swing allocation before melee/projectile dispatch: one exclusive draw bounded by the base maximum, then +1, then the weapon adjustment. Attack and swing counters are separate; continuation can launch another projectile. High Dexterity affects the attack-budget calculation for this shared path; it is not implemented as an invented percentage proc. Three attacks with maximum base swings 3 and a +2 weapon can allocate 9–15 attempts, before equipment/resource/target interruptions or hit resolution.
+
+Added pure `AllocateSwings` with caller-owned random draws and typed result, plus all nine native attack-mode hit/penetration modifier pairs. Special flagged extra swings remain excluded until eligibility is traced. No original global state, engine pointers or storage layout enter these rules. Evidence, exact executable hash, addresses, table mappings and scope are in [physical formula evidence](original-combat-formulas.md).
+
+Corrected `bonus_swings` import from signed byte to full signed little-endian DWORD at item record +0xAD, matching the original instruction operand. Catalog schemas 2/3 retain their integer JSON field; no artificial byte-range validation remains. Import preserves unusual signed values; executable allocation rejects nonpositive totals and overflow rather than emulating unsigned wraparound. Synthetic tests exercise upper bytes and integer limits. All 819 supplied records retain identical decoded bonuses; 13 have nonzero bonuses (+1/+2). Proprietary rows and disassembly remain private.
+
+Validation: 544 portable C# checks including gestures; 545 with private spell metadata scenarios (826 combinations of positive-level metadata and powers, not eligibility tests). 26 Python tests pass. Client build has zero warnings/errors. Real-data Godot gameplay smoke and synthetic mobile smoke both pass. The fixture and spell-metadata CLI checks run separately because they are distinct modes.
+
+The live training battle remains the documented fixture. Full actor statistics, hand selection, hit/penetration builders, damage, ammo/throw depletion, interruptions and special-class procs must be reconstructed before connecting these original formulas to playable combat. Deferred crafting-menu, passive spell-attribute and Gadgeteer/Omnigun balance work stays separate from the original baseline.
+
+Tracking: iteration 017 was restored as TOC-28. Automatic approval review rejected creating this iteration's Linear issue, stating that the available authorization did not explicitly name Linear. This report preserves the work without retrying the blocked publication.

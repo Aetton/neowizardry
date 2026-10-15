@@ -107,7 +107,7 @@ Search by result or ingredient name; flagged entries are hidden by default. Publ
 5. Replace the temporary gold frame with the planned Wizardry visual identity and Grimrock-inspired materials/lighting.
 
 See [format report](docs/formats.md), [architecture](docs/architecture.md) and [iteration report](docs/iteration-001.md).
-Latest progress: [iteration 014](docs/iteration-014.md). Native item data: [slot layout, quantities and charges](docs/item-instance-format.md). Desktop HUD: [original-layout interface](docs/interface.md).
+Latest progress: [iteration 018](docs/iteration-018.md). Native item data: [slot layout, quantities and charges](docs/item-instance-format.md). Desktop HUD: [original-layout interface](docs/interface.md).
 Mobile prototype: [touch controls, Android build and device checklist](docs/mobile.md). Preview on desktop with `godot --path client -- --touch`.
 
-The [formula research module](docs/formula-sources.md) contains a first source-backed candidate calculation; it remains separate from the experimental combat rules.
+Original [physical](docs/original-combat-formulas.md) and [magic](docs/original-magic-formulas.md) formula subsets are implemented independently of the experimental battle. Physical coverage includes attack budgets, per-attack swing allocation for the common melee/projectile path, weapon adjustments and attack-mode hit/penetration modifiers. Full canonical combat is still in reconstruction. The older [guide model](docs/formula-sources.md) remains a source comparison.

@@ -96,6 +96,13 @@ Throws(() => LegacyResearch.SingleClassAttackScore(0,0,0,0,1,5), "Reject unknown
 var restricted = new ItemDefinition(77,"Restricted test staff",0,0,32,32,3,new string('a',64),5,0,2,1,1,2,4,7,50,false,0);
 var catalog = new ItemCatalog(2,"DATABASES/ITEMS.DBS",new Provenance("archive","PATCH.001",new string('b',64)),269,1,[restricted]);
 catalog.Validate();
+foreach(int bonus in new[]{256,-257,int.MaxValue,int.MinValue})
+{
+    var wideBonus=catalog with { Items=[restricted with { BonusSwings=bonus }] };
+    Check(ItemCatalog.Parse(System.Text.Json.JsonSerializer.Serialize(wideBonus,
+        new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower })).Items[0].BonusSwings==bonus,
+        "Item catalogs retain signed dword bonus independently of executable allocation validation");
+}
 var ownedSolo=Inventory.Add(solo,77,1,catalog);
 var equipped = Equipment.Equip(ownedSolo,solo.Party[0].Id,77,catalog);
 Check(Inventory.Count(equipped,77)==0 && Inventory.Count(ownedSolo,77)==1,"Equip moves one copy out of bag without mutation");

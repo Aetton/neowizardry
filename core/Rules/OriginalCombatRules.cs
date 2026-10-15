@@ -1,5 +1,10 @@
 namespace NeoWizardry.Core.Rules;
 
+// Ordinal attack-mode index, not the item database bitmask.
+public enum OriginalAttackMode { Swing,Thrust,Bash,Berserk,Throw,Punch,Kick,Lash,Shoot }
+public sealed record PhysicalModeModifiers(int Hit,int Penetration);
+public sealed record PhysicalSwingAllocation(int BaseSwings,int WeaponBonus,int AllocatedSwings);
+
 public enum OriginalProfession { Fighter,Lord,Valkyrie,Ranger,Samurai,Ninja,Monk,Rogue,Gadgeteer,Bard,Priest,Alchemist,Bishop,Psionic,Mage }
 public sealed record ProfessionLevels(OriginalProfession Profession,int Levels);
 public sealed record SingleWeaponInput(int Dexterity,int Speed,int CombatSkill,int WeaponSkill,
@@ -11,6 +16,34 @@ public sealed record PhysicalAttackBudget(int CombatExperience,int SkillContribu
 // Inputs are effective values. No hand selection, conditions, RNG or world state here.
 public static class OriginalCombatRules
 {
+    // Common allocation precedes melee/projectile dispatch in the original path.
+    // One exclusive draw per attack, including maximumSwings=1. The caller owns RNG.
+    // Allocation does not guarantee execution: equipment, target and resources can interrupt it.
+    public static PhysicalSwingAllocation AllocateSwings(int maximumSwings,int weaponBonus,int draw)
+    {
+        if(maximumSwings is <1 or >3)throw new ArgumentOutOfRangeException(nameof(maximumSwings));
+        if(draw<0 || draw>=maximumSwings)throw new ArgumentOutOfRangeException(nameof(draw));
+        int baseSwings=draw+1;
+        int allocated=checked(baseSwings+weaponBonus);
+        if(allocated<1)throw new ArgumentOutOfRangeException(nameof(weaponBonus),"Adjustment leaves no executable swings");
+        return new(baseSwings,weaponBonus,allocated);
+    }
+
+    // These are additive score modifiers, not final percentages or damage multipliers.
+    public static PhysicalModeModifiers ModeModifiers(OriginalAttackMode mode)=>mode switch
+    {
+        OriginalAttackMode.Swing=>new(0,0),
+        OriginalAttackMode.Thrust=>new(-10,10),
+        OriginalAttackMode.Bash=>new(0,-5),
+        OriginalAttackMode.Berserk=>new(-30,-30),
+        OriginalAttackMode.Throw=>new(-5,5),
+        OriginalAttackMode.Punch=>new(5,-5),
+        OriginalAttackMode.Kick=>new(-10,0),
+        OriginalAttackMode.Lash=>new(10,-10),
+        OriginalAttackMode.Shoot=>new(0,10),
+        _=>throw new ArgumentOutOfRangeException(nameof(mode))
+    };
+
     public static int CombatExperience(IReadOnlyList<ProfessionLevels> history)
     {
         ArgumentNullException.ThrowIfNull(history);
