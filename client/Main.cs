@@ -46,6 +46,11 @@ public partial class Main : Node3D
 
     public override void _Ready()
     {
+        try { Initialize(); }
+        catch(Exception e) { GD.PushError(e.ToString());GetTree().Quit(1); }
+    }
+    private void Initialize()
+    {
         _touchMode=OS.HasFeature("mobile") || OS.GetCmdlineUserArgs().Contains("--touch");
         BuildRoom();
         BuildUi();
@@ -82,6 +87,10 @@ public partial class Main : Node3D
         return state;
     }
 
+    private static string ExternalCatalogRoot() => OS.HasFeature("editor")
+        ? Directory.GetParent(ProjectSettings.GlobalizePath("res://").TrimEnd('/','\\'))!.FullName
+        : Path.GetDirectoryName(OS.GetExecutablePath())!;
+
     private void LoadCatalog()
     {
         var args = OS.GetCmdlineUserArgs();
@@ -96,8 +105,7 @@ public partial class Main : Node3D
             else if(OS.HasFeature("mobile")) { Say("No original item catalog loaded.");return; }
             else
             {
-                string project=ProjectSettings.GlobalizePath("res://").TrimEnd('/', '\\');
-                path=Path.Combine(Directory.GetParent(project)!.FullName,"local","items.json");
+                path=Path.Combine(ExternalCatalogRoot(),"local","items.json");
             }
         }
         if(path.StartsWith("user://") || path.StartsWith("res://"))
@@ -106,8 +114,7 @@ public partial class Main : Node3D
         }
         if(!Path.IsPathRooted(path))
         {
-            string project=ProjectSettings.GlobalizePath("res://").TrimEnd('/', '\\');
-            path=Path.GetFullPath(path,Directory.GetParent(project)!.FullName);
+            path=Path.GetFullPath(path,ExternalCatalogRoot());
         }
         if(!System.IO.File.Exists(path)) { Say("No original item catalog loaded. The scene still works with test rules.");return; }
         Try(()=>{_catalog=ItemCatalog.Parse(System.IO.File.ReadAllText(path));Say($"Loaded {_catalog.Count} items from {_catalog.Provenance.File}.");});
@@ -117,7 +124,7 @@ public partial class Main : Node3D
     {
         var args=OS.GetCmdlineUserArgs();int index=Array.IndexOf(args,"--spells");_spellsRequested=index>=0;
         if(_spellsRequested && index+1>=args.Length) { Say("No spell catalog path selected.");return; }
-        string root=Directory.GetParent(ProjectSettings.GlobalizePath("res://").TrimEnd('/','\\'))!.FullName;
+        string root=ExternalCatalogRoot();
         string local=Path.Combine(root,"local","spells.json");
         string? path=_spellsRequested?args[index+1]:Godot.FileAccess.FileExists("user://spells.json")?"user://spells.json":System.IO.File.Exists(local)?local:Godot.FileAccess.FileExists("res://demo-items.spells.json")?"res://demo-items.spells.json":null;
         if(path is null)return;
@@ -628,7 +635,7 @@ public partial class Main : Node3D
     {
         try
         {
-            if(_spellsRequested && _spellCatalog is null)throw new Exception("Requested spell reference was not loaded");
+            if((_spellsRequested || Godot.FileAccess.FileExists("res://demo-items.spells.json")) && _spellCatalog is null)throw new Exception("Requested spell reference was not loaded");
             if(_spellCatalog is not null) { _spellCatalog.Validate();GD.Print($"PASS: spell reference {_spellCatalog.Count} records with raw record hashes"); }
             if(_catalogRequested && _catalog is null) throw new Exception("Requested smoke catalog was not loaded");
             _player.Position=new(0,0.9f,-4);

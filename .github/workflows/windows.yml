@@ -97,9 +97,15 @@ jobs:
         run: |
           foreach ($mode in @('--smoke', '--mobile-smoke')) {
             $process = Start-Process -FilePath "$PWD/build/windows/NeoWizardry.exe" -ArgumentList "--headless -- --touch $mode" -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP/$mode.log" -RedirectStandardError "$env:RUNNER_TEMP/$mode-error.log"
-            if (!$process.WaitForExit(60000)) { $process.Kill(); throw "Windows $mode timed out" }
-            Get-Content "$env:RUNNER_TEMP/$mode.log"
-            Get-Content "$env:RUNNER_TEMP/$mode-error.log"
+            $completed = $false
+            try {
+              $completed = $process.WaitForExit(60000)
+              if (!$completed) { $process.Kill($true); $process.WaitForExit(5000) | Out-Null }
+            } finally {
+              Get-Content "$env:RUNNER_TEMP/$mode.log" -ErrorAction SilentlyContinue
+              Get-Content "$env:RUNNER_TEMP/$mode-error.log" -ErrorAction SilentlyContinue
+            }
+            if (!$completed) { throw "Windows $mode timed out" }
             if ($process.ExitCode -ne 0) { throw "Windows $mode failed ($($process.ExitCode))" }
             if (!(Select-String -Path "$env:RUNNER_TEMP/$mode.log" -Pattern 'PASS:')) { throw "Missing $mode success marker" }
           }
