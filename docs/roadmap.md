@@ -1,7 +1,7 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Iterations 001–009 delivered the SLF reader, ordinary patch/loose-file overlay, a local catalog of 819 items, a Godot client, independent C# core, variable parties, experimental combat and saves. Android launch was confirmed by the user. Assigned melee weapons use imported base damage dice and initiative with saved deterministic rolls. Windows launch was also confirmed by the user; preview builds update through the portable launcher. Shared item quantities, equip/unequip/transfer and one-time prototype loot now work; five synthetic spells demonstrate realm mana, power, multi-caster plans and saved duration effects. Two atomic synthetic crafting recipes demonstrate skill/knowledge gates and ingredient ownership. Windows previews now run on the persistent self-hosted Windows service. Canonical combat, original magic, crafting recipes and level geometry are not implemented.
+Iterations 001–011 delivered the SLF reader, ordinary patch/loose-file overlay, a local catalog of 819 items, a Godot client, independent C# core, variable parties, experimental combat and saves. Android launch was confirmed by the user. Assigned melee weapons use imported base damage dice and initiative with saved deterministic rolls. Windows launch was also confirmed by the user; preview builds update through the portable launcher. Shared item quantities, equip/unequip/transfer and one-time prototype loot now work; five synthetic spells demonstrate realm mana, power, multi-caster plans and saved duration effects. Two atomic synthetic crafting recipes demonstrate skill/knowledge gates and ingredient ownership. Windows previews now run on the persistent self-hosted Windows service. Canonical combat, original magic, crafting recipes and level geometry are not implemented.
 
 ## Stages
 1. **Combat:** recover and verify initiative, hit/penetration, weapon damage, attack/swing counts, range and formation. Integrate imported weapons.
@@ -42,3 +42,6 @@ Visual development starts with real-world import: Wizardry identity/frame, Grimr
 
 ## Current blocker
 LEVELS.SLF is 497064244 bytes and exceeds the Drive connector's 268435456-byte limit. A local archive inventory is still needed. This does not block accessible rules, magic, inventory or crafting research.
+
+## Original-data research progress
+Iteration 011 decodes 150 native spell metadata records and 160 indexed description entries, preserving provenance and unknown raw bytes. A separate read-only reference is available in the client. This does not establish original effect execution, learning, success/resistance, timing or recipe rules; see [spell format evidence](spell-format.md).
