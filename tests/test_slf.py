@@ -90,6 +90,18 @@ class SlfTest(unittest.TestCase):
         fixture(self.file, [("DATABASES/ITEMS.DBS", data[:-1], 0)])
         with self.assertRaises(FormatError): item_catalog(Archive(self.file))
 
+    def test_native_instance_fields_keep_signed_base_and_unknown_mode(self):
+        import hashlib
+        data=bytearray(4+269);struct.pack_into('<I',data,0,1)
+        data[4+0x41]=0x81;data[4+0x66]=254
+        struct.pack_into('<hBBB',data,4+0x67,-2,3,6,25)
+        fixture(self.file,[("DATABASES/ITEMS.DBS",data,0)])
+        catalog=item_catalog(Archive(self.file));item=catalog['items'][0];fields=item['instance']
+        self.assertEqual(catalog['schema'],3)
+        self.assertEqual((fields['mode'],fields['amount_constant'],fields['amount_dice'],fields['amount_sides'],fields['max_stack'],fields['flags_41']),(254,-2,3,6,25,0x81))
+        self.assertEqual(bytes.fromhex(fields['raw_record_hex']),data[4:])
+        self.assertEqual(item['record_sha256'],hashlib.sha256(data[4:]).hexdigest())
+
     def test_audit_reports_failures(self):
         fixture(self.file, [("one", b"x", 0)])
         (self.root/"broken.slf").write_bytes(b"bad")

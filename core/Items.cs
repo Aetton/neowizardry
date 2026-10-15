@@ -7,7 +7,7 @@ public sealed record ItemDefinition(int Id, string Name, int TypeCode, int IconI
     int ProfessionMask, int RaceMask, int GenderMask, string RecordSha256,
     int UsageSkill, int RangeCode, int Initiative, int ToHit, int DamageConstant,
     int DamageDice, int DamageSides, int AttackModes, int WeightTenthsLb,
-    bool Cursed, int BonusSwings)
+    bool Cursed, int BonusSwings, NativeItemFields? Instance = null)
 {
     // A zero-dice record stores a percentage bonus (e.g. a bow), not flat damage.
     public string DamageDescription => DamageDice == 0 && DamageSides == 0
@@ -29,7 +29,7 @@ public sealed record ItemCatalog(int Schema, string Source, Provenance Provenanc
 
     public void Validate()
     {
-        if (Schema != 2 || RecordSize != 269 || Count <= 0 || Items is null || Count != Items.Length ||
+        if (Schema is not (2 or 3) || RecordSize != 269 || Count <= 0 || Items is null || Count != Items.Length ||
             Source != "DATABASES/ITEMS.DBS" || Provenance is null || !Hash(Provenance.Sha256) ||
             Provenance.Kind is not ("archive" or "loose") || string.IsNullOrWhiteSpace(Provenance.File))
             throw new InvalidDataException("Unsupported or invalid item catalog");
@@ -44,6 +44,8 @@ public sealed record ItemCatalog(int Schema, string Source, Provenance Provenanc
                 item.WeightTenthsLb is < 0 or > 65535 || item.Initiative is < -128 or > 127 || item.ToHit is < -128 or > 127 ||
                 item.BonusSwings is < -128 or > 127)
                 throw new InvalidDataException("Invalid item record");
+            if(Schema==3 && item.Instance is null)throw new InvalidDataException("Missing native instance fields");
+            item.Instance?.Validate(item.RecordSha256);
         }
     }
 

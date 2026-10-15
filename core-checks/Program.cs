@@ -317,6 +317,7 @@ Throws(()=> (recipeReferenceCatalog with {Recipes=[recipeReference with {SkillTh
 Throws(()=> (recipeReferenceCatalog with {Recipes=[recipeReference with {RawRecordHex=new string('f',538)}]}).Validate(),"Combination raw record hash checked");
 Throws(()=> (recipeReferenceCatalog with {Recipes=[recipeReference with {Issues=["unnamed_output"]}]}).Validate(),"Combination anomaly flags cannot hide or invent invalid rows");
 Throws(()=> (recipeReferenceCatalog with {ItemCount=4}).Validate(),"Combination counts include inactive pairs");
+checks+=NativeItemChecks.Run(restricted);
 if(args.Length==2 && args[0]=="--fixture")
 {
     File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with { Count=5, Items=[restricted, restricted with { Id=78,Name="Test herb",TypeCode=19 }, restricted with { Id=79,Name="Test vial",TypeCode=19 }, restricted with { Id=80,Name="Test tonic",TypeCode=15 }, restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }], Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256) },new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
@@ -332,6 +333,13 @@ else if(args.Length==2 && args[0]=="--recipes")
 else if(args.Length>0)
 {
     var real=ItemCatalog.Parse(File.ReadAllText(args[0]));
+    if(real.Schema==3)
+    {
+        Check(real.Items.All(i=>i.Instance is not null),"Real item records include native instance fields");
+        var generated=real.Items.Select(i=>NativeItemFactory.Create(i,[],useMaximum:true)).ToArray();
+        Check(generated.All(i=>NativeItemInstance.Decode(i.Encode())==i),"All imported native creation maxima roundtrip through 12-byte slots");
+        Console.WriteLine($"PASS: native fields and local maximum creation for {generated.Length} original definitions");
+    }
     var cane=real.Items.Single(i=>i.Name=="Cane of Corpus");
     Check(Equipment.Denial(solo.Party[0],cane) is null,"Real faerie ninja weapon allowed");
     Check(Equipment.Denial(Game.Create(2).Party[1],cane)=="Race restriction.","Real human denied exclusive weapon");

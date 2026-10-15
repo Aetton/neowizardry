@@ -213,7 +213,10 @@ def item_catalog(archive: Archive | Resources) -> dict:
                           "weight_tenths_lb": struct.unpack_from("<H", r, 0x8A)[0],
                           "cursed": r[0x8C] == 1,
                           "bonus_swings": struct.unpack_from("<b", r, 0xAD)[0]})
-    return {"schema": 2, "source": "DATABASES/ITEMS.DBS", "provenance": provenance, "record_size": stride,
+        items[-1]["instance"] = {"mode": r[0x66], "amount_constant": struct.unpack_from("<h", r, 0x67)[0],
+                                 "amount_dice": r[0x69], "amount_sides": r[0x6A], "max_stack": r[0x6B],
+                                 "flags_41": r[0x41], "raw_record_hex": r.hex()}
+    return {"schema": 3, "source": "DATABASES/ITEMS.DBS", "provenance": provenance, "record_size": stride,
             "count": count, "items": items}
 
 

@@ -67,7 +67,7 @@ Layout cross-checked with [dbHelper.cpp](https://github.com/anonidiot/Wizardry8E
 | 0x78 | 16-bit race mask |
 | 0x7c | Gender mask byte |
 
-Masks are exported as raw values. Enum interpretation, damage, spells, localization and special-case item mechanics are not invented. Unsupported fixed-record lengths fail explicitly.
+Masks are exported as raw values. Subsequent iterations add selected weapon statistics, spell metadata and combination references without inventing unresolved mechanics. Iteration 014 adds item creation/slot fields in schema 3, retaining schema-2 reader compatibility; see [native instance evidence](item-instance-format.md). Localization and special-case mechanics remain separate. Unsupported fixed-record lengths fail explicitly.
 
 ## Levels
 
