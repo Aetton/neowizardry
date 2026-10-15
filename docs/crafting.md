@@ -16,3 +16,7 @@ Skills and learned recipe IDs are saved explicitly. Old saves do not receive the
 ## Evidence gate for original crafting
 
 Do not turn these recipes or gates into Wizardry 8 rules. Establish separately which original operations use ordinary combinations, Alchemy, Engineering/gadgets, NPC crafting and quest scripting. For each representative recipe record source provenance, ingredient/result IDs and counts, actor/skill/class requirements, learning/discovery, failure behavior, charges/item-instance handling and whether time advances. Some requirements may live in executable logic or scripts rather than a single database. Compare observed original-game results before calling a rule canonical.
+
+## Planned soft rework
+
+The user explicitly requested a soft crafting rework with a proper menu on 2026-10-15. Tracked as [TOC-22](https://linear.app/tochka/issue/TOC-22/ficha-myagkij-revork-krafta-i-polnocennoe-menyu); scope is in the [roadmap](roadmap.md#planned-feature-soft-crafting-rework). Test crafting and Combination reference are temporary tools. The eventual flow should make crafter/recipe/ingredient selection, batch size, requirements and consumption/results clear. Original-rule research is a baseline for deliberate changes, not a requirement to preserve inconvenient UX. This feature is deferred; no gameplay or UI implementation changes accompany this decision.
