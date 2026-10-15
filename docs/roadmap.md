@@ -1,7 +1,7 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Status checked against code and iteration reports through **032**, with an archive/code audit on 2026-10-15. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+Status checked against code and iteration reports through **033**, with an archive/code audit on 2026-10-15. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
 | Workstream | Recovered / implemented | Still required for original gameplay |
 |---|---|---|
@@ -12,7 +12,7 @@ Status checked against code and iteration reports through **032**, with an archi
 | Crafting | 36-record original recipe reference, recovered native combination arithmetic and clean transaction simulation | Actor skill/time/progression policy, original combinations in gameplay and result previews; proper crafting menu remains a separate rework |
 | World | SLF reader and ordinary patch/loose overlay; accessible data imported privately | Local LEVELS.SLF inventory, geometry/collision and original monastery content |
 
-Recovered ordinary character formulas now execute in the default new training duel (032), with real owned weapons, explicit authored effective facts, contact/penetration/HP, RNG continuation and scenario rewards. The actors, scheduler and room remain authored fixtures; imported monsters, real stat derivation and complete original combat/magic remain integration gates.
+Recovered ordinary character formulas now execute in the default new training duel (032), with real owned weapons, explicit authored effective facts, contact/penetration/HP, RNG continuation and scenario rewards. Iteration 033 adds recovered ordinary character initiative / repeated-attack scheduling and safe original Frost / Energy Blast through that executor. Actors, room, immediate delivery, ties and target selection remain authored; real stat derivation and complete original combat/magic remain integration gates. MONSTERS.DBS import now covers 595 record/text/hash definitions with a browser; semantic combat fields and executable monster actors remain open.
 
 ## Audit gate — 2026-10-15
 

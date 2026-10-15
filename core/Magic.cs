@@ -37,7 +37,7 @@ public static class Magic
     {
         var realms=new HashSet<string>();
         foreach(var pool in hero.Mana ?? [])
-            if(pool is null || pool.Realm is not ("Fire" or "Divine") || !realms.Add(pool.Realm) ||
+            if(pool is null || pool.Realm is not ("Fire" or "Water" or "Air" or "Earth" or "Mental" or "Divine") || !realms.Add(pool.Realm) ||
                 pool.Max<0 || pool.Current<0 || pool.Current>pool.Max)
                 throw new InvalidDataException("Invalid mana pool");
         var spells=new HashSet<string>();

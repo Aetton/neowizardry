@@ -246,11 +246,11 @@ def audit_install(root: Path) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for command in ("index", "items", "spells", "recipes", "extract"):
+    for command in ("index", "items", "spells", "recipes", "monsters", "extract"):
         p = sub.add_parser(command)
         p.add_argument("archive", type=Path)
         p.add_argument("--out", required=True, type=Path)
-        if command in ("items", "spells", "recipes"):
+        if command in ("items", "spells", "recipes", "monsters"):
             p.add_argument("--patch", action="append", type=Path, default=[])
             p.add_argument("--loose-dir", type=Path)
         if command == "extract":
@@ -275,6 +275,9 @@ def main() -> int:
                 if args.command == "spells":
                     from tools.spells import spell_catalog
                     result = spell_catalog(resources)
+                elif args.command == "monsters":
+                    from tools.monsters import monster_catalog
+                    result = monster_catalog(resources)
                 elif args.command == "recipes":
                     from tools.recipes import recipe_catalog
                     result = recipe_catalog(resources)

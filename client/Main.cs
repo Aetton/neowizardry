@@ -39,6 +39,8 @@ public partial class Main : Node3D
     private const string AutoSavePath="user://prototype-autosave.json";
     private ItemCatalog? _catalog;
     private SpellCatalog? _spellCatalog;
+    private MonsterCatalog? _monsterCatalog;
+    private bool _monstersRequested;
     private bool _spellsRequested;
     private bool _catalogRequested;
     private bool _autosaveBlocked;
@@ -60,6 +62,7 @@ public partial class Main : Node3D
         if(_catalog is null && _catalogRequested)throw new InvalidDataException("Requested item catalog could not be loaded");
         _catalog??=MeleeTraining.Catalog();
         LoadSpellCatalog();
+        LoadMonsterCatalog();
         LoadRecipeCatalog();
         _state=CreateExpedition(1);
         Refresh();
@@ -80,7 +83,7 @@ public partial class Main : Node3D
 
     private GameState CreateExpedition(int size,bool melee=true)
     {
-        if(melee)return MeleeTraining.Create(size,_catalog??throw new InvalidOperationException("Missing melee catalog"));
+        if(melee)return MeleeTraining.Create(size,_catalog??throw new InvalidOperationException("Missing melee catalog"),_spellCatalog);
         var state=Game.Create(size);
         if(_catalog is null)return state;
         var starter=_catalog.Items.OrderBy(i=>i.Id).Where(i=>Equipment.Denial(state.Party[0],i) is null).Take(Crafting.UsesFixture(_catalog)?1:2).ToArray();
@@ -141,6 +144,38 @@ public partial class Main : Node3D
             _spellCatalog=SpellCatalog.Parse(json);Say($"Loaded {_spellCatalog.Count} spell reference records.");
         });
     }
+    private void LoadMonsterCatalog()
+    {
+        var args=OS.GetCmdlineUserArgs();int index=Array.IndexOf(args,"--monsters");_monstersRequested=index>=0;
+        if(_monstersRequested && index+1>=args.Length){Say("No monster catalog path selected.");return;}
+        string root=ExternalCatalogRoot(),local=Path.Combine(root,"local","monsters.json");
+        string? path=_monstersRequested?args[index+1]:Godot.FileAccess.FileExists("user://monsters.json")?"user://monsters.json":System.IO.File.Exists(local)?local:null;
+        if(path is null)return;
+        if(!path.StartsWith("user://") && !Path.IsPathRooted(path))path=Path.GetFullPath(path,root);
+        Try(()=>{_monsterCatalog=MonsterCatalog.Parse(path.StartsWith("user://")?Godot.FileAccess.GetFileAsString(path):System.IO.File.ReadAllText(path));Say($"Loaded {_monsterCatalog.Count} original monster reference records.");});
+    }
+    private void ShowMonsters()
+    {
+        if(_monsterCatalog is null){Say("Import MONSTERS.DBS using tools.slf monsters; load local/monsters.json or --monsters <path>.");return;}
+        _dialogs++;_touchInput.Reset();Input.MouseMode=Input.MouseModeEnum.Visible;
+        var dialog=new AcceptDialog {Theme=_hudTheme,Title="Original monster reference"};AddChild(dialog);
+        dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;
+        dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
+        var body=new VBoxContainer();dialog.AddChild(body);
+        var search=new LineEdit {PlaceholderText="Search monster names"};body.AddChild(search);
+        var list=new ItemList {CustomMinimumSize=new(360,200)};body.AddChild(list);
+        var detail=new Label {AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(360,100)};body.AddChild(detail);
+        OriginalMonster[] shown=[];
+        void Filter()
+        {
+            shown=_monsterCatalog.Monsters.Where(m=>m.TextSlots.Any(t=>t.Contains(search.Text,StringComparison.OrdinalIgnoreCase))).ToArray();
+            list.Clear();foreach(var m in shown)list.AddItem($"{m.Id}: {m.Label}");
+            detail.Text=$"{shown.Length} / {_monsterCatalog.Count} definitions. Native text slots and evidence imported; combat fields / monster actors pending.";
+        }
+        search.TextChanged+=_=>Filter();list.ItemSelected+=i=>{var m=shown[(int)i];detail.Text=string.Join(" · ",m.TextSlots)+$"\nID {m.Id} · record {m.RecordSha256[..12]} · 663 native bytes preserved.";};
+        Filter();dialog.PopupCentered(new Vector2I(400,400));
+    }
+
     private void ShowGrimoire()
     {
         if(_spellCatalog is null) { Say("Import a spell reference catalog as user://spells.json or select it with --spells. See the README.");return; }
@@ -295,7 +330,7 @@ public partial class Main : Node3D
         Button(body,"New party",()=>Try(()=>{NewParty(size.Selected+1);dialog.QueueFree();}));
         Button(body,"Spell sandbox",()=>Try(()=>{NewParty(size.Selected+1,false);dialog.QueueFree();}));
         Button(body,"Save",Save);Button(body,"Load",()=>{Load();size.Select(_state.Party.Length-1);});
-        Button(body,"Spell reference",ShowGrimoire);Button(body,"Combat facts",ShowCombatFacts);
+        Button(body,"Monster reference",ShowMonsters);Button(body,"Spell reference",ShowGrimoire);Button(body,"Combat facts",ShowCombatFacts);
         Button(body,"Combination reference",ShowCombinations);
         Button(body,"Talk to keeper",()=>Say("Test keeper: The real monastery is still being researched."));
         Button(body,"Capture test",()=>Try(()=>{_state=Game.CaptureFirst(_state);Refresh();}));
@@ -419,7 +454,7 @@ public partial class Main : Node3D
         dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var scroll=new ScrollContainer {CustomMinimumSize=new(360,280)};dialog.AddChild(scroll);
         var text=new Label {Name="CombatFactsText",AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(340,0),SizeFlagsHorizontal=Control.SizeFlags.ExpandFill};scroll.AddChild(text);
-        var lines=new List<string>{"Authored training combatants; recovered ordinary melee formulas.\nSpeed order and target selection are training rules.\n"};
+        var lines=new List<string>{"Authored training combatants; recovered ordinary melee formulas.\nRecovered initiative for new parties; target selection is a training rule.\n"};
         foreach(var (name,facts) in _state.Party.Select(h=>(h.Name,encounter.Party[h.Id])).Append((_state.Enemy.Id,encounter.Opponent)))
             lines.Add($"{name}\nSTR {facts.Strength} · INT {facts.Attributes.Intelligence} · DEX {facts.Attributes.Dexterity} · SPD {facts.Attributes.Speed} · SEN {facts.Attributes.Senses}\n"+
                 $"Combat {facts.CombatSkill} · weapon skill {facts.WeaponSkill} · stealth {facts.Stealth}\n"+
@@ -428,9 +463,48 @@ public partial class Main : Node3D
         text.Text=string.Join("\n",lines);dialog.PopupCentered(new Vector2I(440,400));
     }
 
+    private void ShowRestoredMagic()
+    {
+        if(_spellCatalog is null || _state.Melee?.Magic is null)
+        {Say("Import the original spell catalog, then start a new party to enable the training Mage's Frost / Energy Blast.");return;}
+        var casters=_state.Party.Where(h=>_state.Melee.Magic[h.Id].LearnedSpells.Length>0).ToArray();
+        var spells=_spellCatalog.Spells.Where(RestoredMagic.SupportedSpell).ToArray();
+        if(casters.Length==0 || spells.Length==0){Say("No supported learned original spells.");return;}
+        Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
+        var dialog=new AcceptDialog {Theme=_hudTheme,Title="Restored magic · training Mage"};AddChild(dialog);
+        dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;
+        dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
+        var body=new VBoxContainer();dialog.AddChild(body);
+        var caster=new OptionButton();foreach(var h in casters)caster.AddItem(h.Name);body.AddChild(caster);
+        var spell=new OptionButton();foreach(var s in spells)spell.AddItem(s.Name);body.AddChild(spell);
+        var power=new OptionButton();for(int i=1;i<=7;i++)power.AddItem($"Power {i}");body.AddChild(power);
+        var detail=new Label {AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(350,135)};body.AddChild(detail);
+        var cast=new Button {Text="Cast / resolve round"};body.AddChild(cast);
+        RestoredCastOrder Order()=>new(casters[caster.Selected].Id,spells[spell.Selected].Id,power.Selected+1);
+        void Update()
+        {
+            try
+            {
+                var prepared=RestoredMagic.Prepare(_state,Order(),_spellCatalog);
+                detail.Text=$"{prepared.Spell.Realm} · {prepared.ManaCost} mana · risk {prepared.Risk.FailureThreshold}%\n"+
+                    $"{prepared.Power}d{prepared.Spell.DamageSides}, then Power Cast and target resistance.\n"+
+                    "Safe ordinary casts only. Authored Mage / resistance facts; immediate delivery in this training room.";
+                cast.Disabled=false;
+            }
+            catch(Exception e){detail.Text=e.Message;cast.Disabled=true;}
+        }
+        caster.ItemSelected+=_=>Update();spell.ItemSelected+=_=>Update();power.ItemSelected+=_=>Update();
+        cast.Pressed+=()=>Try(()=>
+        {
+            var result=MeleeCombat.Advance(_state,_catalog!,_player.Position.DistanceTo(_enemyPosition),[Order()],_spellCatalog);
+            _state=result.State;foreach(var entry in result.Events)Say(entry);Refresh();Update();
+        });
+        Update();dialog.PopupCentered(new Vector2I(390,350));
+    }
+
     private void ShowMagic()
     {
-        if(_state.Melee is not null){Say("Original spells are not connected to this melee encounter yet.");return;}
+        if(_state.Melee is not null){ShowRestoredMagic();return;}
         Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
         var dialog=new AcceptDialog { Theme=_hudTheme,Title="Prototype magic",Unresizable=true,WrapControls=false };
         AddChild(dialog);dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;
@@ -761,6 +835,8 @@ public partial class Main : Node3D
             CheckRecipeReference();
             if((_spellsRequested || Godot.FileAccess.FileExists("res://demo-items.spells.json")) && _spellCatalog is null)throw new Exception("Requested spell reference was not loaded");
             if(_spellCatalog is not null) { _spellCatalog.Validate();GD.Print($"PASS: spell reference {_spellCatalog.Count} records with raw record hashes"); }
+            if(_monstersRequested && _monsterCatalog is null)throw new Exception("Requested monster catalog was not loaded");
+            if(_monsterCatalog is not null){_monsterCatalog.Validate();ShowMonsters();GetChildren().OfType<AcceptDialog>().Last().Free();GD.Print($"PASS: monster reference {_monsterCatalog.Count} records and browser");}
             if(_catalogRequested && _catalog is null) throw new Exception("Requested smoke catalog was not loaded");
             _player.Position=new(0,0.9f,-4);
             var expectedMelee=Game.Attack(_state,_catalog,_player.Position.DistanceTo(_enemyPosition));
@@ -773,13 +849,21 @@ public partial class Main : Node3D
                 throw new Exception("Missing authored combat facts UI");
             factsWindow.Free();
             GD.Print("PASS: restored melee attack button, contact thresholds and authored combat facts UI");
+            if(_state.Melee?.Magic is not null && _spellCatalog is not null)
+            {
+                var snapshot=_state;_state=CreateExpedition(1);
+                ShowRestoredMagic();GetChildren().OfType<AcceptDialog>().Last().Free();
+                var cast=MeleeCombat.Advance(_state,_catalog!,3,[new(_state.Party[0].Id,5,3)],_spellCatalog);
+                if(!cast.Events.Any(e=>e.Contains("Energy Blast PL3")) || cast.State.Party[0].Mana!.Single(m=>m.Realm=="Fire").Current!=36)throw new Exception("Original casting smoke failed");
+                _state=snapshot;GD.Print("PASS: restored magic UI, imported Energy Blast, mana and shared combat executor");
+            }
             Save(); _state=Game.Create(8); Load();
             if(_state.Party.Length!=1 || _state.Round!=1) throw new Exception("Client save/load failed");
             _state=Game.CaptureFirst(_state); Refresh();
             _state=Game.Escape(_state); Refresh();
             if (_catalog is not null)
             {
-                var cane=_catalog.Items.FirstOrDefault(i=>i.Name=="Cane of Corpus") ??
+                var cane=(_state.Melee is not null?_catalog.Find(Equipment.ItemId(_state,_state.Party[0].Id)!.Value):_catalog.Items.FirstOrDefault(i=>i.Name=="Cane of Corpus" && Equipment.Denial(_state.Party[0],i) is null)) ??
                     _catalog.Items.FirstOrDefault(i=>Equipment.Denial(_state.Party[0],i) is null);
                 if(cane is null) throw new Exception("Smoke catalog has no eligible melee weapon");
                 {

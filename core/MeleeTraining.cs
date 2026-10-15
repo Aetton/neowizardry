@@ -23,13 +23,16 @@ public static class MeleeTraining
     }
     private static MeleeCharacterFacts Facts(OriginalProfession profession,bool opponent=false)=>new(opponent?60:80,
         new(50,opponent?60:80,opponent?60:80,70),opponent?60:80,opponent?60:80,[new(profession,10)],20,
-        opponent?new(18,18,18,18,18):new(0,0,0,0,0));
+        opponent?new(18,18,18,18,18):new(0,0,0,0,0),new(10,false,0));
     private static bool Supported(ItemDefinition item)=>item.Name.Length>0 && item.TypeCode is 0 or 1 && (item.AttackModes&1)!=0 && item.DamageDice>0 &&
         item.BonusSwings is >=0 and <=15 && item.ToHit>=0 && item.Instance is {Mode:0} fields && fields.Compile(item.RecordSha256).SpellUse==0;
 
-    public static GameState Create(int size,ItemCatalog catalog)
+    public static GameState Create(int size,ItemCatalog catalog,SpellCatalog? spells=null)
     {
-        var state=Game.Create(size);var facts=ImmutableDictionary.CreateBuilder<string,MeleeCharacterFacts>();
+        var state=Game.Create(size);
+        bool magic=spells is not null && spells.Spells.Any(RestoredMagic.SupportedSpell);
+        if(magic)state=state with {Party=state.Party.SetItem(0,state.Party[0] with {Name="Faerie Mage",Profession="Mage",Spellbook=[],Mana=[new("Fire",42,42),new("Water",42,42)]})};
+        var facts=ImmutableDictionary.CreateBuilder<string,MeleeCharacterFacts>();
         foreach(var hero in state.Party)
         {
             var weapon=catalog.Items.OrderBy(i=>i.Id).FirstOrDefault(i=>Supported(i) && Equipment.Denial(hero,i) is null)
@@ -48,6 +51,13 @@ public static class MeleeTraining
         var encounter=new MeleeEncounter(MeleeCombat.Ruleset,catalog.Provenance.Sha256,facts.ToImmutable(),
             Facts(Enum.Parse<OriginalProfession>(state.Party[0].Profession),true),opponentId);
         state=state with {Enemy=enemy,Melee=encounter,Items=ItemInventory.Move(state.Items!,opponentId,new(enemy.Id,Equipment.WeaponSlot),Inventory.Rules(catalog))};
+        if(magic)
+        {
+            RestoredMagicFacts Profile(bool caster)=>new(spells!.Provenance.Sha256,caster?80:0,
+                Enumerable.Repeat(caster?80:0,6).ToImmutableArray(),10,10,false,0,
+                caster?spells.Spells.Where(RestoredMagic.SupportedSpell).Select(s=>s.Id).ToImmutableArray():[],10,[0,0,0,0,0,0]);
+            state=state with {Melee=state.Melee! with {Magic=state.Party.ToImmutableDictionary(h=>h.Id,h=>Profile(h.Id==state.Party[0].Id)).Add(enemy.Id,Profile(false))}};
+        }
         MeleeCombat.Validate(state,catalog);return state;
     }
 }

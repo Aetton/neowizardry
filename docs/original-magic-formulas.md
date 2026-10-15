@@ -94,3 +94,13 @@ The original skips the helper entirely for damage value 9999 (`0x552255`–`0x55
 ## Next integration gate
 
 Ordinary character hit/penetration score arithmetic is now covered in iteration 019; full contextual resolution and monster-side counterparts remain open. Recover exact condition/resistance derivation and effective actor attributes/class history/book selection, then trace one direct-damage and one healing spell from order through costs, result and training. Only then switch representative live actions from fixtures. Keep the pure formula layer, actor validation, random draw service, effect resolver and presentation separate; previews must use the same rules without consuming RNG.
+
+## Iteration 033: first live direct-damage subset
+
+The training Mage now uses pinned Frost (4) and Energy Blast (5) records. Only ordinary zero-risk casts enter the executor; the public risk/backfire arithmetic does not imply a recovered failure lifecycle. Book selection and class/strength-level terms are explicit authored facts. The current pure-Mage single-class fixture uses level 10 for both terms; no general hybrid/history resolver is claimed.
+
+Damage packet preparation `0x4FBD07..0x4FBD26` copies runtime +0x51 (signed constant, byte dice count, byte sides), multiplying the dice-count byte by selected power. These two supported rows have zero constant and 1d7. `0x551A20..0x551A51` rolls through `0x517970` then applies packet +0x24 Power Cast percentage with `0x517F90`; the sentinel path is excluded. Packet strength at +0x18 is passed to the realm resistance helper at `0x544FBE..0x544FDA`. Base strength and half-Power-Cast preparation remain as documented above; neither supported spell is in the special strength-adjustment table starting at ID 70.
+
+On the safe ordinary path, the cast's selected power is written through the consumed-power output (`0x4FCE23..0x4FCE35`); the player caller multiplies consumed power by base cost and debits that realm (`0x4FAB75..0x4FAB89`). Do not extrapolate those costs to failed/backfired/interrupted casts. Successful spell execution normally includes skill-training work in the original; the training encounter leaves its authored effective skills fixed and does not claim that progression subsystem.
+
+`RestoredMagic` prepares supported commands, while `MeleeCombat.Advance` owns scheduling, mutation and commit. A safe cast consumes no failure roll. Dice.Exclusive adds larger bounded draws for resistance without changing the pre-existing 1..255 Dice.Roll sequence or contract. Spatial delivery is immediate and authored; full native projectile/target/effect dispatch remains open. Current limits and validation are in [iteration 033](iteration-033.md).

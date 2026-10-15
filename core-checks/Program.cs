@@ -354,6 +354,8 @@ checks+=MonsterSequenceChecks.Run();
 checks+=SnapshotChecks.Run(referenceCatalog,recipeReferenceCatalog);
 checks+=ProjectileExecutionChecks.Run(restricted);
 checks+=MeleeEncounterChecks.Run();
+checks+=RestoredRoundChecks.Run();
+checks+=MonsterCatalogChecks.Run();
 if(args.Length==2 && args[0]=="--fixture")
 {
     var fixtureItems=new[]{restricted,restricted with {Id=78,Name="Test herb",TypeCode=19},restricted with {Id=79,Name="Test vial",TypeCode=19},
@@ -365,9 +367,14 @@ if(args.Length==2 && args[0]=="--fixture")
     File.WriteAllText(Path.ChangeExtension(args[1],".spells.json"),referenceJson);
     File.WriteAllText(Path.ChangeExtension(args[1],".recipes.json"),recipeReferenceJson);
 }
+else if(args.Length==2 && args[0]=="--monsters")
+{
+    var monsters=MonsterCatalog.Parse(File.ReadAllText(args[1]));checks+=MonsterCatalogChecks.Run(monsters);
+    Console.WriteLine($"PASS: {monsters.Count} native monster reference records");
+}
 else if(args.Length==2 && args[0]=="--spell-formulas")
 {
-    var spells=SpellCatalog.Parse(File.ReadAllText(args[1]));int scenarios=0;
+    var spells=SpellCatalog.Parse(File.ReadAllText(args[1]));checks+=RestoredRoundChecks.RunSpells(spells);int scenarios=0;
     foreach(var spell in spells.Spells.Where(s=>s.Level>0))
     {
         int previous=-1;
