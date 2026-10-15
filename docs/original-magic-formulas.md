@@ -93,4 +93,4 @@ The original skips the helper entirely for damage value 9999 (`0x552255`–`0x55
 
 ## Next integration gate
 
-Recover hit/penetration and their monster counterparts, exact condition/resistance derivation, effective actor attributes/class history/book selection, then trace one direct-damage and one healing spell from order through costs, result and training. Only then switch representative live actions from fixtures. Keep the pure formula layer, actor validation, random draw service, effect resolver and presentation separate; previews must use the same rules without consuming RNG.
+Ordinary character hit/penetration score arithmetic is now covered in iteration 019; full contextual resolution and monster-side counterparts remain open. Recover exact condition/resistance derivation and effective actor attributes/class history/book selection, then trace one direct-damage and one healing spell from order through costs, result and training. Only then switch representative live actions from fixtures. Keep the pure formula layer, actor validation, random draw service, effect resolver and presentation separate; previews must use the same rules without consuming RNG.

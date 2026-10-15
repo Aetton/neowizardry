@@ -1,7 +1,18 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Iterations 001–011 delivered the SLF reader, ordinary patch/loose-file overlay, a local catalog of 819 items, a Godot client, independent C# core, variable parties, experimental combat and saves. Android launch was confirmed by the user. Assigned melee weapons use imported base damage dice and initiative with saved deterministic rolls. Windows launch was also confirmed by the user; preview builds update through the portable launcher. Shared item quantities, equip/unequip/transfer and one-time prototype loot now work; five synthetic spells demonstrate realm mana, power, multi-caster plans and saved duration effects. Two atomic synthetic crafting recipes demonstrate skill/knowledge gates and ingredient ownership. Windows previews now run on the persistent self-hosted Windows service. Canonical combat, original magic, crafting recipes and level geometry are not implemented.
+Status checked against code and iteration reports through **019**, 2026-10-15. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+
+| Workstream | Recovered / implemented | Still required for original gameplay |
+|---|---|---|
+| Combat | Original integer attack/swing budgets, ordinary free-hand base attack rating, common melee/projectile swing allocation, nine mode-modifier pairs, ordinary character hit/penetration score builders with resolved inputs | Effective actor/hand policy, defense/location selection, conditions/context, complete hit/fumble/projectile and resource flow, damage, initiative/range/formation, live integration |
+| Characters | Prototype roster and party-size support; typed effective combat-attribute inputs; weighted original class-history arithmetic | Real character creation, effective stat/skill derivation, XP/leveling/multiclass progression and saves |
+| Magic | 150-record metadata/reference, original ordinary casting-risk/backfire, Power Cast, base strength and resistance helpers | Learning/book/class policy, source/context modifiers, one complete original damage/healing path, resource/condition/training flow and live integration |
+| Inventory | One authoritative typed instance model in gameplay, equipment, fixture crafting and schema-2 saves; old-save migration, split/merge/transfer/resources | Original use/recharge/curse policy and remaining equipment coverage |
+| Crafting | 36-record original recipe reference, recovered native combination arithmetic and clean transaction simulation | Actor skill/time/progression policy, original combinations in gameplay and result previews; proper crafting menu remains a separate rework |
+| World | SLF reader and ordinary patch/loose overlay; accessible data imported privately | Local LEVELS.SLF inventory, geometry/collision and original monastery content |
+
+Recovered formulas are independently testable; the playable training battle still uses labelled fixtures. This distinction is an integration gate, not a claim that the whole combat or magic stage is complete.
 
 ## Stages
 1. **Combat:** recover and verify initiative, hit/penetration, weapon damage, attack/swing counts, range and formation. Integrate imported weapons.
@@ -69,7 +80,7 @@ Review early/mid/late-game contribution, gadget/component availability and usefu
 - Canonical formulas require documented evidence or original-game fixtures.
 
 ## Current blocker
-LEVELS.SLF is 497064244 bytes and exceeds the Drive connector's 268435456-byte limit. A local archive inventory is still needed. This does not block accessible rules, magic, inventory or crafting research.
+LEVELS.SLF is 497064244 bytes and exceeds the Drive connector's 268435456-byte limit. A local LEVELS.SLF inventory is still needed. This does not block accessible rules, magic, inventory or crafting research.
 
 ## Original-data research progress
 Iteration 011 decodes 150 native spell metadata records and 160 indexed description entries, preserving provenance and unknown raw bytes. A separate read-only reference is available in the client. This does not establish original effect execution, learning, success/resistance, timing or recipe rules; see [spell format evidence](spell-format.md).
@@ -82,4 +93,14 @@ User decision, 2026-10-15: preserve inventory functionality on a clean instance 
 
 ## Combat and magic baseline — user decision 2026-10-15
 
-Use original formulas with a clean implementation. Current research priority: physical attack/hit/penetration and magic success/resistance/effect paths, recovered from the executable and checked against reported experiments. Iteration 017 supplies pure integer attack-budget and casting/resistance helpers with documented scope. Next: actor attributes/class history/skill selection, hit/penetration and one complete damage/healing spell path, then representative live integration. Existing synthetic battle rules remain labelled until replaced. Preserve the separately requested deferred crafting, passive magic bonus and Gadgeteer/Omnigun reworks.
+Use original formulas with a clean implementation. Current research priority: physical attack/hit/penetration and magic success/resistance/effect paths, recovered from the executable and checked against reported experiments. Iterations 017–019 supply pure attack-budget, swing-allocation, ordinary hit/penetration-score and casting/resistance helpers with documented scope. The ordinary score builders require resolved hand bonuses and defenses; they do not close target-selection, condition or actor-policy gaps. Next: resolve effective actor/hand/defense selection, trace hit/fumble and damage plus one complete damage/healing spell path, then representative live integration. Existing synthetic battle rules remain labelled until replaced. Preserve the separately requested deferred crafting, passive magic bonus and Gadgeteer/Omnigun reworks.
+
+
+## Immediate execution order after roadmap review (iteration 019)
+
+1. **Finish a complete ordinary physical attack path.** Recover hand/skill/ToHit selection, context counter lifecycle, defense and hit-location selection, hit/fumble/retargeting, damage, ammo/throw depletion and interruptions. Add monster-side attack builders before claiming symmetric combat coverage. Current score results are raw thresholds, not final hit percentages.
+2. **Connect actor facts and one representative live encounter.** Model effective attributes, skills, class history and hand state explicitly; persist them without invented original defaults for old fixture saves. Reuse the recovered calculations for both execution and previews, with externally owned deterministic RNG. Include melee, shooting and throwing, resource exhaustion and solo/magic-party cases.
+3. **Complete representative original magic and combination flows.** Trace costs through results and training, using the clean instance inventory and actor policies. Keep full content coverage and the deferred redesigns separate.
+4. **Resume world import when LEVELS.SLF is locally available.** Rules work does not remove the archive gate. A real monastery slice remains the target for stage 6; no unrelated feature work is needed to proceed on the accessible rules.
+
+Latest evidence: [iteration 019](iteration-019.md), [physical formulas](original-combat-formulas.md), [magic formulas](original-magic-formulas.md). Current work: [TOC-30](https://linear.app/tochka/issue/TOC-30). Completed tracking: [TOC-28](https://linear.app/tochka/issue/TOC-28) (017) and [TOC-29](https://linear.app/tochka/issue/TOC-29) (018). Preserve TOC-22/23/24 as deferred crafting, passive magic and Gadgeteer/Omnigun reworks.

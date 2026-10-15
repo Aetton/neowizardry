@@ -6,7 +6,7 @@ Evidence: read-only disassembly of supplied `Wiz8.exe`, SHA256 `18a74ff61c65b8a2
 
 ## Scope and arithmetic
 
-`Rules/OriginalCombatRules.cs` covers a usable single weapon with the other hand free, supplied effective attributes/skills, resolved weapon initiative and known load category. It does not resolve dual wielding, shields, hand availability, conditions, special weapon overrides, full hit/penetration scores or damage. Swing allocation and attack-mode score modifiers are independent subsets below. The original character path forces one maximum swing for icon `0x90` at `0x4EE642`; in the supplied table that is Rocket Launcher. That override is outside this single-weapon arithmetic API.
+`Rules/OriginalCombatRules.cs` covers a usable single weapon with the other hand free, supplied effective attributes/skills, resolved weapon initiative and known load category. It does not resolve dual wielding, shields, hand availability, conditions, special weapon overrides, full contextual hit/penetration resolution or damage. Swing allocation, mode modifiers and ordinary character score builders are independent subsets below. The original character path forces one maximum swing for icon `0x90` at `0x4EE642`; in the supplied table that is Rocket Launcher. That override is outside this single-weapon arithmetic API.
 
 Let `E` be the sum of class levels times their combat multipliers:
 
@@ -47,7 +47,7 @@ The character branch explicitly caps the base count at three; do not infer a fou
 
 ## Integration gate
 
-These functions are not wired to the fixture sentinel battle. Real effective attributes, class history, hand/skill selection, initiative, hit/penetration, conditions and action consumption must be modeled together before switching the playable combat rules. The current prototype heroes lack those original statistics; assigning invented defaults would hide a balance change. Next static anchors: `Combat Attack.cpp` logging sites `0x53E676` (hit) and `0x53ED26` (penetration), then their builders and monster-side counterparts.
+These functions are not wired to the fixture sentinel battle. Real effective attributes, class history, hand/skill selection, initiative, hit/penetration, conditions and action consumption must be modeled together before switching the playable combat rules. The current prototype heroes lack those original statistics; assigning invented defaults would hide a balance change. Iteration 019 recovers the ordinary character builders below. Next gates are effective actor/hand/defense selection, full hit/fumble/damage and resource flow, then monster-side counterparts.
 
 
 ## Attacks versus swings, including projectiles (iteration 018)
@@ -88,3 +88,59 @@ At `0x53DAC7` the original reads a DWORD at item definition `+0xAD`, then adds i
 | Shoot | 8 | 0x100 | 0 | +10 |
 
 The semantic enum uses ordinals, not database flags. Selection from an item's supported bitmask is a separate unresolved rule; passing the entire bitmask as a mode is invalid. This table alone is not a complete chance-to-hit, armor penetration or Berserk damage implementation. Full builders include target defense, attributes, conditions and repeated-action context that remain outside the recovered subset.
+
+
+## Ordinary character score builders (iteration 019)
+
+`OriginalPhysicalScores.OrdinaryCharacter` takes explicit effective attributes, resolved hand bonuses, attack mode, load category and resolved defenses. It covers the ordinary arithmetic of `0x541C00` and `0x541EC0` with the two special +10 hit flags inactive, no post-target condition modification and neutral final context scaling. It returns **raw scores**, not final probabilities. It neither chooses equipment/targets/hit locations nor spends RNG/resources. The `PhysicalCombatAttributes` value is a calculation input, not a completed character/progression model.
+
+### Base attack rating
+
+For the already-covered free-other-hand branch without dual-wield state or the special NPC/quest modifier:
+
+```
+BAR = 60 + trunc((floor(DEX/2) + 2*S + L)/3)
+```
+
+`S` and `L` are the attack-budget skill contribution and load contribution above. `0x4EE460` stores `S` in hand +0x0D; `0x4EE50D`–`0x4EE535` computes BAR and stores hand +0x11. Class-history experience `E` is not added here. `PhysicalAttackBudget.BaseAttackRating` exposes this additional result. Original dual-wield/context and special NPC/quest branches at `0x4EE4D7`–`0x4EE50B` and `0x4EE538`–`0x4EE58B` remain outside that API.
+
+### Hit and penetration scores
+
+Let `T` be the resolved hand ToHit term, `P` the additional resolved hand penetration term, `Q` the signed accuracy adjustment, `U` the signed penetration adjustment. The latter two are read as signed bytes; the hand terms are resolved integer values. Let `D` be the target defense returned for hit, and `B` the mode/location-specific defense returned for penetration. These are **not interchangeable** with a displayed aggregate armor statistic.
+
+```
+attributeTerm = trunc(((INT+DEX+SPD+SEN)attacker - (INT+DEX+SPD+SEN)target)/10)
+common = BAR + 5*T + 5*Q
+hitBeforeTarget = common + modeHit - hitLoadPenalty - repetitionPenalty
+hitScore = hitBeforeTarget - 5*D + attributeTerm
+penetrationScore = common + 5*P + 5*U + modePenetration - penetrationLoadPenalty - 5*B + attributeTerm
+```
+
+Hit hand/accuracy/mode arithmetic: `0x541C47`–`0x541C82`. Penetration hand terms (+0x21/+0x25), adjustments and mode: `0x541EFA`–`0x541F46`. The two target-defense helpers are `0x542EE0` and `0x542FC0`. Their outputs are multiplied by -5 at `0x541D45`–`0x541D54` and `0x541F87`–`0x541F96`. They include conditional and location/mode calculations not reconstructed by this API; the caller must supply their resolved results rather than inventing an armor lookup.
+
+Attribute sums and truncation: hit `0x541D58`–`0x541E46`; penetration `0x541F9A`–`0x542092`. Character attributes come from effective fields; monster target attributes are unsigned bytes at runtime +0x248..+0x24B. Input validation distinguishes the player effective cap 125 from monster byte range 255. A difference of -9 contributes 0, not -1; -10 contributes -1. Neither raw score is clamped to [0,100].
+
+### Different load penalties
+
+Helper `0x52A7D0`, table `0x52A800`, returns `0,5,10,20,40` for known categories 0–4. Hit calls it at `0x541CAB`–`0x541CC4`; Modern Weapon (skill 7) halves the penalty before subtraction, e.g. category 1 gives 2. Penetration at `0x541F4A`–`0x541F6D` **skips** this penalty for skill 7. This is a second load effect, distinct from the load contribution already included in BAR and the attack/swing budgets.
+
+### Nonlinear context-counter penalty
+
+The hit builder reads a counter at `0x541CC8` and bypasses the following penalty when it is zero:
+
+```
+reserve = max(0, SPD + BAR - 25*counter - 50)
+repetitionPenalty = max(0, trunc(50 - reserve^0.75))
+```
+
+Evidence: `0x541CD2`–`0x541D15`, exponent 0.75 at `0x5EBF40`, subtraction constant 50 at `0x5EE7B8`. The call thunk `0x5E1F6C` imports MSVCRT `_CIpow`; `0x5E1C22` imports `_ftol`. Import-name RVAs are mapped through the PE sections, not assumed to equal file offsets.
+
+The clean helper uses `50-ceil(fourthRoot(reserve^3))`, clamped to zero; reserves >=185 are already saturated at zero. Thus the finite nontrivial calculation uses only small integer powers and comparisons, avoiding cross-platform floating-point boundary differences. Perfect-power checks include reserves 1,16,81, and all integer reserves 0..185 agree with an independent evaluation of the recovered expression. This is static mathematical validation, not execution of the original CRT.
+
+The counter has a reset at `0x4E854F` and a producer at `0x5367AB`–`0x5367B2` under additional context checks. Its full producer/lifecycle is unresolved. `ActionPenaltyCounter` therefore requires an explicit resolved value; do **not** increment it automatically per swing, per attack or per movement step by assumption. This penalty appears only in the inspected hit builder, not the penetration builder.
+
+### Penetration comparison and integration limits
+
+The ordinary branch at `0x53ED37`–`0x53ED4D` passes when its one-based d100 is <= the penetration score, or an earlier automatic-penetration flag bypasses the comparison. `Penetrates` accepts the caller's existing zero-based draw and explicit automatic context; it does not generate another roll or infer automatic eligibility. Exhaustive d100 checks cover negative, zero, interior and above-100 thresholds. This comparison alone does not establish a hit or deal damage.
+
+Full hit resolution remains open: the melee path also computes a cubic fumble term from an untargeted score (`0x53E57E`–`0x53E60B`), scales it using an eligible-target list and can redirect an attack. Projectile contact has its own delivery path. Post-target condition adjustment (`0x541E4A`–`0x541E9F`), special +10 flags and final context scaling (`0x55CC00`) are excluded from `OrdinaryCharacter`; their eligibility must be resolved explicitly before expanding coverage. Do not label the unresolved global mode as difficulty without proving its meaning. Monster-side attack builders, damage, hit-location derivation and complete condition/resource flow remain separate gates in the [roadmap](roadmap.md).

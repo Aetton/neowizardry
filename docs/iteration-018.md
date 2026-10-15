@@ -10,4 +10,4 @@ Validation: 544 portable C# checks including gestures; 545 with private spell me
 
 The live training battle remains the documented fixture. Full actor statistics, hand selection, hit/penetration builders, damage, ammo/throw depletion, interruptions and special-class procs must be reconstructed before connecting these original formulas to playable combat. Deferred crafting-menu, passive spell-attribute and Gadgeteer/Omnigun balance work stays separate from the original baseline.
 
-Tracking: iteration 017 was restored as TOC-28. Automatic approval review rejected creating this iteration's Linear issue, stating that the available authorization did not explicitly name Linear. This report preserves the work without retrying the blocked publication.
+Tracking: completed as [TOC-29](https://linear.app/tochka/issue/TOC-29) after the user explicitly authorized Linear publication. Iteration 017 is TOC-28.
