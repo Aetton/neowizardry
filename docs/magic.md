@@ -63,4 +63,3 @@ User decision, 2026-10-15: [TOC-23](https://linear.app/tochka/issue/TOC-23/ficha
 Keep adjustable mana investment/power and add a small passive contribution from a caster attribute to the spell effect, including low-power casts. Character growth should keep economical casts useful throughout progression, while spending more mana still produces a substantial improvement. Both low-power efficiency and full-power impact should have situational value; neither should become the universally best choice.
 
 The attribute, any school-specific mapping, scaling curve, coefficients and treatment of damage/healing/control remain design questions. Do not assume Intelligence, add character level directly, or apply one formula to every effect mechanism by default. Balance in early/mid/late game against effect per mana and effect per turn, and preview the resulting effect when selecting power. Current fixture formulas are unchanged.
-
