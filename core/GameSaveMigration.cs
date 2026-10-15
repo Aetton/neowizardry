@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -41,7 +42,7 @@ public static class GameSaveMigration
             items.AddRange(Inventory.CreateItems(stack.ItemId,stack.Count,Inventory.BagLocation,catalog,ref sequence,ref random,state.Items!.Capacity-items.Count,migrating:true));
         foreach(var worn in equipped)
             items.AddRange(Inventory.CreateItems(worn.ItemId,1,new(worn.HeroId,Equipment.WeaponSlot),catalog,ref sequence,ref random,state.Items!.Capacity-items.Count,migrating:true));
-        state=Inventory.Commit(state,state.Items! with {Items=items.ToArray()},sequence,catalog);
+        state=Inventory.Commit(state,state.Items! with {Items=items.ToImmutableArray()},sequence,catalog);
         Equipment.ValidateLoadedEquipment(state,catalog,catalog.Provenance.Sha256);return state;
     }
 }

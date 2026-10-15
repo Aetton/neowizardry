@@ -60,7 +60,7 @@ static class AmmunitionChecks
         catalog.Validate();var rules=definitions.Select(OriginalItemAdapter.Rule).ToDictionary(r=>r.DefinitionId);
         ItemInstance Item(string id,int definition,int quantity=1,int? resource=null,bool equipped=false)=>
             new(id,definition,quantity,true,resource,false,new("hero",equipped?"main":null));
-        ItemInventoryState Inventory(params ItemInstance[] items)=>new(1,items.Length,items);
+        ItemInventoryState Inventory(params ItemInstance[] items)=>new(1,items.Length,[..items]);
         ProjectileSeriesState Complete(ProjectileSeriesState state,bool actor=true,bool target=true)
         {
             state=ProjectileSeries.Launch(state,rules);

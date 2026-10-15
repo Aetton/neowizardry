@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 namespace NeoWizardry.Core;
 
 public sealed record ManaPool(string Realm, int Current, int Max);
@@ -15,7 +16,7 @@ public static class Magic
         new SpellDefinition("test-bind","Test Bind","Divine",false,3,"bind"),
         new SpellDefinition("test-burn","Test Burn","Fire",false,2,"burn") });
     public static bool TargetsParty(SpellDefinition spell) => spell.Heals || spell.Effect=="ward";
-    public static void ValidateEffects(StatusEffect[]? effects, bool enemy)
+    public static void ValidateEffects(ImmutableList<StatusEffect>? effects, bool enemy)
     {
         var kinds=new HashSet<string>();
         foreach(var effect in effects ?? [])
@@ -23,13 +24,13 @@ public static class Magic
                 !kinds.Add(effect.Kind) || (enemy ? effect.Kind is not ("bind" or "burn") : effect.Kind!="ward"))
                 throw new InvalidDataException("Invalid status effect");
     }
-    public static StatusEffect[] Apply(StatusEffect[]? effects, StatusEffect added)
+    public static ImmutableList<StatusEffect> Apply(ImmutableList<StatusEffect>? effects, StatusEffect added)
     {
         var old=(effects ?? []).FirstOrDefault(e=>e.Kind==added.Kind);
         if(old is not null)added=added with { Magnitude=Math.Max(old.Magnitude,added.Magnitude),Rounds=Math.Max(old.Rounds,added.Rounds) };
-        return (effects ?? []).Where(e=>e.Kind!=added.Kind).Append(added).OrderBy(e=>e.Kind,StringComparer.Ordinal).ToArray();
+        return (effects ?? []).Where(e=>e.Kind!=added.Kind).Append(added).OrderBy(e=>e.Kind,StringComparer.Ordinal).ToImmutableList();
     }
-    public static StatusEffect[] Tick(StatusEffect[]? effects) => (effects ?? []).Where(e=>e.Rounds>1).Select(e=>e with { Rounds=e.Rounds-1 }).ToArray();
+    public static ImmutableList<StatusEffect> Tick(ImmutableList<StatusEffect>? effects) => (effects ?? []).Where(e=>e.Rounds>1).Select(e=>e with { Rounds=e.Rounds-1 }).ToImmutableList();
     public static SpellDefinition Find(string id) => Spells.FirstOrDefault(s=>s.Id==id)
         ?? throw new InvalidOperationException("Unknown spell");
     public static void ValidateHero(Hero hero)
@@ -66,5 +67,5 @@ public static class Magic
         return null;
     }
     public static Hero Spend(Hero hero, SpellDefinition spell, int power) => hero with {
-        Mana=(hero.Mana ?? []).Select(p=>p.Realm==spell.Realm ? p with { Current=p.Current-spell.CostPerPower*power } : p).ToArray() };
+        Mana=(hero.Mana ?? []).Select(p=>p.Realm==spell.Realm ? p with { Current=p.Current-spell.CostPerPower*power } : p).ToImmutableList() };
 }

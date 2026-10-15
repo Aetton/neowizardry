@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 
 namespace NeoWizardry.Core;
@@ -7,7 +8,7 @@ public sealed record ItemInventoryRule(int DefinitionId,int StackLimit=1,ItemRes
 public sealed record ItemLocation(string ContainerId,string? EquipmentSlot=null);
 public sealed record ItemInstance(string Id,int DefinitionId,int Quantity,bool Identified,int? ResourceRemaining,
     bool CurseRemoved,ItemLocation Location);
-public sealed record ItemInventoryState(int Schema,int Capacity,ItemInstance[] Items);
+public sealed record ItemInventoryState(int Schema,int Capacity,ImmutableArray<ItemInstance> Items);
 public sealed record ItemConsumption(string InstanceId,int Quantity);
 public sealed record ItemMergeResult(ItemInventoryState State,int Moved);
 public sealed record ItemRefillResult(ItemInventoryState State,int Transferred);
@@ -21,7 +22,7 @@ public static class ItemInventory
     public static void ValidateStructure(ItemInventoryState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        if(state.Schema!=1 || state.Capacity<0 || state.Items is null || state.Items.Length>state.Capacity)
+        if(state.Schema!=1 || state.Capacity<0 || state.Items.IsDefault || state.Items.Length>state.Capacity)
             throw new InvalidDataException("Invalid inventory");
         var ids=new HashSet<string>(StringComparer.Ordinal);var equipment=new HashSet<(string,string)>();
         foreach(var item in state.Items)
@@ -56,25 +57,25 @@ public static class ItemInventory
     }
     public static ItemInventoryState Add(ItemInventoryState state,ItemInstance item,IReadOnlyDictionary<int,ItemInventoryRule> rules)
     {
-        Validate(state,rules);return Checked(state with {Items=state.Items.Append(item).ToArray()},rules);
+        Validate(state,rules);return Checked(state with {Items=state.Items.Append(item).ToImmutableArray()},rules);
     }
     public static ItemInventoryState Move(ItemInventoryState state,string id,ItemLocation location,IReadOnlyDictionary<int,ItemInventoryRule> rules)
     {
         Validate(state,rules);var item=Find(state,id);
-        return Checked(state with {Items=state.Items.Select(i=>i.Id==id?item with {Location=location}:i).ToArray()},rules);
+        return Checked(state with {Items=state.Items.Select(i=>i.Id==id?item with {Location=location}:i).ToImmutableArray()},rules);
     }
     public static ItemInventoryState SwapLocations(ItemInventoryState state,string firstId,string secondId,IReadOnlyDictionary<int,ItemInventoryRule> rules)
     {
         Validate(state,rules);var first=Find(state,firstId);var second=Find(state,secondId);
         return Checked(state with {Items=state.Items.Select(i=>i.Id==firstId?i with {Location=second.Location}:
-            i.Id==secondId?i with {Location=first.Location}:i).ToArray()},rules);
+            i.Id==secondId?i with {Location=first.Location}:i).ToImmutableArray()},rules);
     }
     public static ItemInventoryState Split(ItemInventoryState state,string id,int quantity,string newId,IReadOnlyDictionary<int,ItemInventoryRule> rules)
     {
         Validate(state,rules);var item=Find(state,id);
         if(quantity<=0 || quantity>=item.Quantity || state.Items.Any(i=>i.Id==newId))throw new InvalidOperationException("Invalid stack split");
         return Checked(state with {Items=state.Items.Select(i=>i.Id==id?i with {Quantity=i.Quantity-quantity}:i)
-            .Append(item with {Id=newId,Quantity=quantity}).ToArray()},rules);
+            .Append(item with {Id=newId,Quantity=quantity}).ToImmutableArray()},rules);
     }
     public static ItemMergeResult Merge(ItemInventoryState state,string destinationId,string sourceId,IReadOnlyDictionary<int,ItemInventoryRule> rules)
     {
@@ -87,14 +88,14 @@ public static class ItemInventory
         int moved=Math.Min(rules[destination.DefinitionId].StackLimit-destination.Quantity,source.Quantity);
         if(moved==0)return new(state,0);
         var items=state.Items.Where(i=>i.Id!=sourceId || i.Quantity!=moved)
-            .Select(i=>i.Id==destinationId?i with {Quantity=i.Quantity+moved}:i.Id==sourceId?i with {Quantity=i.Quantity-moved}:i).ToArray();
+            .Select(i=>i.Id==destinationId?i with {Quantity=i.Quantity+moved}:i.Id==sourceId?i with {Quantity=i.Quantity-moved}:i).ToImmutableArray();
         return new(Checked(state with {Items=items},rules),moved);
     }
     public static ItemInventoryState SpendResource(ItemInventoryState state,string id,int amount,IReadOnlyDictionary<int,ItemInventoryRule> rules)
     {
         Validate(state,rules);var item=Find(state,id);
         if(amount<=0 || item.ResourceRemaining is null || item.ResourceRemaining<amount)throw new InvalidOperationException("Not enough item resource");
-        return Checked(state with {Items=state.Items.Select(i=>i.Id==id?i with {ResourceRemaining=i.ResourceRemaining-amount}:i).ToArray()},rules);
+        return Checked(state with {Items=state.Items.Select(i=>i.Id==id?i with {ResourceRemaining=i.ResourceRemaining-amount}:i).ToImmutableArray()},rules);
     }
     // Transfer resource units in one transaction; quantity sources disappear at zero,
     // resource sources follow the caller's resolved keep/remove policy. No RNG.
@@ -111,7 +112,7 @@ public static class ItemInventory
         bool remove=remaining==0 && (source.ResourceRemaining is null || removeEmptySource);
         var items=state.Items.Where(i=>i.Id!=sourceId || !remove).Select(i=>
             i.Id==destinationId?i with {ResourceRemaining=current+moved}:
-            i.Id!=sourceId?i:source.ResourceRemaining is null?i with {Quantity=remaining}:i with {ResourceRemaining=remaining}).ToArray();
+            i.Id!=sourceId?i:source.ResourceRemaining is null?i with {Quantity=remaining}:i with {ResourceRemaining=remaining}).ToImmutableArray();
         return new(Checked(state with {Items=items},rules),moved);
     }
     // Combat/use may consume the equipped singleton as well as a bag stack. Crafting
@@ -120,7 +121,7 @@ public static class ItemInventory
     {
         Validate(state,rules);var item=Find(state,id);
         return Checked(state with {Items=state.Items.Where(i=>i.Id!=id || item.Quantity>1)
-            .Select(i=>i.Id==id?i with {Quantity=i.Quantity-1}:i).ToArray()},rules);
+            .Select(i=>i.Id==id?i with {Quantity=i.Quantity-1}:i).ToImmutableArray()},rules);
     }
     // Final-state validation makes a recipe transaction atomic even at full capacity.
     // Recipe/actor/skill policies belong to the calling gameplay service.
@@ -139,7 +140,7 @@ public static class ItemInventory
         var remaining=state.Items.Where(i=>!costs.TryGetValue(i.Id,out int amount) || amount<i.Quantity)
             .Select(i=>costs.TryGetValue(i.Id,out int amount)?i with {Quantity=i.Quantity-amount}:i).ToList();
         // Validate outputs independently before optional packing. Capacity applies to the final state.
-        Validate(new(1,int.MaxValue,produced.ToArray()),rules);
+        Validate(new(1,int.MaxValue,produced.ToImmutableArray()),rules);
         foreach(var output in produced)
         {
             int quantity=output.Quantity;
@@ -154,12 +155,12 @@ public static class ItemInventory
                 }
             if(quantity>0)remaining.Add(output with {Quantity=quantity});
         }
-        return Checked(state with {Items=remaining.ToArray()},rules);
+        return Checked(state with {Items=remaining.ToImmutableArray()},rules);
     }
     public static long Count(ItemInventoryState state,int definitionId,string? container=null)=>state.Items
         .Where(i=>i.DefinitionId==definitionId && (container is null || i.Location.ContainerId==container)).Sum(i=>(long)i.Quantity);
     private static ItemInstance Find(ItemInventoryState state,string id)=>state.Items.FirstOrDefault(i=>i.Id==id)
         ??throw new InvalidOperationException("Unknown item instance");
-    private static ItemInventoryState Sorted(ItemInventoryState state)=>state with {Items=state.Items.OrderBy(i=>i.Id,StringComparer.Ordinal).ToArray()};
+    private static ItemInventoryState Sorted(ItemInventoryState state)=>state with {Items=state.Items.OrderBy(i=>i.Id,StringComparer.Ordinal).ToImmutableArray()};
     private static ItemInventoryState Checked(ItemInventoryState state,IReadOnlyDictionary<int,ItemInventoryRule> rules) {Validate(state,rules);return Sorted(state);}
 }

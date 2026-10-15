@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
@@ -5,15 +6,15 @@ using System.Text.Json;
 
 namespace NeoWizardry.Core;
 
-public sealed record OriginalRecipe(int OutputId, string OutputName, int[] IngredientIds,
-    string?[] IngredientNames, int SkillCode, int SkillThreshold, string UnresolvedC1C8Hex,
-    string[] Issues, string RecordSha256, string RawRecordHex)
+public sealed record OriginalRecipe(int OutputId, string OutputName, ImmutableArray<int> IngredientIds,
+    ImmutableArray<string?> IngredientNames, int SkillCode, int SkillThreshold, string UnresolvedC1C8Hex,
+    ImmutableArray<string> Issues, string RecordSha256, string RawRecordHex)
 {
     public string Skill => SkillCode switch { 255=>"No skill comparison",23=>"Engineering",26=>"Alchemy",0=>"Sword",_=>$"Skill code {SkillCode}" };
 }
 
 public sealed record RecipeCatalog(int Schema, string Mode, string Source, Provenance Provenance,
-    int RecordSize, int ItemCount, int Count, Dictionary<string,int> InactivePairs, OriginalRecipe[] Recipes)
+    int RecordSize, int ItemCount, int Count, ImmutableDictionary<string,int> InactivePairs, ImmutableArray<OriginalRecipe> Recipes)
 {
     public static RecipeCatalog Parse(string json)
     {
@@ -24,7 +25,7 @@ public sealed record RecipeCatalog(int Schema, string Mode, string Source, Prove
     public void Validate()
     {
         if(Schema!=1 || Mode!="reference_only" || Source!="DATABASES/ITEMS.DBS" || RecordSize!=269 ||
-            ItemCount<0 || Count<0 || Recipes is null || Count!=Recipes.Length || InactivePairs is null ||
+            ItemCount<0 || Count<0 || Recipes.IsDefault || Count!=Recipes.Length || InactivePairs is null ||
             InactivePairs.Any(p=>p.Key is not ("-1" or "-2") || p.Value<0) ||
             (long)Count+InactivePairs.Values.Sum(x=>(long)x)!=ItemCount ||
             Provenance is null || Provenance.Kind is not ("archive" or "loose") ||
@@ -34,9 +35,9 @@ public sealed record RecipeCatalog(int Schema, string Mode, string Source, Prove
         foreach(var r in Recipes)
         {
             if(r is null || r.OutputId<0 || r.OutputId>=ItemCount || !ids.Add(r.OutputId) ||
-                r.OutputName is null || r.IngredientIds is not {Length:2} || r.IngredientNames is not {Length:2} ||
+                r.OutputName is null || r.IngredientIds.IsDefault || r.IngredientIds.Length!=2 || r.IngredientNames.IsDefault || r.IngredientNames.Length!=2 ||
                 r.SkillCode is <0 or >255 || r.SkillThreshold is <0 or >255 ||
-                r.Issues is null || r.Issues.Any(x=>x is null) || !Hash(r.RecordSha256) ||
+                r.Issues.IsDefault || r.Issues.Any(x=>x is null) || !Hash(r.RecordSha256) ||
                 r.RawRecordHex is not {Length:538} || !r.RawRecordHex.All(Uri.IsHexDigit))
                 throw new InvalidDataException("Invalid combination record");
             var raw=Convert.FromHexString(r.RawRecordHex);

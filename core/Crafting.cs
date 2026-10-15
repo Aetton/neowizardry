@@ -1,7 +1,8 @@
+using System.Collections.Immutable;
 namespace NeoWizardry.Core;
 
 public sealed record SkillValue(string Id, int Value);
-public sealed record RecipeDefinition(string Id, string Name, ItemStack[] Ingredients,
+public sealed record RecipeDefinition(string Id, string Name, ImmutableArray<ItemStack> Ingredients,
     ItemStack Result, string? Skill = null, int MinimumSkill = 0);
 public sealed record CraftOrder(string HeroId, string RecipeId);
 
@@ -18,7 +19,7 @@ public static class Crafting
     public static void ValidateRecipe(RecipeDefinition recipe, ItemCatalog catalog)
     {
         if(string.IsNullOrWhiteSpace(recipe.Id) || string.IsNullOrWhiteSpace(recipe.Name) ||
-            recipe.Ingredients is not { Length: >0 } || recipe.Result is null || recipe.Result.Count<=0 ||
+            recipe.Ingredients.IsDefaultOrEmpty || recipe.Result is null || recipe.Result.Count<=0 ||
             recipe.MinimumSkill<0 || (recipe.Skill is null && recipe.MinimumSkill!=0))
             throw new InvalidDataException("Invalid recipe.");
         var ids=new HashSet<int>();

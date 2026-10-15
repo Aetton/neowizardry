@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using NeoWizardry.Core.Research;
 using NeoWizardry.Core;
 
@@ -66,7 +67,7 @@ Check(oldMagic.Party[0].Mana is null && oldMagic.Party[0].Spellbook is null,"Old
 for(int size=1;size<=8;size++)
 {
     var magicParty=Game.Create(size);
-    magicParty=magicParty with { Party=magicParty.Party.Select(h=>h with { Profession="Mage" }).ToArray() };
+    magicParty=magicParty with { Party=magicParty.Party.Select(h=>h with { Profession="Mage" }).ToImmutableArray() };
     for(int i=0;i<20 && magicParty.Enemy.Hp>0;i++)
         magicParty=magicParty.Party[0].Mana!.Single(p=>p.Realm=="Fire").Current>=2
             ? Game.Cast(magicParty,new("hero-1","test-spark",1,magicParty.Enemy.Id)).State : Game.Attack(magicParty).State;
@@ -165,7 +166,7 @@ Throws(()=>Crafting.Craft(craftStart with { KnownRecipes=null },tonicOrder,craft
 Throws(()=>Crafting.Craft(Game.CaptureFirst(craftStart),tonicOrder,craftCatalog),"Captive crafter rejected");
 Throws(()=>Crafting.Craft(craftStart with { Party=[craftStart.Party[0] with { Hp=0 }] },tonicOrder,craftCatalog),"Dead crafter rejected");
 foreach(var skills in new SkillValue[]?[]{null,[],[new("test-craft",19)]})
-    Throws(()=>Crafting.Craft(tonic with { Party=[tonic.Party[0] with { Skills=skills }] },new("hero-1","test-staff"),craftCatalog),"Skill gate cannot be bypassed");
+    Throws(()=>Crafting.Craft(tonic with { Party=[tonic.Party[0] with { Skills=skills?.ToImmutableList() }] },new("hero-1","test-staff"),craftCatalog),"Skill gate cannot be bypassed");
 Check(Inventory.Count(Crafting.Craft(tonic with { Party=[tonic.Party[0] with { Skills=[new("test-craft",20)] }] },new("hero-1","test-staff"),craftCatalog),81)==1,"Exact skill threshold permitted");
 Throws(()=>Crafting.Craft(tonic,tonicOrder,craftCatalog with { Provenance=craftCatalog.Provenance with { File="original" } }),"Synthetic recipes cannot apply to original catalog IDs");
 Throws(()=>Crafting.Craft(craftStart with {Items=craftStart.Items! with {Capacity=craftStart.Items.Items.Length}},tonicOrder,craftCatalog),"Craft rejects full instance capacity before ingredient loss");
@@ -187,16 +188,16 @@ var warded=Game.Cast(solo,wardOrder).State;
 Check(warded.Party[0].Hp==35 && warded.Party[0].Effects!.Single().Rounds==2,"Ward reduces damage and ticks on application round");
 Check(warded.RandomState==solo.RandomState,"Status spell consumes no fabricated success dice");
 var ward2=Game.Attack(warded).State;var ward3=Game.Attack(ward2).State;var ward4=Game.Attack(ward3).State;
-Check(ward2.Party[0].Hp==34 && ward3.Party[0].Hp==33 && ward3.Party[0].Effects!.Length==0 && ward4.Party[0].Hp==30,"Ward expires after exactly three rounds");
+Check(ward2.Party[0].Hp==34 && ward3.Party[0].Hp==33 && ward3.Party[0].Effects!.Count==0 && ward4.Party[0].Hp==30,"Ward expires after exactly three rounds");
 var bound=Game.Cast(solo,new("hero-1","test-bind",1,solo.Enemy.Id)).State;
-Check(bound.Party[0].Hp==36 && bound.Enemy.Effects!.Length==0,"Fast binding skips only this round enemy action");
+Check(bound.Party[0].Hp==36 && bound.Enemy.Effects!.Count==0,"Fast binding skips only this round enemy action");
 Check(Game.Attack(bound).State.Party[0].Hp==33,"Enemy acts normally after binding expires");
 var lateBind=Game.Cast(solo with { Party=[solo.Party[0] with { Speed=0 }] },new("hero-1","test-bind",1,solo.Enemy.Id)).State;
-Check(lateBind.Party[0].Hp==33 && lateBind.Enemy.Effects!.Length==0,"Late binding cannot retroactively skip an enemy action");
+Check(lateBind.Party[0].Hp==33 && lateBind.Enemy.Effects!.Count==0,"Late binding cannot retroactively skip an enemy action");
 var burned=Game.Cast(solo,new("hero-1","test-burn",2,solo.Enemy.Id)).State;
 Check(burned.Enemy.Hp==30 && burned.Enemy.Effects!.Single().Rounds==2,"Burn ticks at round end including cast round");
 var burn2=Game.Attack(burned).State;var burn3=Game.Attack(burn2).State;var burn4=Game.Attack(burn3).State;
-Check(burn2.Enemy.Hp==21 && burn3.Enemy.Hp==12 && burn3.Enemy.Effects!.Length==0 && burn4.Enemy.Hp==5,"Periodic damage stops after exact duration");
+Check(burn2.Enemy.Hp==21 && burn3.Enemy.Hp==12 && burn3.Enemy.Effects!.Count==0 && burn4.Enemy.Hp==5,"Periodic damage stops after exact duration");
 var burnWin=Game.Cast(solo with { Enemy=solo.Enemy with { Hp=2 } },new("hero-1","test-burn",2,solo.Enemy.Id)).State;
 Check(burnWin.RewardGranted && burnWin.Party[0].Xp==120 && Game.Attack(burnWin).State.Party[0].Xp==120,"Periodic damage victory grants XP once");
 var dual=Game.Create(2);var orders=new[]{wardOrder,new SpellOrder("hero-2","test-burn",1,dual.Enemy.Id)};
@@ -210,7 +211,7 @@ Throws(()=>Game.CastRound(dual,[]),"Empty casting plan rejected");
 Throws(()=>Game.CastRound(dual,[wardOrder,new("hero-2","unknown",1,dual.Enemy.Id)]),"One invalid plan order rejects entire round");
 Check(dual.Round==0 && dual.Party.All(h=>h.Mana!.All(m=>m.Current==12)),"Rejected plan spends no mana or turn");
 var refreshed=Magic.Apply([new("ward",6,1)],new("ward",2,3));
-Check(refreshed.Length==1 && refreshed[0].Magnitude==6 && refreshed[0].Rounds==3,"Repeated status refreshes duration without stacking or weakening");
+Check(refreshed.Count==1 && refreshed[0].Magnitude==6 && refreshed[0].Rounds==3,"Repeated status refreshes duration without stacking or weakening");
 Throws(()=>Game.Validate(solo with { Party=[solo.Party[0] with { Effects=[new("burn",1,2)] }] }),"Wrong target effect rejected");
 Throws(()=>Game.Validate(solo with { Enemy=solo.Enemy with { Effects=[new("bind",1,0)] } }),"Expired effect rejected in saves");
 Throws(()=>Game.Validate(solo with { Enemy=solo.Enemy with { Effects=[new("burn",1,2),new("burn",1,2)] } }),"Duplicate saved effects rejected");
@@ -328,7 +329,7 @@ System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(recipeBytes.AsSpan
 recipeBytes[0xc9]=26;recipeBytes[0xca]=15;
 var recipeReference=new OriginalRecipe(2,"Fixture compound",[0,1],["Fixture A","Fixture B"],26,15,new string('0',16),[],
     Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(recipeBytes)),Convert.ToHexString(recipeBytes));
-var recipeReferenceCatalog=new RecipeCatalog(1,"reference_only","DATABASES/ITEMS.DBS",new("loose","synthetic-combination-reference",new string('c',64)),269,3,1,new(){{"-1",2}},[recipeReference]);
+var recipeReferenceCatalog=new RecipeCatalog(1,"reference_only","DATABASES/ITEMS.DBS",new("loose","synthetic-combination-reference",new string('c',64)),269,3,1,ImmutableDictionary<string,int>.Empty.Add("-1",2),[recipeReference]);
 var recipeReferenceJson=System.Text.Json.JsonSerializer.Serialize(recipeReferenceCatalog,new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower});
 Check(RecipeCatalog.Parse(recipeReferenceJson).Recipes[0].Skill=="Alchemy","Combination reference parses with source-backed skill name");
 Throws(()=> (recipeReferenceCatalog with {Recipes=[recipeReference with {SkillThreshold=16}]}).Validate(),"Combination metadata must match its raw bytes");
@@ -350,6 +351,7 @@ checks+=CharacterDefenseChecks.Run();
 checks+=MonsterDefenseChecks.Run();
 checks+=MonsterScoreChecks.Run();
 checks+=MonsterSequenceChecks.Run();
+checks+=SnapshotChecks.Run(referenceCatalog,recipeReferenceCatalog);
 if(args.Length==2 && args[0]=="--fixture")
 {
     File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with { Count=5, Items=[restricted, restricted with { Id=78,Name="Test herb",TypeCode=19 }, restricted with { Id=79,Name="Test vial",TypeCode=19 }, restricted with { Id=80,Name="Test tonic",TypeCode=15 }, restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }], Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256) },new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));

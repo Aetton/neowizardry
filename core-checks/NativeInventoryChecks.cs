@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using NeoWizardry.Core.Research;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
@@ -110,7 +111,7 @@ static class NativeInventoryChecks
         outputDefinition=outputDefinition with {RecordSha256=Convert.ToHexString(SHA256.HashData(recipeRaw)),Instance=outputDefinition.Instance with {RawRecordHex=Convert.ToHexString(recipeRaw)}};
         var craftCatalog=catalog with {Count=3,Items=[definition,Definition(1,1,5),outputDefinition]};
         var recipe=new OriginalRecipe(2,outputDefinition.Name,[0,1],[definition.Name,craftCatalog.Find(1).Name],26,15,new string('0',16),[],outputDefinition.RecordSha256,Convert.ToHexString(recipeRaw));
-        var recipes=new RecipeCatalog(1,"reference_only","DATABASES/ITEMS.DBS",craftCatalog.Provenance,269,3,1,new(){{"-1",2}},[recipe]);
+        var recipes=new RecipeCatalog(1,"reference_only","DATABASES/ITEMS.DBS",craftCatalog.Provenance,269,3,1,ImmutableDictionary<string,int>.Empty.Add("-1",2),[recipe]);
         NativeInventoryState Ingredients(int a,int b,int capacity)
         {
             var inventory=NativeInventory.Create(craftCatalog,capacity);

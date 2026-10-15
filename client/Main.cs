@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Godot;
 using NeoWizardry.Core;
 using System.Text.Json;
@@ -84,7 +85,7 @@ public partial class Main : Node3D
         if(Crafting.UsesFixture(_catalog))
         {
             state=Inventory.Add(Inventory.Add(state,78,4,_catalog),79,2,_catalog);
-            state=state with { KnownRecipes=Crafting.Recipes.Select(r=>r.Id).ToArray() };
+            state=state with { KnownRecipes=Crafting.Recipes.Select(r=>r.Id).ToImmutableList() };
         }
         if(starter.Length>0)state=state with { Enemy=state.Enemy with { LootItemId=starter[^1].Id } };
         return state;
@@ -411,7 +412,7 @@ public partial class Main : Node3D
         AddChild(dialog);dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;
         dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var body=new VBoxContainer();dialog.AddChild(body);
-        var caster=new OptionButton();foreach(var h in _state.Party)caster.AddItem(h.Name);caster.Select(Array.FindIndex(_state.Party,h=>h.Id==_selectedHeroId));body.AddChild(caster);
+        var caster=new OptionButton();foreach(var h in _state.Party)caster.AddItem(h.Name);caster.Select(Array.FindIndex(_state.Party.ToArray(),h=>h.Id==_selectedHeroId));body.AddChild(caster);
         var spell=new OptionButton();foreach(var s in Magic.Spells)spell.AddItem($"{s.Name} · {s.Realm}");if(_initialRealm is not null)spell.Select(Math.Max(0,Array.FindIndex(Magic.Spells.ToArray(),s=>s.Realm==_initialRealm)));_initialRealm=null;body.AddChild(spell);
         var power=new OptionButton();for(int i=1;i<=3;i++)power.AddItem($"Power {i}");body.AddChild(power);
         var target=new OptionButton();foreach(var h in _state.Party)target.AddItem(h.Name);body.AddChild(target);
@@ -468,7 +469,7 @@ public partial class Main : Node3D
         dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var scroll=new ScrollContainer();dialog.AddChild(scroll);
         var body=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };scroll.AddChild(body);
-        var hero=new OptionButton();foreach(var h in _state.Party)hero.AddItem(h.Name);hero.Select(Array.FindIndex(_state.Party,h=>h.Id==_selectedHeroId));body.AddChild(hero);
+        var hero=new OptionButton();foreach(var h in _state.Party)hero.AddItem(h.Name);hero.Select(Array.FindIndex(_state.Party.ToArray(),h=>h.Id==_selectedHeroId));body.AddChild(hero);
         var recipe=new OptionButton();foreach(var r in Crafting.Recipes)recipe.AddItem(r.Name);body.AddChild(recipe);
         var detail=new Label { AutowrapMode=TextServer.AutowrapMode.WordSmart };body.AddChild(detail);
         var craft=new Button { Text="Craft one batch",CustomMinimumSize=new(0,56) };body.AddChild(craft);
@@ -546,7 +547,7 @@ public partial class Main : Node3D
         layout.Position=new(12,12);layout.Size=new(dialogSize.X-24,dialogSize.Y-64);
         var search=new LineEdit { PlaceholderText="Search item name" };layout.AddChild(search);
         var browse=new CheckButton { Text="Browse full catalog" };layout.AddChild(browse);
-        var hero=new OptionButton();foreach(var h in _state.Party)hero.AddItem(h.Name);hero.Select(Array.FindIndex(_state.Party,h=>h.Id==_selectedHeroId));layout.AddChild(hero);
+        var hero=new OptionButton();foreach(var h in _state.Party)hero.AddItem(h.Name);hero.Select(Array.FindIndex(_state.Party.ToArray(),h=>h.Id==_selectedHeroId));layout.AddChild(hero);
         BoxContainer row=narrow ? new VBoxContainer() : new HBoxContainer();row.SizeFlagsVertical=Control.SizeFlags.ExpandFill;layout.AddChild(row);
         var list=new ItemList { Name="InventoryDefinitions",CustomMinimumSize=new(narrow?0:Math.Min(360,dialogSize.X*0.4f),narrow?120:180),SizeFlagsVertical=Control.SizeFlags.ExpandFill,AutoHeight=false };row.AddChild(list);
         var detailColumn=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };row.AddChild(detailColumn);

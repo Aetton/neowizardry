@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 
 namespace NeoWizardry.Core;
@@ -5,11 +6,11 @@ namespace NeoWizardry.Core;
 // These are prototype rules, NOT recovered Wizardry 8 combat formulas.
 public sealed record Hero(string Id, string Name, string Race, string Profession,
     int Hp, int MaxHp, int Speed, int Power, int Xp = 0, bool Captive = false,
-    string Gender = "Male", ManaPool[]? Mana = null, string[]? Spellbook = null, SkillValue[]? Skills = null, StatusEffect[]? Effects = null);
-public sealed record Enemy(string Id, int Hp, int Speed, int Power, int XpReward, int? LootItemId = null, StatusEffect[]? Effects = null);
-public sealed record GameState(int Schema, Hero[] Party, Enemy Enemy, int Round = 0,
-    bool RewardGranted = false, string Quest = "none", uint RandomState = Dice.DefaultSeed, ItemInventoryState? Items = null, string[]? KnownRecipes = null, long NextItemSequence = 1);
-public sealed record RoundResult(GameState State, string[] Events);
+    string Gender = "Male", ImmutableList<ManaPool>? Mana = null, ImmutableList<string>? Spellbook = null, ImmutableList<SkillValue>? Skills = null, ImmutableList<StatusEffect>? Effects = null);
+public sealed record Enemy(string Id, int Hp, int Speed, int Power, int XpReward, int? LootItemId = null, ImmutableList<StatusEffect>? Effects = null);
+public sealed record GameState(int Schema, ImmutableArray<Hero> Party, Enemy Enemy, int Round = 0,
+    bool RewardGranted = false, string Quest = "none", uint RandomState = Dice.DefaultSeed, ItemInventoryState? Items = null, ImmutableList<string>? KnownRecipes = null, long NextItemSequence = 1);
+public sealed record RoundResult(GameState State, ImmutableArray<string> Events);
 
 public static class Game
 {
@@ -21,14 +22,14 @@ public static class Game
         var party = Enumerable.Range(1, size).Select(i =>
             new Hero($"hero-{i}", i == 1 ? "Faerie Ninja" : $"Companion {i}",
                 i == 1 ? "Faerie" : "Human", "Ninja", 36, 36, 12-i, 7,
-                Mana: [new("Fire",12,12),new("Divine",12,12)], Spellbook: Magic.Spells.Select(s=>s.Id).ToArray(), Skills: [new("test-craft",25)])).ToArray();
-        return new(SaveSchema, party, new("Training Sentinel", 32, 4, 3, 120), Items: ItemInventory.Create(Inventory.DefaultCapacity));
+                Mana: [new("Fire",12,12),new("Divine",12,12)], Spellbook: Magic.Spells.Select(s=>s.Id).ToImmutableList(), Skills: [new("test-craft",25)])).ToArray();
+        return new(SaveSchema, party.ToImmutableArray(), new("Training Sentinel", 32, 4, 3, 120), Items: ItemInventory.Create(Inventory.DefaultCapacity));
     }
 
     public static void Validate(GameState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        if (state.Schema != SaveSchema || state.Party is null || state.Enemy is null ||
+        if (state.Schema != SaveSchema || state.Party.IsDefault || state.Enemy is null ||
             state.Party.Length is < 1 or > 8 || state.Round < 0 ||
             state.Enemy.Hp < 0 || state.Enemy.Power < 0 || state.Enemy.Speed < 0 || state.Enemy.XpReward < 0 || state.Enemy.LootItemId < 0 ||
             string.IsNullOrWhiteSpace(state.Enemy.Id) || state.Quest is not ("none" or "captive" or "escaped"))
@@ -190,14 +191,14 @@ public static class Game
                 events.Add($"Victory. {enemy.XpReward} XP divided between {eligible.Length} survivors.");
             }
         }
-        var result = state with { Party = heroes, Enemy = enemy, Round = checked(state.Round+1), RewardGranted = granted,
+        var result = state with { Party = heroes.ToImmutableArray(), Enemy = enemy, Round = checked(state.Round+1), RewardGranted = granted,
             RandomState = randomState };
         if (granted && !state.RewardGranted && enemy.LootItemId.HasValue)
         {
             result = Inventory.Add(result,enemy.LootItemId.Value,1,catalog!);
             events.Add($"Loot: {catalog!.Find(enemy.LootItemId.Value).Name} ×1 added to the party bag.");
         }
-        return new(result, events.ToArray());
+        return new(result, events.ToImmutableArray());
     }
 
     // A regression fixture for the solo captivity softlock, not a canonical Crock quest implementation.
@@ -205,18 +206,18 @@ public static class Game
     {
         Validate(state);
         if (state.Quest != "none") throw new InvalidOperationException("Captivity event already used");
-        int index = Array.FindIndex(state.Party, h => h.Hp > 0 && !h.Captive);
+        int index = Array.FindIndex(state.Party.ToArray(), h => h.Hp > 0 && !h.Captive);
         if (index < 0) throw new InvalidOperationException("No living hero to capture");
         var party = state.Party.ToArray();
         party[index] = party[index] with { Captive = true };
-        return state with { Party = party, Quest = "captive" };
+        return state with { Party = party.ToImmutableArray(), Quest = "captive" };
     }
 
     public static GameState Escape(GameState state)
     {
         Validate(state);
         if (state.Quest != "captive") throw new InvalidOperationException("No captivity event");
-        return state with { Party = state.Party.Select(h => h with { Captive = false }).ToArray(), Quest = "escaped" };
+        return state with { Party = state.Party.Select(h => h with { Captive = false }).ToImmutableArray(), Quest = "escaped" };
     }
 
     public static string Save(GameState state)
