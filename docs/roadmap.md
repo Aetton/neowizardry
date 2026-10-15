@@ -1,11 +1,11 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Status checked against code and iteration reports through **025**, 2026-10-15. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+Status checked against code and iteration reports through **028**, with an archive/code audit on 2026-10-15. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
 | Workstream | Recovered / implemented | Still required for original gameplay |
 |---|---|---|
-| Combat | Original integer attack/swing budgets, ordinary free-hand base attack rating, common melee/projectile swing allocation, nine mode-modifier pairs, ordinary character hit/penetration score builders, primary-hand bonuses, prepared weapon/ammo damage inputs, physical damage scaling, a connected neutral melee calculation, explicit projectile completion/resource lifecycle, native ammo compatibility, scoped reserve/refill continuation and connected neutral projectile post-delivery resolution, distance/spread aim perturbation pending aimed launch, character defense from active armor/effective stats and stamina-derived fatigue | Effective actor/hand policy, effective stat generation and state/action predicates, monster defense/location selection, conditions/context, hit/fumble special paths, actor aim-profile/collision/actual-target policy, final-attack refill scheduling and resource flow, target-dependent damage context/effects, initiative/range/formation, live integration |
+| Combat | Original integer attack/swing budgets, ordinary free-hand base attack rating, common melee/projectile swing allocation, nine mode-modifier pairs, ordinary character hit/penetration score builders, primary-hand bonuses, prepared weapon/ammo damage inputs, physical damage scaling, a connected neutral melee calculation, explicit projectile completion/resource lifecycle, native ammo compatibility, scoped reserve/refill continuation and connected neutral projectile post-delivery resolution, distance/spread aim perturbation pending aimed launch, character defense from active armor/effective stats and stamina-derived fatigue, monster target defense and seven-zone selection, monster hit/penetration scores, physical candidate tuples and separate group/swing budgets | Effective actor/hand policy, effective stat generation and state/action predicates, full mixed-action monster AI/eligibility and damage-state producers, conditions/context, hit/fumble special paths, actor aim-profile/collision/actual-target policy, final-attack refill scheduling and resource flow, target-dependent damage context/effects, initiative/range/formation, live integration |
 | Characters | Prototype roster and party-size support; typed effective combat-attribute inputs; weighted original class-history arithmetic | Real character creation, effective stat/skill derivation, XP/leveling/multiclass progression and saves |
 | Magic | 150-record metadata/reference, original ordinary casting-risk/backfire, Power Cast, base strength and resistance helpers | Learning/book/class policy, source/context modifiers, one complete original damage/healing path, resource/condition/training flow and live integration |
 | Inventory | One authoritative typed instance model in gameplay, equipment, fixture crafting and schema-2 saves; old-save migration, split/merge/transfer/resources | Original use/recharge/curse policy and remaining equipment coverage |
@@ -13,6 +13,19 @@ Status checked against code and iteration reports through **025**, 2026-10-15. W
 | World | SLF reader and ordinary patch/loose overlay; accessible data imported privately | Local LEVELS.SLF inventory, geometry/collision and original monastery content |
 
 Recovered formulas are independently testable; the playable training battle still uses labelled fixtures. This distinction is an integration gate, not a claim that the whole combat or magic stage is complete.
+
+## Audit gate — 2026-10-15
+
+[Archive/code audit](audit-2026-10-15.md) found reproducible typed/raw catalog validation gaps, repeated full-catalog decoding in inventory operations and mutable arrays behind the snapshot contract. Projectile integration must retain one authoritative inventory. These are implementation tasks, separate from intentionally preserved original arithmetic.
+
+Immediate integration prerequisites take priority over adding isolated arithmetic helpers:
+
+1. [TOC-40](https://linear.app/tochka/issue/TOC-40): verified immutable compiled definitions, cross-check known typed/raw fields and reuse indexed semantic rules.
+2. [TOC-41](https://linear.app/tochka/issue/TOC-41) / [TOC-42](https://linear.app/tochka/issue/TOC-42): explicit original actors and command/state/save contracts; one complete original encounter with current-inventory resource completion. Then one original spell effect and one native combination.
+3. [TOC-43](https://linear.app/tochka/issue/TOC-43): accessible monster/encounter/item/missile imports and NPC/facts content research. DATA.SLF availability is verified; these tracks do not depend on downloading LEVELS.SLF.
+
+Measure evidence, import, execution, persistence and UI separately. Arithmetic case counts and fixture CI do not establish original gameplay coverage. The detailed execution backlog below remains open within these gates.
+
 
 ## Stages
 1. **Combat:** recover and verify initiative, hit/penetration, weapon damage, attack/swing counts, range and formation. Integrate imported weapons.
