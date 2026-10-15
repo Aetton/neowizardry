@@ -75,7 +75,7 @@ for(int size=1;size<=8;size++)
 }
 Throws(() => Game.Create(0), "No empty party");
 Throws(() => Game.Create(9), "UI limit enforced");
-Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 3", "\"Schema\": 99")), "Reject unknown save version");
+Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 4", "\"Schema\": 99")), "Reject unknown save version");
 Throws(() => Game.Validate(solo with { Party = [solo.Party[0], solo.Party[0]] }), "Reject duplicate IDs");
 Throws(() => Game.Escape(solo), "Escape requires capture");
 var fast = solo with { Party = [solo.Party[0] with { Speed = 0, Hp = 1 }] };
@@ -141,7 +141,7 @@ var wonLoot=Game.Attack(lootBattle,catalog).State;
 Check(wonLoot.RewardGranted && Inventory.Count(wonLoot,77)==1,"Victory grants configured test loot");
 Check(Inventory.Count(Game.Attack(Game.Load(Game.Save(wonLoot)),catalog).State,77)==1,"Reloaded victory cannot duplicate loot");
 var legacyBagSave=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(equipped))!;
-legacyBagSave["Schema"]=1;legacyBagSave.AsObject().Remove("Items");legacyBagSave.AsObject().Remove("NextItemSequence");legacyBagSave.AsObject().Remove("ProjectileActions");legacyBagSave.AsObject().Remove("NextProjectileSequence");
+legacyBagSave["Schema"]=1;legacyBagSave.AsObject().Remove("Items");legacyBagSave.AsObject().Remove("NextItemSequence");legacyBagSave.AsObject().Remove("ProjectileActions");legacyBagSave.AsObject().Remove("NextProjectileSequence");legacyBagSave.AsObject().Remove("Melee");
 legacyBagSave["Party"]![0]!["EquippedItemId"]=77;
 var legacyEquipment=Game.Load(legacyBagSave.ToJsonString(),catalog);
 Check(Inventory.Count(legacyEquipment,77)==0 && Inventory.Count(Equipment.Unequip(legacyEquipment,"hero-1",catalog),77)==1,"Old equipped save retains its single owned copy");
@@ -283,7 +283,7 @@ Check(Game.Attack(negativeEquipped,negativeCatalog).State.Enemy.Hp==solo.Enemy.H
 var snakeJson=System.Text.Json.JsonSerializer.Serialize(catalog,new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower});
 Check(ItemCatalog.Parse(snakeJson).Find(77).Name==restricted.Name,"Python/C# snake-case schema");
 var oldSave=System.Text.Json.Nodes.JsonNode.Parse(Game.Save(solo))!;
-oldSave["Schema"]=1;oldSave.AsObject().Remove("Items");oldSave.AsObject().Remove("NextItemSequence");oldSave.AsObject().Remove("ProjectileActions");oldSave.AsObject().Remove("NextProjectileSequence");
+oldSave["Schema"]=1;oldSave.AsObject().Remove("Items");oldSave.AsObject().Remove("NextItemSequence");oldSave.AsObject().Remove("ProjectileActions");oldSave.AsObject().Remove("NextProjectileSequence");oldSave.AsObject().Remove("Melee");
 foreach(var member in oldSave["Party"]!.AsArray()) { member!.AsObject().Remove("Gender");member.AsObject().Remove("EquippedItemId"); }
 var migrated=Game.Load(oldSave.ToJsonString());
 Check(migrated.Party[0].Gender=="Male" && Equipment.ItemId(migrated,migrated.Party[0].Id) is null,"Iteration-001 saves remain readable");
@@ -353,9 +353,15 @@ checks+=MonsterScoreChecks.Run();
 checks+=MonsterSequenceChecks.Run();
 checks+=SnapshotChecks.Run(referenceCatalog,recipeReferenceCatalog);
 checks+=ProjectileExecutionChecks.Run(restricted);
+checks+=MeleeEncounterChecks.Run();
 if(args.Length==2 && args[0]=="--fixture")
 {
-    File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with { Count=5, Items=[restricted, restricted with { Id=78,Name="Test herb",TypeCode=19 }, restricted with { Id=79,Name="Test vial",TypeCode=19 }, restricted with { Id=80,Name="Test tonic",TypeCode=15 }, restricted with { Id=81,Name="Tempered test staff",DamageConstant=3 }], Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256) },new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
+    var fixtureItems=new[]{restricted,restricted with {Id=78,Name="Test herb",TypeCode=19},restricted with {Id=79,Name="Test vial",TypeCode=19},
+        restricted with {Id=80,Name="Test tonic",TypeCode=15},restricted with {Id=81,Name="Tempered test staff",DamageConstant=3}}
+        .Select(i=>SourceFixture.Item(i with {RaceMask=65535,ProfessionMask=32767,GenderMask=3,Instance=new(i.TypeCode is 0 or 1?0:1,0,0,0,100,0,new string('0',538))})).ToImmutableArray();
+    File.WriteAllText(args[1],System.Text.Json.JsonSerializer.Serialize(catalog with {Schema=3,Count=5,Items=fixtureItems,
+        Provenance=new Provenance("loose","synthetic-test-catalog",catalog.Provenance.Sha256)},
+        new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
     File.WriteAllText(Path.ChangeExtension(args[1],".spells.json"),referenceJson);
     File.WriteAllText(Path.ChangeExtension(args[1],".recipes.json"),recipeReferenceJson);
 }
@@ -424,6 +430,7 @@ else if(args.Length>0)
     var real=ItemCatalog.Parse(File.ReadAllText(args[0]));
     if(real.Schema==3)
     {
+        checks+=MeleeEncounterChecks.RunCatalog(real);
         Check(real.Items.All(i=>i.Instance is not null),"Real item records include native instance fields");
         var generated=real.Items.Select(i=>NativeItemFactory.Create(i,[],useMaximum:true)).ToArray();
         Check(generated.All(i=>NativeItemInstance.Decode(i.Encode())==i),"All imported native creation maxima roundtrip through 12-byte slots");

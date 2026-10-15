@@ -16,12 +16,8 @@ public static class OriginalMeleeStrike
             throw new ArgumentException("Only ordinary weapon melee is covered");
         if(contactDraw is <0 or >99)throw new ArgumentOutOfRangeException(nameof(contactDraw));
         var scores=OriginalPhysicalScores.OrdinaryCharacter(input);
-        if(scores.UntargetedHitScore<100)throw new InvalidOperationException("Fumble target selection must be resolved for this score");
-        bool automatic=contactDraw<5;
-        if(contactDraw>=95 || !automatic && contactDraw+1>scores.HitScore)
-            return NoDamage(PhysicalStrikeOutcome.Miss);
-        if(!OriginalPhysicalScores.Penetrates(scores.PenetrationScore,contactDraw,automatic))
-            return NoDamage(PhysicalStrikeOutcome.NotPenetrated);
+        var outcome=Contact(scores,contactDraw);
+        if(outcome!=PhysicalStrikeOutcome.Damage)return NoDamage(outcome);
         int repetitions=input.Mode==OriginalAttackMode.Berserk?2:1;
         var damage=OriginalPhysicalDamage.Roll(profile,repetitions,handDamagePercent,effectDamagePercent,absorptionPercent,damageDraws);
         return new(PhysicalStrikeOutcome.Damage,scores,damage);
@@ -32,4 +28,15 @@ public static class OriginalMeleeStrike
             return new(outcome,scores,null);
         }
     }
+    // Shared by the executor to request damage dice only when contact and penetration pass.
+    public static PhysicalStrikeOutcome Contact(PhysicalScoreBreakdown scores,int contactDraw)
+    {
+        ArgumentNullException.ThrowIfNull(scores);
+        if(contactDraw is <0 or >99)throw new ArgumentOutOfRangeException(nameof(contactDraw));
+        if(scores.UntargetedHitScore<100)throw new InvalidOperationException("Fumble target selection must be resolved for this score");
+        bool automatic=contactDraw<5;
+        if(contactDraw>=95 || !automatic && contactDraw+1>scores.HitScore)return PhysicalStrikeOutcome.Miss;
+        return OriginalPhysicalScores.Penetrates(scores.PenetrationScore,contactDraw,automatic)?PhysicalStrikeOutcome.Damage:PhysicalStrikeOutcome.NotPenetrated;
+    }
+
 }

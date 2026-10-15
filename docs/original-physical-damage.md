@@ -57,6 +57,10 @@ The multiplier-building branches `0x542225`–`0x54238E` include target state, B
 
 The test scenario connects class history and attributes through BAR, hand bonuses, target scores, shared d100 and damage. It is not a whole combat round or live original battle. Projectile contact/delivery, redirected attacks, low-score fumbles, target/equipment/actor validation, ammo/throw depletion, interruptions, HP effects, special conditions and monster-side attacks remain explicit gates. A critical item effect is not implied by a high physical damage roll.
 
+## Playable integration update — iteration 032
+
+New expeditions now execute this ordinary character melee path through [MeleeCombat](iteration-032.md), using authored effective facts, real inventory-owned weapons, full attack/swing budgets, actual HP/RNG commits and scenario rewards. The opposing training character is not a monster; original actor generation, special effects and scheduling remain open. The following safeguard describes the retained legacy/synthetic sandbox.
+
 ## Playable fixture safeguard
 
 The experimental battle continues to use its labelled fixture rules. Its imported-weapon damage is now floored at one after the raw dice roll, preventing newly supported negative signed constants from healing the enemy. Unarmed fixture Power and original-stat/save migration behavior are unchanged. This safeguard does not silently replace the playable battle with the new neutral melee calculation.

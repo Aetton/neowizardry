@@ -1,7 +1,7 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Status checked against code and iteration reports through **031**, with an archive/code audit on 2026-10-15. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+Status checked against code and iteration reports through **032**, with an archive/code audit on 2026-10-15. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
 | Workstream | Recovered / implemented | Still required for original gameplay |
 |---|---|---|
@@ -12,7 +12,7 @@ Status checked against code and iteration reports through **031**, with an archi
 | Crafting | 36-record original recipe reference, recovered native combination arithmetic and clean transaction simulation | Actor skill/time/progression policy, original combinations in gameplay and result previews; proper crafting menu remains a separate rework |
 | World | SLF reader and ordinary patch/loose overlay; accessible data imported privately | Local LEVELS.SLF inventory, geometry/collision and original monastery content |
 
-Recovered formulas are independently testable; the playable training battle still uses labelled fixtures. This distinction is an integration gate, not a claim that the whole combat or magic stage is complete.
+Recovered ordinary character formulas now execute in the default new training duel (032), with real owned weapons, explicit authored effective facts, contact/penetration/HP, RNG continuation and scenario rewards. The actors, scheduler and room remain authored fixtures; imported monsters, real stat derivation and complete original combat/magic remain integration gates.
 
 ## Audit gate — 2026-10-15
 
@@ -116,7 +116,7 @@ Use original formulas with a clean implementation. Current research priority: ph
 3. **Complete representative original magic and combination flows.** Trace costs through results and training, using the clean instance inventory and actor policies. Keep full content coverage and the deferred redesigns separate.
 4. **Resume world import when LEVELS.SLF is locally available.** Rules work does not remove the archive gate. A real monastery slice remains the target for stage 6; no unrelated feature work is needed to proceed on the accessible rules.
 
-Latest evidence: [iteration 031](iteration-031.md), [iteration 030](iteration-030.md), [iteration 029](iteration-029.md), [iteration 028](iteration-028.md), [monster sequences](original-monster-sequences.md), [iteration 027](iteration-027.md), [monster attacks](original-monster-attacks.md), [iteration 026](iteration-026.md), [monster defense](original-monster-defense.md), [iteration 025](iteration-025.md), [character defense/fatigue](original-character-defense.md), [iteration 024](iteration-024.md), [projectile aim](original-projectile-aim.md), [iteration 023](iteration-023.md), [projectile strike](original-projectile-strike.md), [iteration 022](iteration-022.md), [ammo and refill](original-ammunition-reload.md), [iteration 021](iteration-021.md), [projectile resources](original-projectile-resources.md), [iteration 020](iteration-020.md), [physical damage](original-physical-damage.md), [physical formulas](original-combat-formulas.md), [magic formulas](original-magic-formulas.md). Current work: [TOC-40](https://linear.app/tochka/issue/TOC-40); actor and snapshot integration follow in TOC-41/42. Completed tracking: [TOC-28](https://linear.app/tochka/issue/TOC-28) (017) and [TOC-29](https://linear.app/tochka/issue/TOC-29) (018). Preserve TOC-22/23/24 as deferred crafting, passive magic and Gadgeteer/Omnigun reworks.
+Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-031.md), [iteration 030](iteration-030.md), [iteration 029](iteration-029.md), [iteration 028](iteration-028.md), [monster sequences](original-monster-sequences.md), [iteration 027](iteration-027.md), [monster attacks](original-monster-attacks.md), [iteration 026](iteration-026.md), [monster defense](original-monster-defense.md), [iteration 025](iteration-025.md), [character defense/fatigue](original-character-defense.md), [iteration 024](iteration-024.md), [projectile aim](original-projectile-aim.md), [iteration 023](iteration-023.md), [projectile strike](original-projectile-strike.md), [iteration 022](iteration-022.md), [ammo and refill](original-ammunition-reload.md), [iteration 021](iteration-021.md), [projectile resources](original-projectile-resources.md), [iteration 020](iteration-020.md), [physical damage](original-physical-damage.md), [physical formulas](original-combat-formulas.md), [magic formulas](original-magic-formulas.md). Current work: [TOC-40](https://linear.app/tochka/issue/TOC-40); actor and snapshot integration follow in TOC-41/42. Completed tracking: [TOC-28](https://linear.app/tochka/issue/TOC-28) (017) and [TOC-29](https://linear.app/tochka/issue/TOC-29) (018). Preserve TOC-22/23/24 as deferred crafting, passive magic and Gadgeteer/Omnigun reworks.
 
 ## Iteration 030 — deep immutable snapshots
 
@@ -126,3 +126,8 @@ Latest evidence: [iteration 031](iteration-031.md), [iteration 030](iteration-03
 ## Iteration 031 — authoritative projectile transactions
 
 [Iteration 031](iteration-031.md) addresses AUD-05: series state no longer carries inventory; the canonical executor commits resource cost, actual-target HP and pending ordinal against current GameState.Items. Source-instance reservations, multiple distinct pending shots, duplicate callback rejection, monotonic IDs, current-state refill and schema-1/2 → 3 migration are covered. Callers serialize commits to the current state. Godot fixture combat is unchanged; original actor eligibility/stats, geometry/collision, RNG planning and reward scheduling remain integration work.
+
+
+## Iteration 032 — playable ordinary melee
+
+[Iteration 032](iteration-032.md) connects the recovered character single-weapon attack/swing, defense/location, hit/penetration and damage rules to the default new expedition and Attack UI. Real owned weapons, clamped HP, exact-instance loot transfer, one-time scenario XP, core range validation and save schema 4 are covered for parties 1–8, including private original equipment. Training stats/body protection, effective-Speed scheduling, targets and RNG are explicitly authored; the opposing character is not an imported monster. Legacy saves retain their prior mode; synthetic spells stay in Spell sandbox. TOC-41 remains in progress for original actor/stat/hand/state producers, monster execution, original magic/combinations and fuller action policy.

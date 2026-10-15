@@ -47,6 +47,7 @@ public static class Magic
     }
     public static string? Denial(GameState state, SpellOrder order)
     {
+        if(state.Melee is not null)return "Original spells are not connected to this melee encounter yet.";
         var caster=state.Party.FirstOrDefault(h=>h.Id==order.HeroId);
         if(caster is null)return "Unknown caster.";
         if(caster.Hp==0 || caster.Captive)return "Caster cannot act.";

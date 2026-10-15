@@ -10,12 +10,12 @@ public sealed record Hero(string Id, string Name, string Race, string Profession
 public sealed record Enemy(string Id, int Hp, int Speed, int Power, int XpReward, int? LootItemId = null, ImmutableList<StatusEffect>? Effects = null);
 public sealed record GameState(int Schema, ImmutableArray<Hero> Party, Enemy Enemy, int Round = 0,
     bool RewardGranted = false, string Quest = "none", uint RandomState = Dice.DefaultSeed, ItemInventoryState? Items = null, ImmutableList<string>? KnownRecipes = null, long NextItemSequence = 1,
-    ImmutableDictionary<string,ProjectileActionState>? ProjectileActions = null, long NextProjectileSequence = 1);
+    ImmutableDictionary<string,ProjectileActionState>? ProjectileActions = null, long NextProjectileSequence = 1, MeleeEncounter? Melee = null);
 public sealed record RoundResult(GameState State, ImmutableArray<string> Events);
 
 public static class Game
 {
-    public const int SaveSchema = 3;
+    public const int SaveSchema = 4;
 
     public static GameState Create(int size)
     {
@@ -45,6 +45,7 @@ public static class Game
             throw new InvalidDataException("Reward before victory");
         Inventory.ValidateStructure(state);
         ProjectileExecution.ValidateStructure(state);
+        MeleeCombat.ValidateStructure(state);
         foreach(var hero in state.Party)
         {
             Magic.ValidateHero(hero);
@@ -61,7 +62,9 @@ public static class Game
                 throw new InvalidDataException("Invalid known recipe");
     }
 
-    public static RoundResult Attack(GameState state, ItemCatalog? catalog = null) => ResolveRound(state,catalog,[]);
+    public static RoundResult Attack(GameState state, ItemCatalog? catalog = null, double? distance = null) => state.Melee is null?
+        ResolveRound(state,catalog,[]):MeleeCombat.Advance(state,catalog??throw new InvalidOperationException("Melee catalog required"),
+            distance??throw new InvalidOperationException("Resolve melee distance before attacking"));
 
     public static RoundResult Cast(GameState state, SpellOrder order, ItemCatalog? catalog = null)
     {
@@ -71,6 +74,7 @@ public static class Game
     public static RoundResult CastRound(GameState state, IReadOnlyList<SpellOrder> orders, ItemCatalog? catalog = null)
     {
         ArgumentNullException.ThrowIfNull(orders);
+        if(state.Melee is not null)throw new InvalidOperationException("Synthetic spell rounds are unavailable in the restored melee encounter");
         Validate(state);
         if(orders.Count==0)throw new InvalidOperationException("No spell orders selected.");
         var actors=new HashSet<string>();

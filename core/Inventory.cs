@@ -18,7 +18,7 @@ public static class Inventory
         ItemInventory.ValidateStructure(state.Items);
         foreach(var item in state.Items.Items)
         {
-            if(item.Location!=BagLocation && (item.Location.EquipmentSlot!=Equipment.WeaponSlot || !state.Party.Any(h=>h.Id==item.Location.ContainerId)))
+            if(item.Location!=BagLocation && (item.Location.EquipmentSlot!=Equipment.WeaponSlot || !state.Party.Any(h=>h.Id==item.Location.ContainerId) && !(state.Melee is not null && item.Location.ContainerId==state.Enemy.Id)))
                 throw new InvalidDataException("Unknown inventory location");
             if(item.Id.StartsWith("item-",StringComparison.Ordinal) && long.TryParse(item.Id.AsSpan(5),out long sequence) && sequence>=state.NextItemSequence)
                 throw new InvalidDataException("Item identity sequence would reuse an existing ID");

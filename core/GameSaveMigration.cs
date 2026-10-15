@@ -11,16 +11,18 @@ public static class GameSaveMigration
     {
         var root=JsonNode.Parse(json)?.AsObject()??throw new InvalidDataException("Empty save");
         int schema=root["Schema"]?.GetValue<int>()??throw new InvalidDataException("Missing save version");
+        if(schema is 1 or 2 or 3 && root.ContainsKey("Melee"))throw new InvalidDataException("Melee encounter requires save schema 4");
         if(schema is 1 or 2 && (root.ContainsKey("ProjectileActions") || root.ContainsKey("NextProjectileSequence")))
             throw new InvalidDataException("Projectile state requires save schema 3");
-        if(schema==2)
+        if(schema is 2 or 3)
         {
             if(root.ContainsKey("Bag") || root["Party"] is JsonArray oldParty && oldParty.Any(h=>h?.AsObject().ContainsKey("EquippedItemId")==true))
                 throw new InvalidDataException("Conflicting legacy inventory fields in instance save");
             var previous=JsonSerializer.Deserialize<GameState>(json)??throw new InvalidDataException("Empty save");
             var upgraded=previous with {Schema=Game.SaveSchema};
+            if(upgraded.ProjectileActions is {Count:>0} && catalog is null)throw new InvalidDataException("Saved projectiles require their catalog");
             Game.Validate(upgraded);
-            if(catalog is not null)Equipment.ValidateLoadedEquipment(upgraded,catalog,catalog.Provenance.Sha256);
+            if(catalog is not null){Equipment.ValidateLoadedEquipment(upgraded,catalog,catalog.Provenance.Sha256);ProjectileExecution.Validate(upgraded,catalog);}
             return upgraded;
         }
         if(schema==Game.SaveSchema)
@@ -29,12 +31,13 @@ public static class GameSaveMigration
                 throw new InvalidDataException("Conflicting legacy inventory fields in instance save");
             var current=JsonSerializer.Deserialize<GameState>(json)??throw new InvalidDataException("Empty save");
             Game.Validate(current);
-            if(current.ProjectileActions is {Count:>0} && catalog is null)
-                throw new InvalidDataException("Saved projectile actions require their item catalog");
+            if((current.ProjectileActions is {Count:>0} || current.Melee is not null) && catalog is null)
+                throw new InvalidDataException("Saved combat actions require their item catalog");
             if(catalog is not null)
             {
                 Equipment.ValidateLoadedEquipment(current,catalog,catalog.Provenance.Sha256);
                 ProjectileExecution.Validate(current,catalog);
+                if(current.Melee is not null)MeleeCombat.Validate(current,catalog);
             }
             return current;
         }

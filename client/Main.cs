@@ -57,6 +57,8 @@ public partial class Main : Node3D
         BuildRoom();
         BuildUi();
         LoadCatalog();
+        if(_catalog is null && _catalogRequested)throw new InvalidDataException("Requested item catalog could not be loaded");
+        _catalog??=MeleeTraining.Catalog();
         LoadSpellCatalog();
         LoadRecipeCatalog();
         _state=CreateExpedition(1);
@@ -65,7 +67,7 @@ public partial class Main : Node3D
         if(!OS.GetCmdlineUserArgs().Contains("--smoke") && !OS.GetCmdlineUserArgs().Contains("--mobile-smoke") && Godot.FileAccess.FileExists(AutoSavePath))
             Try(()=>LoadFrom(AutoSavePath));
         if(OS.GetCmdlineUserArgs().Contains("--ui-preview"))NewParty(8);
-        Say("Technical slice. Synthetic room, sentinel and dialogue; combat rules are experimental.");
+        Say("Training room: restored ordinary melee rules; authored combatants and scenario initiative.");
         Say(_touchMode ? "Left pad — move · swipe the view — look · approach the sentinel to attack." : "WASD — move · right mouse — look · Esc — release cursor.");
         if (OS.GetCmdlineUserArgs().Contains("--smoke")) CallDeferred(nameof(Smoke));
         if (OS.GetCmdlineUserArgs().Contains("--mobile-smoke")) Callable.From(MobileSmoke).CallDeferred();
@@ -76,8 +78,9 @@ public partial class Main : Node3D
         if (OS.GetCmdlineUserArgs().Contains("--magic")) Callable.From(ShowMagic).CallDeferred();
     }
 
-    private GameState CreateExpedition(int size)
+    private GameState CreateExpedition(int size,bool melee=true)
     {
+        if(melee)return MeleeTraining.Create(size,_catalog??throw new InvalidOperationException("Missing melee catalog"));
         var state=Game.Create(size);
         if(_catalog is null)return state;
         var starter=_catalog.Items.OrderBy(i=>i.Id).Where(i=>Equipment.Denial(state.Party[0],i) is null).Take(Crafting.UsesFixture(_catalog)?1:2).ToArray();
@@ -120,7 +123,7 @@ public partial class Main : Node3D
         {
             path=Path.GetFullPath(path,ExternalCatalogRoot());
         }
-        if(!System.IO.File.Exists(path)) { Say("No original item catalog loaded. The scene still works with test rules.");return; }
+        if(!System.IO.File.Exists(path)) { Say("No imported item catalog loaded. Using practice equipment.");return; }
         Try(()=>{_catalog=ItemCatalog.Parse(System.IO.File.ReadAllText(path));Say($"Loaded {_catalog.Count} items from {_catalog.Provenance.File}.");});
     }
 
@@ -278,9 +281,9 @@ public partial class Main : Node3D
         theme.SetColor("default_color","RichTextLabel",new(.77f,.77f,.66f));
         _hudTheme=theme;GetWindow().Theme=theme;
     }
-    private void NewParty(int size)
+    private void NewParty(int size,bool melee=true)
     {
-        _state=CreateExpedition(size);_autosaveBlocked=false;_player.Position=new(0,.9f,2);_selectedHeroId=_state.Party[0].Id;Refresh();Say("New test expedition.");
+        _state=CreateExpedition(size,melee);_autosaveBlocked=false;_player.Position=new(0,.9f,2);_selectedHeroId=_state.Party[0].Id;Refresh();Say(melee?"New melee training expedition.":"New synthetic spell sandbox.");
     }
     private void ShowMenu()
     {
@@ -289,9 +292,10 @@ public partial class Main : Node3D
         dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var scroll=new ScrollContainer();dialog.AddChild(scroll);var body=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };scroll.AddChild(body);
         var size=new OptionButton();for(int i=1;i<=8;i++)size.AddItem($"{i} adventurer{(i==1?"":"s")}");size.Select(_state.Party.Length-1);body.AddChild(size);
-        Button(body,"New party",()=>{NewParty(size.Selected+1);dialog.QueueFree();});
+        Button(body,"New party",()=>Try(()=>{NewParty(size.Selected+1);dialog.QueueFree();}));
+        Button(body,"Spell sandbox",()=>Try(()=>{NewParty(size.Selected+1,false);dialog.QueueFree();}));
         Button(body,"Save",Save);Button(body,"Load",()=>{Load();size.Select(_state.Party.Length-1);});
-        Button(body,"Spell reference",ShowGrimoire);
+        Button(body,"Spell reference",ShowGrimoire);Button(body,"Combat facts",ShowCombatFacts);
         Button(body,"Combination reference",ShowCombinations);
         Button(body,"Talk to keeper",()=>Say("Test keeper: The real monastery is still being researched."));
         Button(body,"Capture test",()=>Try(()=>{_state=Game.CaptureFirst(_state);Refresh();}));
@@ -384,6 +388,7 @@ public partial class Main : Node3D
         _selection.Text=$"{selected.Name} · HP {selected.Hp}/{selected.MaxHp}\n"+(Equipment.ItemId(_state,selected.Id) is int id && _catalog is not null?_catalog.Find(id).Name:"Unarmed");
         _realms.Available=Magic.Spells.Where(s=>(selected.Spellbook ?? []).Contains(s.Id)).Select(s=>s.Realm).Distinct().ToArray();_realms.QueueRedraw();
         _compass.EnemyAlive=_state.Enemy.Hp>0;_compass.QueueRedraw();
+        _title.Text=_state.Melee is null?"Legacy training rules":"Melee training · restored physical rules";
         _enemy.Text=$"{_state.Enemy.Id} · HP {_state.Enemy.Hp} · Round {_state.Round}\n"+string.Join(" · ",(_state.Enemy.Effects ?? []).Select(e=>$"{e.Kind} {e.Rounds}r"));
         _quest.Text=$"Captivity fixture: {_state.Quest}";
         _sentinel.Visible=_state.Enemy.Hp>0;
@@ -391,8 +396,8 @@ public partial class Main : Node3D
     }
     private void Attack()
     {
-        if (_player.Position.DistanceTo(_enemyPosition)>4.5f) { Say("Too far from the sentinel. Move closer."); return; }
-        Try(() => { var r=Game.Attack(_state,_catalog); _state=r.State; foreach(var e in r.Events) Say(e); Refresh(); });
+        if (_state.Melee is null && _player.Position.DistanceTo(_enemyPosition)>4.5f) { Say("Too far from the sentinel. Move closer."); return; }
+        Try(() => { var r=Game.Attack(_state,_catalog,_state.Melee is null?null:_player.Position.DistanceTo(_enemyPosition)); _state=r.State; foreach(var e in r.Events) Say(e); Refresh(); });
     }
     private void Save() => Try(()=>{SaveTo(SavePath);Say("Saved.");});
 
@@ -405,8 +410,27 @@ public partial class Main : Node3D
         Refresh();
     }
 
+    private void ShowCombatFacts()
+    {
+        if(_state.Melee is not { } encounter){Say("This saved expedition uses legacy training rules. Start a new expedition for restored melee.");return;}
+        _dialogs++;_touchInput.Reset();
+        var dialog=new AcceptDialog {Theme=_hudTheme,Title="Melee training facts",Unresizable=false};AddChild(dialog);
+        dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;
+        dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
+        var scroll=new ScrollContainer {CustomMinimumSize=new(360,280)};dialog.AddChild(scroll);
+        var text=new Label {Name="CombatFactsText",AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(340,0),SizeFlagsHorizontal=Control.SizeFlags.ExpandFill};scroll.AddChild(text);
+        var lines=new List<string>{"Authored training combatants; recovered ordinary melee formulas.\nSpeed order and target selection are training rules.\n"};
+        foreach(var (name,facts) in _state.Party.Select(h=>(h.Name,encounter.Party[h.Id])).Append((_state.Enemy.Id,encounter.Opponent)))
+            lines.Add($"{name}\nSTR {facts.Strength} · INT {facts.Attributes.Intelligence} · DEX {facts.Attributes.Dexterity} · SPD {facts.Attributes.Speed} · SEN {facts.Attributes.Senses}\n"+
+                $"Combat {facts.CombatSkill} · weapon skill {facts.WeaponSkill} · stealth {facts.Stealth}\n"+
+                string.Join(", ",facts.History.Select(h=>$"{h.Profession} level {h.Levels}"))+"\nBody protection: "+
+                $"{facts.BodyArmor.Head}/{facts.BodyArmor.Torso}/{facts.BodyArmor.Legs}/{facts.BodyArmor.Hands}/{facts.BodyArmor.Feet}\n");
+        text.Text=string.Join("\n",lines);dialog.PopupCentered(new Vector2I(440,400));
+    }
+
     private void ShowMagic()
     {
+        if(_state.Melee is not null){Say("Original spells are not connected to this melee encounter yet.");return;}
         Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
         var dialog=new AcceptDialog { Theme=_hudTheme,Title="Prototype magic",Unresizable=true,WrapControls=false };
         AddChild(dialog);dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;
@@ -658,7 +682,8 @@ public partial class Main : Node3D
             _Input(new InputEventScreenDrag { Index=1,Position=view+new Vector2(30,0),Relative=new(30,0) });
             var before=_player.Rotation.Y;_PhysicsProcess(1.0/60);
             if(_player.Rotation.Y==before)throw new Exception("Touch look failed");
-            _state=Game.Attack(_state,_catalog).State;var saved=Game.Save(_state);
+            _player.Position=new(0,0.9f,-4);
+            _state=Game.Attack(_state,_catalog,_state.Melee is null?null:_player.Position.DistanceTo(_enemyPosition)).State;var saved=Game.Save(_state);
             _Notification((int)NotificationApplicationPaused);
             if(_touchInput.MovePointer is not null || _touchInput.LookPointer is not null)throw new Exception("Pause left stuck gesture");
             _state=Game.Create(8);LoadFrom(AutoSavePath);
@@ -714,7 +739,7 @@ public partial class Main : Node3D
         SaveTo(SavePath);
         string current=Godot.FileAccess.GetFileAsString(SavePath);
         var root=System.Text.Json.Nodes.JsonNode.Parse(current)!;
-        var game=root["Game"]!;game["Schema"]=1;game.AsObject().Remove("Items");game.AsObject().Remove("NextItemSequence");game.AsObject().Remove("ProjectileActions");game.AsObject().Remove("NextProjectileSequence");
+        var game=root["Game"]!;game["Schema"]=1;game.AsObject().Remove("Items");game.AsObject().Remove("NextItemSequence");game.AsObject().Remove("ProjectileActions");game.AsObject().Remove("NextProjectileSequence");game.AsObject().Remove("Melee");
         game["Bag"]=JsonSerializer.SerializeToNode(Inventory.Bag(_state).GroupBy(i=>i.DefinitionId)
             .Select(g=>new ItemStack(g.Key,checked((int)g.Sum(i=>(long)i.Quantity)))).ToArray());
         foreach(var hero in game["Party"]!.AsArray())hero!["EquippedItemId"]=Equipment.ItemId(_state,hero["Id"]!.GetValue<string>());
@@ -738,8 +763,16 @@ public partial class Main : Node3D
             if(_spellCatalog is not null) { _spellCatalog.Validate();GD.Print($"PASS: spell reference {_spellCatalog.Count} records with raw record hashes"); }
             if(_catalogRequested && _catalog is null) throw new Exception("Requested smoke catalog was not loaded");
             _player.Position=new(0,0.9f,-4);
+            var expectedMelee=Game.Attack(_state,_catalog,_player.Position.DistanceTo(_enemyPosition));
             Attack();
-            if(_state.Round!=1 || _state.Enemy.Hp!=25) throw new Exception("Combat/UI smoke failed");
+            if(_state.Melee is null || _state.Round!=1 || Game.Save(_state)!=Game.Save(expectedMelee.State) ||
+                !expectedMelee.Events.Any(e=>e.Contains("d100"))) throw new Exception("Combat/UI smoke failed");
+            ShowCombatFacts();
+            var factsWindow=GetChildren().OfType<AcceptDialog>().Last();
+            if(factsWindow.FindChild("CombatFactsText",true,false) is not Label factsLabel || !factsLabel.Text.Contains("Authored training combatants"))
+                throw new Exception("Missing authored combat facts UI");
+            factsWindow.Free();
+            GD.Print("PASS: restored melee attack button, contact thresholds and authored combat facts UI");
             Save(); _state=Game.Create(8); Load();
             if(_state.Party.Length!=1 || _state.Round!=1) throw new Exception("Client save/load failed");
             _state=Game.CaptureFirst(_state); Refresh();
@@ -753,12 +786,12 @@ public partial class Main : Node3D
                     if(Inventory.Count(_state,cane.Id)==0)_state=Inventory.Add(_state,cane.Id,1,_catalog);
                     _state=Equipment.Equip(_state,_state.Party[0].Id,cane.Id,_catalog); Save(); _state=Game.Create(8); Load();
                     if(Equipment.ItemId(_state,_state.Party[0].Id)!=cane.Id) throw new Exception("Imported equipment save/load failed");
-                    var expected=Game.Save(Game.Attack(_state,_catalog).State);
+                    var expected=Game.Save(Game.Attack(_state,_catalog,_state.Melee is null?null:_player.Position.DistanceTo(_enemyPosition)).State);
                     Attack();
                     if(Game.Save(_state)!=expected) throw new Exception("Client did not use equipped weapon");
-                    Save(); var continuation=Game.Save(Game.Attack(_state,_catalog).State);
+                    Save(); var continuation=Game.Save(Game.Attack(_state,_catalog,_state.Melee is null?null:_player.Position.DistanceTo(_enemyPosition)).State);
                     _state=Game.Create(8); Load();
-                    if(Game.Save(Game.Attack(_state,_catalog).State)!=continuation) throw new Exception("Weapon roll continuation failed");
+                    if(Game.Save(Game.Attack(_state,_catalog,_state.Melee is null?null:_player.Position.DistanceTo(_enemyPosition)).State)!=continuation) throw new Exception("Weapon roll continuation failed");
                     long copies=Inventory.Count(_state,cane.Id);
                     _state=Equipment.Unequip(_state,_state.Party[0].Id,_catalog);Save();Load();
                     if(Equipment.ItemId(_state,_state.Party[0].Id).HasValue || Inventory.Count(_state,cane.Id)!=copies+1)throw new Exception("Inventory unequip/save failed");
@@ -766,21 +799,21 @@ public partial class Main : Node3D
                     GD.Print($"PASS: imported catalog {_catalog.Count}, equipment and save binding");
                 }
             }
-            _state=CreateExpedition(1);
+            _state=CreateExpedition(1,false);
             var fire=_state.Party[0].Mana!.Single(p=>p.Realm=="Fire").Current;
             Cast(new("hero-1","test-spark",2,_state.Enemy.Id));
             if(_state.Party[0].Mana!.Single(p=>p.Realm=="Fire").Current!=fire-4)throw new Exception("Client spell casting failed");
             Save();var spellContinuation=Game.Save(Game.Cast(_state,new("hero-1","test-mend",1,"hero-1"),_catalog).State);
             _state=Game.Create(8);Load();Cast(new("hero-1","test-mend",1,"hero-1"));
             if(Game.Save(_state)!=spellContinuation)throw new Exception("Client magic save continuation failed");
-            _state=CreateExpedition(2);
+            _state=CreateExpedition(2,false);
             CastOrders([new("hero-1","test-ward",1,"hero-1"),new("hero-2","test-burn",1,_state.Enemy.Id)]);
             if(_state.Party[0].Hp!=35 || _state.Enemy.Hp!=31 || _state.Party[0].Effects?.Single().Rounds!=2)throw new Exception("Client multi-caster effects failed");
-            Save();var effectContinuation=Game.Save(Game.Attack(_state,_catalog).State);Load();Attack();
+            Save();var effectContinuation=Game.Save(Game.Attack(_state,_catalog,_state.Melee is null?null:_player.Position.DistanceTo(_enemyPosition)).State);Load();Attack();
             if(Game.Save(_state)!=effectContinuation)throw new Exception("Client duration save continuation failed");
             if(_catalog is not null && Crafting.UsesFixture(_catalog))
             {
-                _state=CreateExpedition(1);
+                _state=CreateExpedition(1,false);
                 _state=Crafting.Craft(_state,new("hero-1","test-tonic"),_catalog);
                 Save();Load();
                 if(Inventory.Count(_state,80)!=1 || Inventory.Count(_state,78)!=2)throw new Exception("Client recipe/save failed");

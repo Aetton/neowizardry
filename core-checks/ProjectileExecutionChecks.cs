@@ -83,6 +83,9 @@ static class ProjectileExecutionChecks
         var serialized=Game.Save(during);var loaded=Game.Load(serialized,catalog);
         Check(Game.Save(loaded)==serialized,"Full pending game roundtrips with source reservation, aim, RNG and catalog identity");
         Check(Game.Save(Finish(loaded,created.ActionId).State)==Game.Save(completed.State),"Save/load continuation matches uninterrupted completion without re-aiming or extra spending");
+        var oldPending=JsonNode.Parse(serialized)!.AsObject();oldPending["Schema"]=3;oldPending.Remove("Melee");
+        Check(Game.Save(Finish(Game.Load(oldPending.ToJsonString(),catalog),created.ActionId).State)==Game.Save(completed.State),
+            "Schema-three pending projectiles migrate without changing reservations, ordinal or completion");
         Reject(()=>Game.Load(serialized),"Pending actions cannot load without their catalog");
         Reject(()=>Game.Load(serialized,catalog with {Provenance=catalog.Provenance with {Sha256=new string('b',64)}}),"Wrong content identity cannot resume a flight");
         var unavailable=flight with {Party=flight.Party.SetItem(0,flight.Party[0] with {Hp=0})};
@@ -148,9 +151,9 @@ static class ProjectileExecutionChecks
         var overflow=Start() with {NextProjectileSequence=long.MaxValue};
         bool overflowed=false;try{Begin(overflow);}catch(OverflowException){overflowed=true;}
         Check(overflowed && overflow.ProjectileActions is null,"Identity overflow cannot publish a partially created action");
-        var old=JsonNode.Parse(Game.Save(Start()))!.AsObject();old["Schema"]=2;old.Remove("ProjectileActions");old.Remove("NextProjectileSequence");
+        var old=JsonNode.Parse(Game.Save(Start()))!.AsObject();old["Schema"]=2;old.Remove("ProjectileActions");old.Remove("NextProjectileSequence");old.Remove("Melee");
         var migrated=Game.Load(old.ToJsonString(),catalog);
-        Check(migrated.Schema==3 && migrated.ProjectileActions is null && migrated.NextProjectileSequence==1 && migrated.Items!.Items.SequenceEqual(Start().Items!.Items),
+        Check(migrated.Schema==Game.SaveSchema && migrated.ProjectileActions is null && migrated.NextProjectileSequence==1 && migrated.Items!.Items.SequenceEqual(Start().Items!.Items),
             "Schema-two saves migrate without invented projectiles or resource changes");
         var downgraded=JsonNode.Parse(serialized)!;downgraded["Schema"]=2;
         Reject(()=>Game.Load(downgraded.ToJsonString(),catalog),"Pending actions cannot hide inside a downgraded save version");
