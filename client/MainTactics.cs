@@ -22,6 +22,7 @@ public partial class Main
         dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var scroll=new ScrollContainer();dialog.AddChild(scroll);var body=new VBoxContainer {SizeFlagsHorizontal=Control.SizeFlags.ExpandFill};scroll.AddChild(body);
         body.AddChild(new Label {Text="Choose hero and order, then tap a cell.\nOne step or adjacent melee; spells need clear sight.\nUnordered heroes attack nearby enemies or wait.\nAI: Brute closes in; Hunter targets wounded;\nFlanker spreads out; Skirmisher retreats at low HP.",AutowrapMode=TextServer.AutowrapMode.WordSmart});
+        if(_state.Melee.Field.Monsters is not null)body.AddChild(new Label {Text="Monster physical test: spellcasting and XP/loot are not connected.",AutowrapMode=TextServer.AutowrapMode.WordSmart});
         var actor=new OptionButton {Name="TacticalActor"};foreach(var h in _state.Party)actor.AddItem(h.Name);body.AddChild(actor);
         var mode=new OptionButton();foreach(var text in new[]{"Move","Attack","Spell"})mode.AddItem(text);body.AddChild(mode);
         OriginalSpell[] magic=_state.Melee.Magic is null?[]:_spellCatalog?.Spells.Where(RestoredMagic.SupportedSpell).ToArray()??[];
@@ -52,7 +53,7 @@ public partial class Main
                     var h=_state.Party[actor.Selected];if(h.Hp==0 || h.Captive)throw new InvalidOperationException("Select a living free hero");
                     var action=(TacticalAction)(mode.Selected==0?1:mode.Selected==1?0:3);
                     if(action is TacticalAction.Cast or TacticalAction.Attack && id is null)throw new InvalidOperationException("Select an occupied target cell");
-                    if(action==TacticalAction.Cast && magic.Length==0)throw new InvalidOperationException("Load the original spell catalog first");
+                    if(action==TacticalAction.Cast && magic.Length==0)throw new InvalidOperationException(_state.Melee.Magic is null?"Original casting is not connected in this encounter.":"Load the original spell catalog first.");
                     orders[h.Id]=new(h.Id,action,id,action==TacticalAction.Move?cell:null,action==TacticalAction.Cast?new(h.Id,magic[spell.Selected].Id,power.Selected+1,id):null);Render();
                 });grid.AddChild(b);
             }
