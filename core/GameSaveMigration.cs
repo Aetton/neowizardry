@@ -14,6 +14,10 @@ public static class GameSaveMigration
         if(schema is 1 or 2 or 3 && root.ContainsKey("Melee"))throw new InvalidDataException("Melee encounter requires save schema 4");
         if(schema is 1 or 2 && (root.ContainsKey("ProjectileActions") || root.ContainsKey("NextProjectileSequence")))
             throw new InvalidDataException("Projectile state requires save schema 3");
+        if(schema is 2 or 3 or 4)
+        {
+            if(root["Melee"] is JsonObject melee && melee["Field"] is not null)throw new InvalidDataException("Tactical field requires save schema 5");
+        }
         if(schema is 2 or 3)
         {
             if(root.ContainsKey("Bag") || root["Party"] is JsonArray oldParty && oldParty.Any(h=>h?.AsObject().ContainsKey("EquippedItemId")==true))
@@ -25,11 +29,11 @@ public static class GameSaveMigration
             if(catalog is not null){Equipment.ValidateLoadedEquipment(upgraded,catalog,catalog.Provenance.Sha256);ProjectileExecution.Validate(upgraded,catalog);}
             return upgraded;
         }
-        if(schema==Game.SaveSchema)
+        if(schema==4 || schema==Game.SaveSchema)
         {
             if(root.ContainsKey("Bag") || root["Party"] is JsonArray party && party.Any(h=>h?.AsObject().ContainsKey("EquippedItemId")==true))
                 throw new InvalidDataException("Conflicting legacy inventory fields in instance save");
-            var current=JsonSerializer.Deserialize<GameState>(json)??throw new InvalidDataException("Empty save");
+            var current=(JsonSerializer.Deserialize<GameState>(json)??throw new InvalidDataException("Empty save")) with {Schema=Game.SaveSchema};
             Game.Validate(current);
             if((current.ProjectileActions is {Count:>0} || current.Melee is not null) && catalog is null)
                 throw new InvalidDataException("Saved combat actions require their item catalog");

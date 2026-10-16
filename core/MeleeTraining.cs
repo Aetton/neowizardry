@@ -21,6 +21,25 @@ public static class MeleeTraining
         var catalog=new ItemCatalog(3,"DATABASES/ITEMS.DBS",new("loose","synthetic-melee-training",hash),269,1,[item]);
         catalog.Validate();return catalog;
     }
+    public static GameState CreateTactical(int size,int opponents,ItemCatalog catalog,SpellCatalog? spells=null)
+    {
+        if(opponents is <1 or >8)throw new ArgumentOutOfRangeException(nameof(opponents));
+        var s=Create(size,catalog,spells);var original=s.Melee!;
+        var extra=ImmutableArray.CreateBuilder<TacticalOpponent>();
+        int definition=Equipment.ItemId(s,s.Party[0].Id)!.Value;
+        for(int n=1;n<opponents;n++)
+        {
+            var before=s.Items!.Items.Select(i=>i.Id).ToHashSet();s=Inventory.Add(s,definition,1,catalog);
+            var owned=s.Items!.Items.Single(i=>!before.Contains(i.Id));string id=$"Training Duelist {n+1}";
+            extra.Add(new(s.Enemy with {Id=id},original.Opponent,owned.Id,original.Magic?.GetValueOrDefault(s.Enemy.Id)));
+        }
+        var positions=s.Party.Select((h,i)=>(h.Id,Cell:new BattleCell(1,i))).ToImmutableDictionary(p=>p.Id,p=>p.Cell).Add(s.Enemy.Id,new(6,0));
+        for(int n=0;n<extra.Count;n++)positions=positions.Add(extra[n].Actor.Id,new(6,n+1));
+        var field=new TacticalField(8,8,positions,[new(3,3),new(3,4)],extra.ToImmutable());
+        var items=s.Items!;
+        foreach(var o in extra)items=ItemInventory.Move(items,o.WeaponId,new(o.Actor.Id,Equipment.WeaponSlot),Inventory.Rules(catalog));
+        s=s with {Items=items,Melee=original with {Field=field}};MeleeCombat.Validate(s,catalog);return s;
+    }
     private static MeleeCharacterFacts Facts(OriginalProfession profession,bool opponent=false)=>new(opponent?60:80,
         new(50,opponent?60:80,opponent?60:80,70),opponent?60:80,opponent?60:80,[new(profession,10)],20,
         opponent?new(18,18,18,18,18):new(0,0,0,0,0),new(10,false,0));

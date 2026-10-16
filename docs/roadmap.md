@@ -131,3 +131,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 032 — playable ordinary melee
 
 [Iteration 032](iteration-032.md) connects the recovered character single-weapon attack/swing, defense/location, hit/penetration and damage rules to the default new expedition and Attack UI. Real owned weapons, clamped HP, exact-instance loot transfer, one-time scenario XP, core range validation and save schema 4 are covered for parties 1–8, including private original equipment. Training stats/body protection, effective-Speed scheduling, targets and RNG are explicitly authored; the opposing character is not an imported monster. Legacy saves retain their prior mode; synthetic spells stay in Spell sandbox. TOC-41 remains in progress for original actor/stat/hand/state producers, monster execution, original magic/combinations and fuller action policy.
+
+
+## Iteration 035 — multi-opponent position laboratory
+
+[Iteration 035](iteration-035.md) adds an explicit grid laboratory for 1–8 heroes and 1–8 authored opposing characters. Per-actor positions, one-step movement, obstacles, sight, selected targets, deterministic pathfinding, shared initiative, supported original single-target spells, all-opponents victory, exact-instance loot and schema-5 continuation are playable. Movement/AI/geometry are laboratory policies; imported monster execution, native formation/continuous motion, ranged/area effects and full magic coverage remain open. TOC-41/42/43 remain in progress.

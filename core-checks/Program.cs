@@ -75,7 +75,7 @@ for(int size=1;size<=8;size++)
 }
 Throws(() => Game.Create(0), "No empty party");
 Throws(() => Game.Create(9), "UI limit enforced");
-Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 4", "\"Schema\": 99")), "Reject unknown save version");
+Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 5", "\"Schema\": 99")), "Reject unknown save version");
 Throws(() => Game.Validate(solo with { Party = [solo.Party[0], solo.Party[0]] }), "Reject duplicate IDs");
 Throws(() => Game.Escape(solo), "Escape requires capture");
 var fast = solo with { Party = [solo.Party[0] with { Speed = 0, Hp = 1 }] };
@@ -354,6 +354,7 @@ checks+=MonsterSequenceChecks.Run();
 checks+=SnapshotChecks.Run(referenceCatalog,recipeReferenceCatalog);
 checks+=ProjectileExecutionChecks.Run(restricted);
 checks+=MeleeEncounterChecks.Run();
+checks+=TacticalCombatChecks.Run();
 checks+=RestoredRoundChecks.Run();
 checks+=MonsterCatalogChecks.Run();
 if(args.Length==2 && args[0]=="--fixture")
@@ -374,7 +375,7 @@ else if(args.Length==2 && args[0]=="--monsters")
 }
 else if(args.Length==2 && args[0]=="--spell-formulas")
 {
-    var spells=SpellCatalog.Parse(File.ReadAllText(args[1]));checks+=RestoredRoundChecks.RunSpells(spells);checks+=OriginalMagicLifecycleChecks.Run(spells);int scenarios=0;
+    var spells=SpellCatalog.Parse(File.ReadAllText(args[1]));checks+=RestoredRoundChecks.RunSpells(spells);checks+=OriginalMagicLifecycleChecks.Run(spells);checks+=TacticalCombatChecks.RunSpells(spells);int scenarios=0;
     foreach(var spell in spells.Spells.Where(s=>s.Level>0))
     {
         int previous=-1;

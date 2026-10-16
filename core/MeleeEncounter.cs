@@ -8,7 +8,7 @@ namespace NeoWizardry.Core;
 public sealed record MeleeCharacterFacts(int Strength,PhysicalCombatAttributes Attributes,int CombatSkill,int WeaponSkill,
     ImmutableArray<ProfessionLevels> History,int Stealth,BodyArmor BodyArmor,CharacterInitiativeFacts? Initiative=null);
 public sealed record MeleeEncounter(string Ruleset,string ItemDatabaseHash,ImmutableDictionary<string,MeleeCharacterFacts> Party,
-    MeleeCharacterFacts Opponent,string? OpponentWeaponId,ImmutableDictionary<string,RestoredMagicFacts>? Magic=null);
+    MeleeCharacterFacts Opponent,string? OpponentWeaponId,ImmutableDictionary<string,RestoredMagicFacts>? Magic=null,TacticalField? Field=null);
 
 public static class MeleeCombat
 {
@@ -22,7 +22,8 @@ public static class MeleeCombat
             encounter.Party is null || encounter.Party.Count!=state.Party.Length || state.Party.Any(h=>h.Id==state.Enemy.Id || !encounter.Party.ContainsKey(h.Id)) ||
             state.ProjectileActions is {Count:>0})
             throw new InvalidDataException("Invalid or mixed melee encounter");
-        foreach(var facts in encounter.Party.Values.Append(encounter.Opponent))ValidateFacts(facts);
+        if(encounter.Field is not null)TacticalCombat.ValidateStructure(state);
+        foreach(var facts in encounter.Party.Values.Append(encounter.Opponent).Concat(encounter.Field?.Opponents.Select(o=>o.Facts)??[]))ValidateFacts(facts);
         var initiativeCount=encounter.Party.Values.Append(encounter.Opponent).Count(f=>f.Initiative is not null);
         if(initiativeCount!=0 && initiativeCount!=state.Party.Length+1)throw new InvalidDataException("Mixed initiative profiles");
         if(encounter.Magic is { } magic)
@@ -36,7 +37,7 @@ public static class MeleeCombat
             weapon.Location!=new ItemLocation(state.Enemy.Id,Equipment.WeaponSlot)))
             throw new InvalidDataException("Missing opponent-owned melee weapon");
     }
-    private static void ValidateFacts(MeleeCharacterFacts facts)
+    internal static void ValidateFacts(MeleeCharacterFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);ArgumentNullException.ThrowIfNull(facts.Attributes);ArgumentNullException.ThrowIfNull(facts.BodyArmor);
         if(facts.Strength is <0 or >125 || facts.Stealth is <0 or >125 || facts.History.IsDefaultOrEmpty)
@@ -47,17 +48,21 @@ public static class MeleeCombat
         _=OriginalCombatRules.SingleWeapon(new(facts.Attributes.Dexterity,facts.Attributes.Speed,facts.CombatSkill,facts.WeaponSkill,facts.History.ToArray(),0));
         _=OriginalPhysicalScores.OrdinaryCharacter(new(100,0,0,0,0,facts.Attributes,facts.Attributes,OriginalAttackMode.Swing,0,0));
     }
-    private static ItemDefinition Weapon(GameState state,string actorId,ItemCatalog catalog)
+    internal static ItemDefinition Weapon(GameState state,string actorId,ItemCatalog catalog)
     {
         var item=actorId==state.Enemy.Id?state.Items!.Items.Single(i=>i.Id==state.Melee!.OpponentWeaponId):Equipment.Instance(state,actorId);
         if(item is null)throw new InvalidOperationException("Equip a single ordinary melee weapon before attacking");
         var definition=catalog.Find(item.DefinitionId);
+        return OrdinaryWeapon(definition);
+    }
+    internal static ItemDefinition OrdinaryWeapon(ItemDefinition definition)
+    {
         if(definition.TypeCode is not (0 or 1) || (definition.AttackModes&1)==0 || definition.DamageDice==0 || definition.DamageSides==0 ||
             definition.Instance is not {Mode:0} fields || fields.Compile(definition.RecordSha256).SpellUse!=0)
             throw new InvalidOperationException("This encounter supports a free offhand and ordinary Swing weapons without resource/spell use");
         return definition;
     }
-    private static (PhysicalAttackBudget Budget,PreparedPhysicalWeapon Weapon,PhysicalHandBonuses Hand) Prepare(MeleeCharacterFacts facts,ItemDefinition weapon)
+    internal static (PhysicalAttackBudget Budget,PreparedPhysicalWeapon Weapon,PhysicalHandBonuses Hand) Prepare(MeleeCharacterFacts facts,ItemDefinition weapon)
     {
         var prepared=OriginalWeaponAdapter.PreparePrimary(weapon);
         var budget=OriginalCombatRules.SingleWeapon(new(facts.Attributes.Dexterity,facts.Attributes.Speed,facts.CombatSkill,
@@ -78,6 +83,7 @@ public static class MeleeCombat
 
     public static RoundResult Advance(GameState state,ItemCatalog catalog,double distance,IReadOnlyList<RestoredCastOrder>? castOrders=null,SpellCatalog? spells=null)
     {
+        if(state.Melee?.Field is not null)return TacticalCombat.Advance(state,catalog,spells:spells,casts:castOrders);
         Validate(state,catalog);
         if(!double.IsFinite(distance) || distance<0)throw new ArgumentOutOfRangeException(nameof(distance));
         if(distance>Reach)throw new InvalidOperationException("Too far from the opponent. Move closer.");

@@ -54,7 +54,7 @@ static class MeleeEncounterChecks
         Reject(()=>Game.Validate(noActor),"Missing actor facts cannot acquire fabricated defaults");
         var old3=JsonNode.Parse(Game.Save(Game.Create(1)))!.AsObject();old3["Schema"]=3;old3.Remove("Melee");
         var migrated=Game.Load(old3.ToJsonString());
-        Check(migrated.Schema==4 && migrated.Melee is null && Game.Attack(migrated).State.Enemy.Hp==25,"Schema-three legacy battle remains legacy after migration");
+        Check(migrated.Schema==Game.SaveSchema && migrated.Melee is null && Game.Attack(migrated).State.Enemy.Hp==25,"Schema-three legacy battle remains legacy after migration");
         var downgraded=JsonNode.Parse(before)!;downgraded["Schema"]=3;
         Reject(()=>Game.Load(downgraded.ToJsonString(),catalog),"New actor/ruleset fields cannot hide in downgraded schema");
         var outcomes=new HashSet<string>();

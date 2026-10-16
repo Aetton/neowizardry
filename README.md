@@ -12,6 +12,7 @@ Godot 4.5.1 .NET client + independent .NET 8 core + dependency-free Python 3.10+
 - A catalog of 819 original item records: IDs, names, item type/icon indices and equipment restriction masks. Generated catalogs stay local; original assets are not bundled.
 - A synthetic 3D corridor with free movement, collisions, mouse look, party size 1–8, a training sentinel, round resolution, XP, sample dialogue and save/load.
 - A solo captivity/escape regression fixture. This proves an engine state transition, **not** that the original Crock quest has been reproduced.
+- **Menu → New tactical battle** adds an 8 × 8 test field with 1–8 heroes and 1–8 opponents, individual positions, move/attack/wait/spell orders, obstacles, sight checks and enemy pathfinding. Movement/AI are authored laboratory rules; see [iteration 035](docs/iteration-035.md).
 - New training parties use recovered character initiative, interleaved melee attack groups and explicit saved effective facts.
 - With an original spell catalog loaded, the training Bishop casts Frost / Energy Blast / Heal Wounds at powers 1–7 through the shared battle executor, with realm mana and recovered damage/resistance arithmetic. Ordinary risk, fizzle/backfire and healing are connected; broader original conditions/effects/progression remain open; five synthetic spells remain in the separate sandbox.
 - First MONSTERS.DBS import: 595 native reference records, verified text/defense fields, content-to-defense-rules integration and Menu → Monster reference search. Executable monster actors remain pending.
@@ -19,7 +20,7 @@ Godot 4.5.1 .NET client + independent .NET 8 core + dependency-free Python 3.10+
 - Original-item browser with search, raw weapon statistics and a melee equipment slot backed by the shared party bag enforcing race/profession/gender restrictions. Equipped items survive saves; loading requires the same source item database.
 - Ordinary resource overlay: loose data files, then descending `PATCH.NNN`, then base archive, with source provenance.
 
-Starting characters, opponent facts, room, targeting and rewards are **authored training fixtures**. The connected original formula subset and its remaining gates are documented in [iteration 034](docs/iteration-034.md). No enemy scaling by party size. Reward is shared between living, uncaptured heroes, so solo retains the concentration of XP.
+Starting characters, opponent facts, room, targeting and rewards are **authored training fixtures**. The connected original formula subset and its remaining gates are documented in [iteration 035](docs/iteration-035.md) and [iteration 034](docs/iteration-034.md). No enemy scaling by party size. Reward is shared between living, uncaptured heroes, so solo retains the concentration of XP.
 
 ## Windows testing
 
@@ -37,6 +38,8 @@ godot --path client
 ```
 
 Replace `godot` with the path to your Godot .NET executable if it is not in PATH.
+
+For multiple opponents, choose the party and opponent counts in **Menu → New tactical battle**. Choose an actor, an order and a target cell, then **Resolve round**. Attack/Magic reopen the tactical field; **Save/Load** retains all committed positions and opponent states.
 
 WASD moves; hold the right mouse button to look; Esc releases the cursor. Start **Menu → New party**, approach the Training Duelist and press **Attack**. New expeditions execute the recovered ordinary melee rules; **Combat facts** shows the authored effective stats and **Spell sandbox** keeps the previous synthetic spell tests available. Existing saves retain their legacy combat mode. Open **Menu** for party size, **New party**, **Save/Load** and test-scenario controls. Click a side portrait to select the actor used by Magic, Items and Craft. **Save/Load** preserves the party, battle, captivity and camera. **Test captivity/Escape** demonstrates the solo regression fixture. The keeper's fixed line is sample text, not extracted story content.
 
@@ -71,7 +74,7 @@ For the supplied Steam installation, include its enabled patch:
 python -m tools.slf items "/path/to/Wizardry8/Data/DATA.SLF" --patch "/path/to/Wizardry8/Patches/PATCH.001" --out local/items.json
 ```
 
-Repeat `--patch` for every enabled `PATCH.NNN`; do not pass disabled `.BAK` files. Use `--loose-dir "/path/to/Wizardry8/Data"` to include loose-file overrides. Open **Items** in the client; `local/items.json` loads automatically. An external catalog can be selected with `godot --path client -- --catalog "/path/to/items.json"`. The shared party bag tracks quantities and equipment ownership. Transfer a weapon by returning it to the bag and equipping it on another eligible hero. Items now selects individual spare copies and supports stack split/merge. Identity, quantity, identification, resource counters and equipment locations survive saves. Core resource spending is supported; use effects, recharge, curse removal and full original combat remain open. Schema-1/2/3 saves migrate to game schema 4 on load without invented combat facts; missing historical charge counters become zero. Assigned melee weapons now use their imported base damage dice and initiative in the experimental battle.
+Repeat `--patch` for every enabled `PATCH.NNN`; do not pass disabled `.BAK` files. Use `--loose-dir "/path/to/Wizardry8/Data"` to include loose-file overrides. Open **Items** in the client; `local/items.json` loads automatically. An external catalog can be selected with `godot --path client -- --catalog "/path/to/items.json"`. The shared party bag tracks quantities and equipment ownership. Transfer a weapon by returning it to the bag and equipping it on another eligible hero. Items now selects individual spare copies and supports stack split/merge. Identity, quantity, identification, resource counters and equipment locations survive saves. Core resource spending is supported; use effects, recharge, curse removal and full original combat remain open. Schema-1/2/3/4 saves migrate to game schema 5 on load without invented combat facts; missing historical charge counters become zero. Assigned melee weapons now use their imported base damage dice and initiative in the experimental battle.
 
 `audit` reads SLF files and `PATCH.NNN` locally and produces a small inventory. The Drive connector cannot download `LEVELS.SLF` because its 497,064,244 bytes exceed the connector's 256 MiB limit. Local indexing avoids that restriction. Parallel Worlds and localization overlays remain unsupported.
 

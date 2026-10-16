@@ -78,6 +78,7 @@ public partial class Main : Node3D
         if (OS.GetCmdlineUserArgs().Contains("--grimoire")) Callable.From(ShowGrimoire).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--combinations")) Callable.From(ShowCombinations).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--craft")) Callable.From(ShowCrafting).CallDeferred();
+        if (OS.GetCmdlineUserArgs().Contains("--tactics")) Callable.From(()=>{NewTactical(_state.Party.Length,3);ShowTactics();}).CallDeferred();
         if (OS.GetCmdlineUserArgs().Contains("--magic")) Callable.From(ShowMagic).CallDeferred();
     }
 
@@ -328,6 +329,9 @@ public partial class Main : Node3D
         var scroll=new ScrollContainer();dialog.AddChild(scroll);var body=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };scroll.AddChild(body);
         var size=new OptionButton();for(int i=1;i<=8;i++)size.AddItem($"{i} adventurer{(i==1?"":"s")}");size.Select(_state.Party.Length-1);body.AddChild(size);
         Button(body,"New party",()=>Try(()=>{NewParty(size.Selected+1);dialog.QueueFree();}));
+        var opponents=new OptionButton();for(int n=1;n<=8;n++)opponents.AddItem($"{n} opponents");opponents.Select(2);body.AddChild(opponents);
+        Button(body,"New tactical battle",()=>Try(()=>{NewTactical(size.Selected+1,opponents.Selected+1);dialog.QueueFree();ShowTactics();}));
+        Button(body,"Tactical field",ShowTactics);
         Button(body,"Spell sandbox",()=>Try(()=>{NewParty(size.Selected+1,false);dialog.QueueFree();}));
         Button(body,"Save",Save);Button(body,"Load",()=>{Load();size.Select(_state.Party.Length-1);});
         Button(body,"Monster reference",ShowMonsters);Button(body,"Spell reference",ShowGrimoire);Button(body,"Combat facts",ShowCombatFacts);
@@ -422,15 +426,17 @@ public partial class Main : Node3D
         }
         _selection.Text=$"{selected.Name} · HP {selected.Hp}/{selected.MaxHp}\n"+(Equipment.ItemId(_state,selected.Id) is int id && _catalog is not null?_catalog.Find(id).Name:"Unarmed");
         _realms.Available=Magic.Spells.Where(s=>(selected.Spellbook ?? []).Contains(s.Id)).Select(s=>s.Realm).Distinct().ToArray();_realms.QueueRedraw();
-        _compass.EnemyAlive=_state.Enemy.Hp>0;_compass.QueueRedraw();
-        _title.Text=_state.Melee is null?"Legacy training rules":"Melee training · restored physical rules";
+        _compass.EnemyAlive=TacticalCombat.Enemies(_state).Any(e=>e.Hp>0);_compass.QueueRedraw();
+        _title.Text=_state.Melee?.Field is not null?"Tactical laboratory · grid positions":_state.Melee is null?"Legacy training rules":"Melee training · restored physical rules";
         _enemy.Text=$"{_state.Enemy.Id} · HP {_state.Enemy.Hp} · Round {_state.Round}\n"+string.Join(" · ",(_state.Enemy.Effects ?? []).Select(e=>$"{e.Kind} {e.Rounds}r"));
         _quest.Text=$"Captivity fixture: {_state.Quest}";
-        _sentinel.Visible=_state.Enemy.Hp>0;
+        _sentinel.Visible=_state.Melee?.Field is null && _state.Enemy.Hp>0;
+        if(_state.Melee?.Field is not null)_enemy.Text=$"Tactical field · Round {_state.Round} · {TacticalCombat.Enemies(_state).Count(e=>e.Hp>0)} opponents alive";
         _size.Select(_state.Party.Length-1);
     }
     private void Attack()
     {
+        if(_state.Melee?.Field is not null){ShowTactics();return;}
         if (_state.Melee is null && _player.Position.DistanceTo(_enemyPosition)>4.5f) { Say("Too far from the sentinel. Move closer."); return; }
         Try(() => { var r=Game.Attack(_state,_catalog,_state.Melee is null?null:_player.Position.DistanceTo(_enemyPosition)); _state=r.State; foreach(var e in r.Events) Say(e); Refresh(); });
     }
@@ -515,6 +521,7 @@ public partial class Main : Node3D
 
     private void ShowMagic()
     {
+        if(_state.Melee?.Field is not null){ShowTactics();return;}
         if(_state.Melee is not null){ShowRestoredMagic();return;}
         Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
         var dialog=new AcceptDialog { Theme=_hudTheme,Title="Prototype magic",Unresizable=true,WrapControls=false };
@@ -850,6 +857,7 @@ public partial class Main : Node3D
             if(_monsterCatalog is not null){_monsterCatalog.Validate();ShowMonsters();GetChildren().OfType<AcceptDialog>().Last().Free();GD.Print($"PASS: monster reference {_monsterCatalog.Count} records and browser");}
             if(_catalogRequested && _catalog is null) throw new Exception("Requested smoke catalog was not loaded");
             _player.Position=new(0,0.9f,-4);
+            CheckTacticalInterface();
             var expectedMelee=Game.Attack(_state,_catalog,_player.Position.DistanceTo(_enemyPosition));
             Attack();
             if(_state.Melee is null || _state.Round!=1 || Game.Save(_state)!=Game.Save(expectedMelee.State) ||

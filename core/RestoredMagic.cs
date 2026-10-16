@@ -38,17 +38,17 @@ public static class RestoredMagic
         var hero=state.Party.SingleOrDefault(h=>h.Id==order.CasterId)??throw new InvalidOperationException("Unknown caster");
         var facts=state.Melee?.Magic?.GetValueOrDefault(hero.Id)??throw new InvalidOperationException("This actor has no restored spellcasting profile");
         Validate(facts);
-        if(hero.Hp==0 || hero.Captive || state.Enemy.Hp==0 || hero.Effects is {Count:>0})throw new InvalidOperationException("Caster or target unavailable");
+        if(hero.Hp==0 || hero.Captive || !TacticalCombat.Enemies(state).Any(e=>e.Hp>0) || hero.Effects is {Count:>0})throw new InvalidOperationException("Caster or target unavailable");
         if(!facts.SpellDatabaseHash.Equals(spells.Provenance.Sha256,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Spell catalog identity mismatch");
         var spell=spells.Spells.SingleOrDefault(s=>s.Id==order.SpellId)??throw new InvalidOperationException("Unknown original spell");
         if(!facts.LearnedSpells.Contains(order.SpellId) || !SupportedSpell(spell))throw new InvalidOperationException("This original spell effect is not connected");
         var risk=OriginalMagicRules.OrdinaryCastingRisk(new(facts.BookSkill,facts.RealmSkills[spell.RealmCode],spell.Level,spell.Cost,order.Power,facts.EffectiveCasterLevel));
-        string targetId=order.TargetId??(spell.Id==6?hero.Id:state.Enemy.Id);
+        string targetId=order.TargetId??(spell.Id==6?hero.Id:TacticalCombat.Enemies(state).First(e=>e.Hp>0).Id);
         if(spell.Id==6)
         {
             if(!state.Party.Any(h=>h.Id==targetId && h.Hp>0 && !h.Captive))throw new InvalidOperationException("Select a living party member for Heal Wounds");
         }
-        else if(targetId!=state.Enemy.Id)throw new InvalidOperationException("Select the opponent for this offensive spell");
+        else if(!TacticalCombat.Enemies(state).Any(e=>e.Id==targetId && e.Hp>0))throw new InvalidOperationException("Select the opponent for this offensive spell");
         int cost=checked(spell.Cost*order.Power);
         if((hero.Mana??[]).SingleOrDefault(m=>m.Realm==spell.Realm)?.Current<cost || !(hero.Mana??[]).Any(m=>m.Realm==spell.Realm))
             throw new InvalidOperationException("Not enough mana");

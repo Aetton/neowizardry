@@ -15,7 +15,7 @@ public sealed record RoundResult(GameState State, ImmutableArray<string> Events)
 
 public static class Game
 {
-    public const int SaveSchema = 4;
+    public const int SaveSchema = 5;
 
     public static GameState Create(int size)
     {
@@ -41,7 +41,7 @@ public static class Game
                 h.Hp < 0 || h.Hp > h.MaxHp || h.Xp < 0 || h.Power < 0 || h.Speed < 0 ||
                 h.Gender is not ("Male" or "Female"))
                 throw new InvalidDataException("Invalid party member");
-        if (state.RewardGranted && state.Enemy.Hp != 0)
+        if (state.RewardGranted && (state.Enemy.Hp != 0 || state.Melee?.Field?.Opponents.Any(o=>o.Actor.Hp>0)==true))
             throw new InvalidDataException("Reward before victory");
         Inventory.ValidateStructure(state);
         ProjectileExecution.ValidateStructure(state);
