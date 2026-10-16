@@ -21,7 +21,7 @@ public static class MeleeTraining
         var catalog=new ItemCatalog(3,"DATABASES/ITEMS.DBS",new("loose","synthetic-melee-training",hash),269,1,[item]);
         catalog.Validate();return catalog;
     }
-    public static GameState CreateTactical(int size,int opponents,ItemCatalog catalog,SpellCatalog? spells=null)
+    public static GameState CreateTactical(int size,int opponents,ItemCatalog catalog,SpellCatalog? spells=null,bool ai=true)
     {
         if(opponents is <1 or >8)throw new ArgumentOutOfRangeException(nameof(opponents));
         var s=Create(size,catalog,spells);var original=s.Melee!;
@@ -38,7 +38,7 @@ public static class MeleeTraining
         var field=new TacticalField(8,8,positions,[new(3,3),new(3,4)],extra.ToImmutable());
         var items=s.Items!;
         foreach(var o in extra)items=ItemInventory.Move(items,o.WeaponId,new(o.Actor.Id,Equipment.WeaponSlot),Inventory.Rules(catalog));
-        s=s with {Items=items,Melee=original with {Field=field}};MeleeCombat.Validate(s,catalog);return s;
+        s=s with {Items=items,Melee=original with {Field=field}};MeleeCombat.Validate(s,catalog);return ai?EnemyAi.Enable(s,48):s;
     }
     private static MeleeCharacterFacts Facts(OriginalProfession profession,bool opponent=false)=>new(opponent?60:80,
         new(50,opponent?60:80,opponent?60:80,70),opponent?60:80,opponent?60:80,[new(profession,10)],20,

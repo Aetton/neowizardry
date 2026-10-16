@@ -136,3 +136,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 035 — multi-opponent position laboratory
 
 [Iteration 035](iteration-035.md) adds an explicit grid laboratory for 1–8 heroes and 1–8 authored opposing characters. Per-actor positions, one-step movement, obstacles, sight, selected targets, deterministic pathfinding, shared initiative, supported original single-target spells, all-opponents victory, exact-instance loot and schema-5 continuation are playable. Movement/AI/geometry are laboratory policies; imported monster execution, native formation/continuous motion, ranged/area effects and full magic coverage remain open. TOC-41/42/43 remain in progress.
+
+
+## Iteration 036 — enemy behavior profiles
+
+[Iteration 036](iteration-036.md) adds four authored tactical behavior profiles, target perception with expiring last-position memory, allied target distribution, wounded-target selection, low-HP retreat, same-round retargeting between attack groups, explanations/profile selection in the UI and schema-six brain persistence. Existing schema-five tactical saves keep legacy pursuit. Original monster actor import and native AI recovery remain open; training characters exercise the new controller without inventing monster stats. TOC-41/42/43 remain in progress.

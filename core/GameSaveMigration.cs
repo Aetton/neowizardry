@@ -18,6 +18,8 @@ public static class GameSaveMigration
         {
             if(root["Melee"] is JsonObject melee && melee["Field"] is not null)throw new InvalidDataException("Tactical field requires save schema 5");
         }
+        if(schema<=5 && root["Melee"] is JsonObject oldMelee && oldMelee["Field"] is JsonObject oldField && oldField["Brains"] is not null)
+            throw new InvalidDataException("Enemy brains require save schema 6");
         if(schema is 2 or 3)
         {
             if(root.ContainsKey("Bag") || root["Party"] is JsonArray oldParty && oldParty.Any(h=>h?.AsObject().ContainsKey("EquippedItemId")==true))
@@ -29,7 +31,7 @@ public static class GameSaveMigration
             if(catalog is not null){Equipment.ValidateLoadedEquipment(upgraded,catalog,catalog.Provenance.Sha256);ProjectileExecution.Validate(upgraded,catalog);}
             return upgraded;
         }
-        if(schema==4 || schema==Game.SaveSchema)
+        if(schema is 4 or 5 || schema==Game.SaveSchema)
         {
             if(root.ContainsKey("Bag") || root["Party"] is JsonArray party && party.Any(h=>h?.AsObject().ContainsKey("EquippedItemId")==true))
                 throw new InvalidDataException("Conflicting legacy inventory fields in instance save");

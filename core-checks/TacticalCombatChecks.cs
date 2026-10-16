@@ -20,7 +20,7 @@ static class TacticalCombatChecks
         Check(Game.Save(first.State)==Game.Save(Game.Attack(s,catalog,999).State),"Tactical dispatch uses individual positions instead of legacy camera range");
         Check(Game.Save(TacticalCombat.Advance(first.State,catalog).State)==Game.Save(TacticalCombat.Advance(Game.Load(Game.Save(first.State),catalog),catalog).State),"Tactical save preserves all opponents positions RNG and continuation");
         var old=JsonNode.Parse(Game.Save(MeleeTraining.Create(2,catalog)))!;old["Schema"]=4;old["Melee"]!.AsObject().Remove("Field");
-        var migrated=Game.Load(old.ToJsonString(),catalog);Check(migrated.Schema==5 && migrated.Melee!.Field is null,"Schema-four duels migrate without invented positions");
+        var migrated=Game.Load(old.ToJsonString(),catalog);Check(migrated.Schema==Game.SaveSchema && migrated.Melee!.Field is null,"Schema-four duels migrate without invented positions");
         var forged=JsonNode.Parse(before)!;forged["Schema"]=4;Reject(()=>Game.Load(forged.ToJsonString(),catalog),"Old schema cannot carry a tactical field");
         Reject(()=>TacticalCombat.Advance(s,catalog,[new("hero-1",TacticalAction.Attack,s.Enemy.Id)]),"Reject out-of-reach target before RNG");
         Reject(()=>TacticalCombat.Advance(s,catalog,[new("hero-1",TacticalAction.Move,Destination:new(1,1))]),"Reject movement into occupied ally cell");

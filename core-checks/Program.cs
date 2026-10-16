@@ -75,7 +75,7 @@ for(int size=1;size<=8;size++)
 }
 Throws(() => Game.Create(0), "No empty party");
 Throws(() => Game.Create(9), "UI limit enforced");
-Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 5", "\"Schema\": 99")), "Reject unknown save version");
+Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 6", "\"Schema\": 99")), "Reject unknown save version");
 Throws(() => Game.Validate(solo with { Party = [solo.Party[0], solo.Party[0]] }), "Reject duplicate IDs");
 Throws(() => Game.Escape(solo), "Escape requires capture");
 var fast = solo with { Party = [solo.Party[0] with { Speed = 0, Hp = 1 }] };
@@ -355,6 +355,7 @@ checks+=SnapshotChecks.Run(referenceCatalog,recipeReferenceCatalog);
 checks+=ProjectileExecutionChecks.Run(restricted);
 checks+=MeleeEncounterChecks.Run();
 checks+=TacticalCombatChecks.Run();
+checks+=EnemyAiChecks.Run();
 checks+=RestoredRoundChecks.Run();
 checks+=MonsterCatalogChecks.Run();
 if(args.Length==2 && args[0]=="--fixture")

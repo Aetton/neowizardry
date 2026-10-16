@@ -16,7 +16,7 @@ public partial class Main
         var dialog=new AcceptDialog {Name="TacticalDialog",Theme=_hudTheme,Title="Tactical field · authored movement rules",Unresizable=true};AddChild(dialog);
         dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var scroll=new ScrollContainer();dialog.AddChild(scroll);var body=new VBoxContainer {SizeFlagsHorizontal=Control.SizeFlags.ExpandFill};scroll.AddChild(body);
-        body.AddChild(new Label {Text="Choose hero and order, then tap a cell.\nOne step or adjacent melee; spells need clear sight.\nUnordered heroes attack nearby enemies or wait.",AutowrapMode=TextServer.AutowrapMode.WordSmart});
+        body.AddChild(new Label {Text="Choose hero and order, then tap a cell.\nOne step or adjacent melee; spells need clear sight.\nUnordered heroes attack nearby enemies or wait.\nAI: Brute closes in; Hunter targets wounded;\nFlanker spreads out; Skirmisher retreats at low HP.",AutowrapMode=TextServer.AutowrapMode.WordSmart});
         var actor=new OptionButton {Name="TacticalActor"};foreach(var h in _state.Party)actor.AddItem(h.Name);body.AddChild(actor);
         var mode=new OptionButton();foreach(var text in new[]{"Move","Attack","Spell"})mode.AddItem(text);body.AddChild(mode);
         var magic=_spellCatalog?.Spells.Where(RestoredMagic.SupportedSpell).ToArray()??[];
@@ -24,7 +24,11 @@ public partial class Main
         var power=new OptionButton();for(int i=1;i<=7;i++)power.AddItem($"Power {i}");body.AddChild(power);
         var feedback=new Label {AutowrapMode=TextServer.AutowrapMode.WordSmart};body.AddChild(feedback);
         void Attempt(Action action){try{action();feedback.Text="";}catch(Exception e){feedback.Text=e.Message;Say(e.Message);}}
+        var aiLabel=new Label {Name="EnemyAiStatus",AutowrapMode=TextServer.AutowrapMode.WordSmart};body.AddChild(aiLabel);
+        var inspect=new OptionButton {Name="EnemyAiActor"};foreach(var e in TacticalCombat.Enemies(_state))inspect.AddItem(e.Id);body.AddChild(inspect);
+        var tactic=new OptionButton {Name="EnemyAiTactic"};foreach(var t in Enum.GetValues<EnemyTactic>())tactic.AddItem(t.ToString());body.AddChild(tactic);
         var grid=new GridContainer {Columns=_state.Melee.Field.Width,Name="TacticalGrid"};body.AddChild(grid);
+        var lastDecisions=new Label {Name="EnemyAiReasons",AutowrapMode=TextServer.AutowrapMode.WordSmart};
         var orders=new Dictionary<string,TacticalOrder>();var summary=new Label {AutowrapMode=TextServer.AutowrapMode.WordSmart};
         void Render()
         {
@@ -47,20 +51,30 @@ public partial class Main
                     orders[h.Id]=new(h.Id,action,id,action==TacticalAction.Move?cell:null,action==TacticalAction.Cast?new(h.Id,magic[spell.Selected].Id,power.Selected+1,id):null);Render();
                 });grid.AddChild(b);
             }
+            var brains=f.Brains;
+            aiLabel.Text=brains is null?"Legacy pursuit AI. Start a new battle for behavior profiles.":
+                string.Join("\n",TacticalCombat.Enemies(_state).Select((e,i)=>{var b=brains[e.Id];return $"E{i+1}: {b.Profile.Tactic} · {b.Mode} · target {b.TargetId??"—"} · seen {b.LastSeen?.ToString()??"—"}";}));
+            tactic.Disabled=brains is null;
+            if(brains is not null)tactic.Select((int)brains[TacticalCombat.Enemies(_state).ElementAt(inspect.Selected).Id].Profile.Tactic);
             summary.Text=$"Round {_state.Round} · {TacticalCombat.Enemies(_state).Count(e=>e.Hp>0)} enemies alive\n"+
                 string.Join("\n",orders.Values.Select(o=>$"{o.ActorId}: {o.Action} {o.TargetId} {o.Destination} {(o.Spell is {} cast?$"spell {cast.SpellId} PL{cast.Power}":"")}"))+"\n"+
                 string.Join(" · ",_state.Party.Select((h,i)=>$"P{i+1} {h.Name}"))+"\nP = party, E = enemy; number below = HP. ▩ = obstacle.\nOrders are cleared when this window closes; positions are saved.";
         }
-        actor.ItemSelected+=_=>Render();
+        actor.ItemSelected+=_=>Render();inspect.ItemSelected+=_=>Render();
+        tactic.ItemSelected+=index=>Attempt(()=>
+        {
+            _state=EnemyAi.SetTactic(_state,TacticalCombat.Enemies(_state).ElementAt(inspect.Selected).Id,(EnemyTactic)index);Render();
+        });
         var controls=new HBoxContainer();body.AddChild(controls);
         Button(controls,"Wait",()=>{var h=_state.Party[actor.Selected];orders[h.Id]=new(h.Id,TacticalAction.Wait);Render();});
         Button(controls,"Clear",()=>{orders.Clear();Render();});
         var resolve=Button(controls,"Resolve round",()=>Attempt(()=>
         {
             var result=TacticalCombat.Advance(_state,_catalog!,orders.Values.ToArray(),_spellCatalog);_state=result.State;
+            lastDecisions.Text=string.Join("\n",result.Events.Where(e=>e.StartsWith("AI ")));
             foreach(var e in result.Events)Say(e);orders.Clear();Refresh();Render();
         }));resolve.Name="TacticalResolve";
-        Button(body,"Save positions and combat",()=>Attempt(()=>{SaveTo(SavePath);Say("Tactical battle saved.");}));body.AddChild(summary);Render();
+        Button(body,"Save positions and combat",()=>Attempt(()=>{SaveTo(SavePath);Say("Tactical battle saved.");}));body.AddChild(lastDecisions);body.AddChild(summary);Render();
         var screen=GetViewport().GetVisibleRect().Size;var dimensions=new Vector2I((int)Math.Min(520,screen.X-24),(int)Math.Min(740,screen.Y-24));
         scroll.Position=new(10,10);scroll.Size=new(dimensions.X-20,dimensions.Y-62);dialog.PopupCentered(dimensions);
     }
@@ -73,6 +87,11 @@ public partial class Main
         Walk(dialog).OfType<Button>().Single(b=>b.Name=="Cell2_0").EmitSignal(Godot.Button.SignalName.Pressed);
         Walk(dialog).OfType<Button>().Single(b=>b.Name=="TacticalResolve").EmitSignal(Godot.Button.SignalName.Pressed);
         if(_state.Round!=1 || _state.Melee!.Field!.Positions["hero-1"]!=new BattleCell(2,0) || TacticalCombat.Enemies(_state).Count()!=3 || _state.Melee!.Field!.Positions["Training Duelist"].X!=5)throw new Exception("Tactical UI round did not move opponents");
+        if(_state.Melee.Field.Brains is null || !_state.Melee.Field.Brains.Values.Any(b=>b.TargetId is not null))throw new Exception("Enemy AI did not perceive or pursue the party");
+        var inspect=Walk(dialog).OfType<OptionButton>().Single(b=>b.Name=="EnemyAiActor");inspect.Select(1);inspect.EmitSignal(OptionButton.SignalName.ItemSelected,1L);
+        var tactic=Walk(dialog).OfType<OptionButton>().Single(b=>b.Name=="EnemyAiTactic");tactic.Select(3);tactic.EmitSignal(OptionButton.SignalName.ItemSelected,3L);
+        if(_state.Melee.Field.Brains["Training Duelist 2"].Profile.Tactic!=EnemyTactic.Skirmisher)throw new Exception("Enemy AI profile selector did not commit");
+        GD.Print("PASS: enemy AI perception, profile selector and tactical saved state");
         GD.Print("PASS: tactical UI renders 64 cells and resolves three independent opponents");
         var saved=Game.Save(_state);var continuation=Game.Save(TacticalCombat.Advance(_state,_catalog!).State);
         _state=Game.Load(saved,_catalog);if(Game.Save(TacticalCombat.Advance(_state,_catalog!).State)!=continuation)throw new Exception("Tactical client save continuation failed");

@@ -7,7 +7,7 @@ namespace NeoWizardry.Core;
 public readonly record struct BattleCell(int X,int Y);
 public sealed record TacticalOpponent(Enemy Actor,MeleeCharacterFacts Facts,string WeaponId,RestoredMagicFacts? Magic=null);
 public sealed record TacticalField(int Width,int Height,ImmutableDictionary<string,BattleCell> Positions,
-    ImmutableArray<BattleCell> Walls,ImmutableArray<TacticalOpponent> Opponents);
+    ImmutableArray<BattleCell> Walls,ImmutableArray<TacticalOpponent> Opponents,ImmutableDictionary<string,EnemyBrain>? Brains=null);
 public enum TacticalAction { Attack, Move, Wait, Cast }
 public sealed record TacticalOrder(string ActorId,TacticalAction Action,string? TargetId=null,BattleCell? Destination=null,RestoredCastOrder? Spell=null);
 
@@ -28,6 +28,7 @@ public static class TacticalCombat
             f.Positions.Values.Any(p=>!Inside(f,p)) || f.Walls.Distinct().Count()!=f.Walls.Length || f.Walls.Any(p=>!Inside(f,p)) ||
             f.Positions.Any(p=>f.Walls.Contains(p.Value)) || ids.Where(id=>Alive(state,id)).Select(id=>f.Positions[id]).Distinct().Count()!=ids.Count(id=>Alive(state,id)))
             throw new InvalidDataException("Invalid tactical positions");
+        EnemyAi.Validate(state);
         foreach(var o in f.Opponents)
         {
             if(state.Items!.Items.SingleOrDefault(i=>i.Id==o.WeaponId) is not {Quantity:1} w || w.Location!=(state.RewardGranted?Inventory.BagLocation:new ItemLocation(o.Actor.Id,Equipment.WeaponSlot)))throw new InvalidDataException("Missing tactical opponent weapon");
@@ -56,12 +57,12 @@ public static class TacticalCombat
         }
         return true;
     }
-    private static bool CanStep(GameState s,string actor,BattleCell to)
+    internal static bool CanStep(GameState s,string actor,BattleCell to)
     {
         var from=s.Melee!.Field!.Positions[actor];
         return Distance(from,to)==1 && Free(s,to,actor) && (from.X==to.X || from.Y==to.Y || Free(s,new(from.X,to.Y),actor) && Free(s,new(to.X,from.Y),actor));
     }
-    private static bool InReach(GameState s,string a,string b)=>Distance(s.Melee!.Field!.Positions[a],s.Melee.Field.Positions[b])==1 && Visible(s,a,b);
+    internal static bool InReach(GameState s,string a,string b)=>Distance(s.Melee!.Field!.Positions[a],s.Melee.Field.Positions[b])==1 && Visible(s,a,b);
     private static int Hp(GameState s,string id)=>s.Party.FirstOrDefault(h=>h.Id==id)?.Hp??Enemies(s).Single(e=>e.Id==id).Hp;
     private static GameState WithHp(GameState s,string id,int amount)
     {
@@ -71,7 +72,7 @@ public static class TacticalCombat
         var f=s.Melee!.Field!;int j=Array.FindIndex(f.Opponents.ToArray(),o=>o.Actor.Id==id);var o=f.Opponents[j];
         return s with {Melee=s.Melee with {Field=f with {Opponents=f.Opponents.SetItem(j,o with {Actor=o.Actor with {Hp=Math.Max(0,o.Actor.Hp+amount)}})}}};
     }
-    private static IEnumerable<BattleCell> Neighbors(BattleCell p)=>from y in Enumerable.Range(-1,3) from x in Enumerable.Range(-1,3) where x!=0 || y!=0 select new BattleCell(p.X+x,p.Y+y);
+    internal static IEnumerable<BattleCell> Neighbors(BattleCell p)=>from y in Enumerable.Range(-1,3) from x in Enumerable.Range(-1,3) where x!=0 || y!=0 select new BattleCell(p.X+x,p.Y+y);
     private static TacticalOrder EnemyOrder(GameState s,string id)
     {
         var targets=s.Party.Where(h=>h.Hp>0 && !h.Captive).OrderBy(h=>Distance(s.Melee!.Field!.Positions[id],s.Melee.Field.Positions[h.Id])).ThenBy(h=>h.Id,StringComparer.Ordinal).ToArray();
@@ -128,7 +129,14 @@ public static class TacticalCombat
             var turn=queue.OrderBy(t=>t.Time).ThenBy(t=>Enemies(s).Any(e=>e.Id==t.Id)).ThenBy(t=>t.Id,StringComparer.Ordinal).First();queue.Remove(turn);
             if(!Alive(s,turn.Id))continue;
             bool enemy=Enemies(s).Any(e=>e.Id==turn.Id);
-            if(enemy && !enemyOrders.ContainsKey(turn.Id))enemyOrders[turn.Id]=EnemyOrder(s,turn.Id);
+            if(enemy && s.Melee!.Field!.Brains is not null)
+            {
+                var decision=EnemyAi.Decide(s,turn.Id,allowMove:!enemyOrders.ContainsKey(turn.Id));
+                s=s with {Melee=s.Melee with {Field=s.Melee.Field with {Brains=s.Melee.Field.Brains.SetItem(turn.Id,decision.Brain)}}};
+                enemyOrders[turn.Id]=decision.Order;
+                events.Add($"AI {turn.Id} [{decision.Brain.Profile.Tactic}/{decision.Brain.Mode}]: {decision.Reason}");
+            }
+            else if(enemy && !enemyOrders.ContainsKey(turn.Id))enemyOrders[turn.Id]=EnemyOrder(s,turn.Id);
             var order=enemy?enemyOrders[turn.Id]:selected[turn.Id];
             events.Add($"Queue {turn.Time}: {turn.Id} · {order.Action}");
             if(order.Action==TacticalAction.Wait)continue;

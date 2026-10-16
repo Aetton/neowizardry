@@ -329,7 +329,7 @@ public partial class Main : Node3D
         var scroll=new ScrollContainer();dialog.AddChild(scroll);var body=new VBoxContainer { SizeFlagsHorizontal=Control.SizeFlags.ExpandFill };scroll.AddChild(body);
         var size=new OptionButton();for(int i=1;i<=8;i++)size.AddItem($"{i} adventurer{(i==1?"":"s")}");size.Select(_state.Party.Length-1);body.AddChild(size);
         Button(body,"New party",()=>Try(()=>{NewParty(size.Selected+1);dialog.QueueFree();}));
-        var opponents=new OptionButton();for(int n=1;n<=8;n++)opponents.AddItem($"{n} opponents");opponents.Select(2);body.AddChild(opponents);
+        var opponents=new OptionButton();for(int n=1;n<=8;n++)opponents.AddItem($"{n} opponents");opponents.Select(3);body.AddChild(opponents);
         Button(body,"New tactical battle",()=>Try(()=>{NewTactical(size.Selected+1,opponents.Selected+1);dialog.QueueFree();ShowTactics();}));
         Button(body,"Tactical field",ShowTactics);
         Button(body,"Spell sandbox",()=>Try(()=>{NewParty(size.Selected+1,false);dialog.QueueFree();}));
