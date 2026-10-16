@@ -1,8 +1,4 @@
-"""First native monster import: record boundaries and four text slots only.
-
-Do not reinterpret the 663-byte disk rows as 485-byte runtime definitions.
-Combat fields remain evidence bytes until the loader mapping is recovered.
-"""
+"""Native monster text and defense fields, verified through the 663-byte loader."""
 from __future__ import annotations
 import hashlib
 import struct
@@ -30,7 +26,12 @@ def monster_catalog(resources: Resources) -> dict:
                 raise FormatError('Unterminated monster text slot')
             texts.append(slot.split('\0', 1)[0])
         rows.append({'id': index, 'label': texts[0], 'text_slots': texts,
-                     'record_sha256': hashlib.sha256(record).hexdigest(), 'raw_record_hex': record.hex()})
-    return {'schema': 1, 'source': 'DATABASES/MONSTERS.DBS', 'provenance': provenance,
+                     'record_sha256': hashlib.sha256(record).hexdigest(), 'raw_record_hex': record.hex(),
+                     'defense': {'armor_class': struct.unpack_from('<b', record, 0x15d)[0],
+                                 'anatomy_code': record[0x15e],
+                                 'location_weights': list(record[0x15f:0x166]),
+                                 'location_armor': list(struct.unpack_from('<7b', record, 0x166)),
+                                 'mode_armor': list(struct.unpack_from('<9b', record, 0x16d))}})
+    return {'schema': 2, 'source': 'DATABASES/MONSTERS.DBS', 'provenance': provenance,
             'record_size': MONSTER_STRIDE, 'count': count,
             'database_sha256': hashlib.sha256(data).hexdigest(), 'monsters': rows}

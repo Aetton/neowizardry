@@ -374,7 +374,7 @@ else if(args.Length==2 && args[0]=="--monsters")
 }
 else if(args.Length==2 && args[0]=="--spell-formulas")
 {
-    var spells=SpellCatalog.Parse(File.ReadAllText(args[1]));checks+=RestoredRoundChecks.RunSpells(spells);int scenarios=0;
+    var spells=SpellCatalog.Parse(File.ReadAllText(args[1]));checks+=RestoredRoundChecks.RunSpells(spells);checks+=OriginalMagicLifecycleChecks.Run(spells);int scenarios=0;
     foreach(var spell in spells.Spells.Where(s=>s.Level>0))
     {
         int previous=-1;

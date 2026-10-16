@@ -170,9 +170,9 @@ public partial class Main : Node3D
         {
             shown=_monsterCatalog.Monsters.Where(m=>m.TextSlots.Any(t=>t.Contains(search.Text,StringComparison.OrdinalIgnoreCase))).ToArray();
             list.Clear();foreach(var m in shown)list.AddItem($"{m.Id}: {m.Label}");
-            detail.Text=$"{shown.Length} / {_monsterCatalog.Count} definitions. Native text slots and evidence imported; combat fields / monster actors pending.";
+            detail.Text=$"{shown.Length} / {_monsterCatalog.Count} definitions. Verified text and defense fields; executable monster actors pending.";
         }
-        search.TextChanged+=_=>Filter();list.ItemSelected+=i=>{var m=shown[(int)i];detail.Text=string.Join(" · ",m.TextSlots)+$"\nID {m.Id} · record {m.RecordSha256[..12]} · 663 native bytes preserved.";};
+        search.TextChanged+=_=>Filter();list.ItemSelected+=i=>{var m=shown[(int)i];detail.Text=string.Join(" · ",m.TextSlots)+$"\nID {m.Id} · record {m.RecordSha256[..12]} · 663 native bytes preserved."+(m.Defense is { } d?$"\nAC {d.ArmorClass} · zones {string.Join("/",d.LocationWeights)}\nZone armor {string.Join("/",d.LocationArmor)} · mode armor {string.Join("/",d.ModeArmor)}":"");};
         Filter();dialog.PopupCentered(new Vector2I(400,400));
     }
 
@@ -466,40 +466,51 @@ public partial class Main : Node3D
     private void ShowRestoredMagic()
     {
         if(_spellCatalog is null || _state.Melee?.Magic is null)
-        {Say("Import the original spell catalog, then start a new party to enable the training Mage's Frost / Energy Blast.");return;}
+        {Say("Import the original spell catalog, then start a new party to enable the training Bishop's Frost / Energy Blast / Heal Wounds.");return;}
         var casters=_state.Party.Where(h=>_state.Melee.Magic[h.Id].LearnedSpells.Length>0).ToArray();
         var spells=_spellCatalog.Spells.Where(RestoredMagic.SupportedSpell).ToArray();
         if(casters.Length==0 || spells.Length==0){Say("No supported learned original spells.");return;}
         Input.MouseMode=Input.MouseModeEnum.Visible;_touchInput.Reset();_dialogs++;
-        var dialog=new AcceptDialog {Theme=_hudTheme,Title="Restored magic · training Mage"};AddChild(dialog);
+        var dialog=new AcceptDialog {Theme=_hudTheme,Title="Restored magic · training Bishop"};AddChild(dialog);
         dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;
         dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var body=new VBoxContainer();dialog.AddChild(body);
         var caster=new OptionButton();foreach(var h in casters)caster.AddItem(h.Name);body.AddChild(caster);
         var spell=new OptionButton();foreach(var s in spells)spell.AddItem(s.Name);body.AddChild(spell);
         var power=new OptionButton();for(int i=1;i<=7;i++)power.AddItem($"Power {i}");body.AddChild(power);
+        var target=new OptionButton();body.AddChild(target);
         var detail=new Label {AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(350,135)};body.AddChild(detail);
-        var cast=new Button {Text="Cast / resolve round"};body.AddChild(cast);
-        RestoredCastOrder Order()=>new(casters[caster.Selected].Id,spells[spell.Selected].Id,power.Selected+1);
+        var cast=new Button {Name="RestoredCastButton",Text="Cast / resolve round"};body.AddChild(cast);
+        RestoredCastOrder Order()=>new(casters[caster.Selected].Id,spells[spell.Selected].Id,power.Selected+1,
+            spells[spell.Selected].Id==6?_state.Party[target.Selected].Id:_state.Enemy.Id);
+        void Targets()
+        {
+            target.Clear();bool heal=spells[spell.Selected].Id==6;
+            if(heal)foreach(var hero in _state.Party)target.AddItem($"{hero.Name} · {hero.Hp}/{hero.MaxHp} HP");
+            else target.AddItem(_state.Enemy.Id);
+            target.Disabled=!heal;
+        }
         void Update()
         {
             try
             {
                 var prepared=RestoredMagic.Prepare(_state,Order(),_spellCatalog);
-                detail.Text=$"{prepared.Spell.Realm} · {prepared.ManaCost} mana · risk {prepared.Risk.FailureThreshold}%\n"+
-                    $"{prepared.Power}d{prepared.Spell.DamageSides}, then Power Cast and target resistance.\n"+
-                    "Safe ordinary casts only. Authored Mage / resistance facts; immediate delivery in this training room.";
+                bool heal=prepared.Spell.Id==6;
+                if(heal)for(int i=0;i<_state.Party.Length;i++)target.SetItemText(i,$"{_state.Party[i].Name} · {_state.Party[i].Hp}/{_state.Party[i].MaxHp} HP");
+                detail.Text=$"{prepared.Spell.Realm} · {prepared.ManaCost} mana · failure {Math.Min(100,prepared.Risk.FailureThreshold)}% · {prepared.Risk.Band}\n"+
+                    $"{prepared.Power*prepared.Spell.DamageDice}d{prepared.Spell.DamageSides}, then Power Cast"+(heal?"; heals selected ally.":" and target resistance.")+"\n"+
+                    (heal?"Failure consumes mana. Full HP needs no healing dice.":"Failure consumes mana. Backfire can hit the caster.");
                 cast.Disabled=false;
             }
             catch(Exception e){detail.Text=e.Message;cast.Disabled=true;}
         }
-        caster.ItemSelected+=_=>Update();spell.ItemSelected+=_=>Update();power.ItemSelected+=_=>Update();
+        caster.ItemSelected+=_=>Update();spell.ItemSelected+=_=>{Targets();Update();};power.ItemSelected+=_=>Update();target.ItemSelected+=_=>Update();
         cast.Pressed+=()=>Try(()=>
         {
             var result=MeleeCombat.Advance(_state,_catalog!,_player.Position.DistanceTo(_enemyPosition),[Order()],_spellCatalog);
             _state=result.State;foreach(var entry in result.Events)Say(entry);Refresh();Update();
         });
-        Update();dialog.PopupCentered(new Vector2I(390,350));
+        Targets();Update();dialog.PopupCentered(new Vector2I(390,350));
     }
 
     private void ShowMagic()
@@ -855,7 +866,21 @@ public partial class Main : Node3D
                 ShowRestoredMagic();GetChildren().OfType<AcceptDialog>().Last().Free();
                 var cast=MeleeCombat.Advance(_state,_catalog!,3,[new(_state.Party[0].Id,5,3)],_spellCatalog);
                 if(!cast.Events.Any(e=>e.Contains("Energy Blast PL3")) || cast.State.Party[0].Mana!.Single(m=>m.Realm=="Fire").Current!=36)throw new Exception("Original casting smoke failed");
-                _state=snapshot;GD.Print("PASS: restored magic UI, imported Energy Blast, mana and shared combat executor");
+                if(_spellCatalog.Spells.Any(s=>s.Id==6 && RestoredMagic.SupportedSpell(s)))
+                {
+                    _state=CreateExpedition(1);_state=_state with {Party=_state.Party.SetItem(0,_state.Party[0] with {Hp=_state.Party[0].MaxHp-1})};
+                    ShowRestoredMagic();var healDialog=GetChildren().OfType<AcceptDialog>().Last();
+                    var controls=healDialog.GetChildren().OfType<VBoxContainer>().Single();
+                    var choices=controls.GetChildren().OfType<OptionButton>().ToArray();
+                    int healing=Array.FindIndex(_spellCatalog.Spells.Where(RestoredMagic.SupportedSpell).ToArray(),s=>s.Id==6);
+                    choices[1].Select(healing);choices[1].EmitSignal(OptionButton.SignalName.ItemSelected,(long)healing);
+                    var healButton=controls.GetChildren().OfType<Godot.Button>().Single(b=>b.Name=="RestoredCastButton");
+                    if(healButton.Disabled)throw new Exception("Heal Wounds UI unexpectedly disabled");
+                    healButton.EmitSignal(Godot.Button.SignalName.Pressed);
+                    if(_state.Round!=1 || _state.Party[0].Mana!.Single(m=>m.Realm=="Divine").Current!=39)throw new Exception("Heal Wounds button did not execute the shared round");
+                    healDialog.Free();
+                }
+                _state=snapshot;GD.Print("PASS: restored magic UI, imported direct spell / Heal Wounds buttons, mana and shared combat executor");
             }
             Save(); _state=Game.Create(8); Load();
             if(_state.Party.Length!=1 || _state.Round!=1) throw new Exception("Client save/load failed");

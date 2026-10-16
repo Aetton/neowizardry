@@ -13,13 +13,13 @@ Godot 4.5.1 .NET client + independent .NET 8 core + dependency-free Python 3.10+
 - A synthetic 3D corridor with free movement, collisions, mouse look, party size 1–8, a training sentinel, round resolution, XP, sample dialogue and save/load.
 - A solo captivity/escape regression fixture. This proves an engine state transition, **not** that the original Crock quest has been reproduced.
 - New training parties use recovered character initiative, interleaved melee attack groups and explicit saved effective facts.
-- With an original spell catalog loaded, the training Mage casts safe Frost / Energy Blast at powers 1–7 through the shared battle executor, with realm mana and recovered damage/resistance arithmetic. Risky casting, healing and broader original effects remain open; five synthetic spells remain in the separate sandbox.
-- First MONSTERS.DBS import: 595 native reference records, verified text slots/hashes and Menu → Monster reference search. Executable monster actors remain pending.
+- With an original spell catalog loaded, the training Bishop casts Frost / Energy Blast / Heal Wounds at powers 1–7 through the shared battle executor, with realm mana and recovered damage/resistance arithmetic. Ordinary risk, fizzle/backfire and healing are connected; broader original conditions/effects/progression remain open; five synthetic spells remain in the separate sandbox.
+- First MONSTERS.DBS import: 595 native reference records, verified text/defense fields, content-to-defense-rules integration and Menu → Monster reference search. Executable monster actors remain pending.
 - Deterministic core transitions and versioned saves, tested independently of Godot. Imported melee damage dice and weapon initiative are active; the prototype RNG state survives saves.
 - Original-item browser with search, raw weapon statistics and a melee equipment slot backed by the shared party bag enforcing race/profession/gender restrictions. Equipped items survive saves; loading requires the same source item database.
 - Ordinary resource overlay: loose data files, then descending `PATCH.NNN`, then base archive, with source provenance.
 
-Starting characters, opponent facts, room, targeting and rewards are **authored training fixtures**. The connected original formula subset and its remaining gates are documented in [iteration 033](docs/iteration-033.md). No enemy scaling by party size. Reward is shared between living, uncaptured heroes, so solo retains the concentration of XP.
+Starting characters, opponent facts, room, targeting and rewards are **authored training fixtures**. The connected original formula subset and its remaining gates are documented in [iteration 034](docs/iteration-034.md). No enemy scaling by party size. Reward is shared between living, uncaptured heroes, so solo retains the concentration of XP.
 
 ## Windows testing
 

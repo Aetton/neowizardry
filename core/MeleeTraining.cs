@@ -31,7 +31,7 @@ public static class MeleeTraining
     {
         var state=Game.Create(size);
         bool magic=spells is not null && spells.Spells.Any(RestoredMagic.SupportedSpell);
-        if(magic)state=state with {Party=state.Party.SetItem(0,state.Party[0] with {Name="Faerie Mage",Profession="Mage",Spellbook=[],Mana=[new("Fire",42,42),new("Water",42,42)]})};
+        if(magic)state=state with {Party=state.Party.SetItem(0,state.Party[0] with {Name="Faerie Bishop",Profession="Bishop",Spellbook=[],Mana=[new("Fire",42,42),new("Water",42,42),new("Divine",42,42)]})};
         var facts=ImmutableDictionary.CreateBuilder<string,MeleeCharacterFacts>();
         foreach(var hero in state.Party)
         {
@@ -53,8 +53,8 @@ public static class MeleeTraining
         state=state with {Enemy=enemy,Melee=encounter,Items=ItemInventory.Move(state.Items!,opponentId,new(enemy.Id,Equipment.WeaponSlot),Inventory.Rules(catalog))};
         if(magic)
         {
-            RestoredMagicFacts Profile(bool caster)=>new(spells!.Provenance.Sha256,caster?80:0,
-                Enumerable.Repeat(caster?80:0,6).ToImmutableArray(),10,10,false,0,
+            RestoredMagicFacts Profile(bool caster)=>new(spells!.Provenance.Sha256,caster?40:0,
+                Enumerable.Repeat(caster?40:0,6).ToImmutableArray(),10,10,false,0,
                 caster?spells.Spells.Where(RestoredMagic.SupportedSpell).Select(s=>s.Id).ToImmutableArray():[],10,[0,0,0,0,0,0]);
             state=state with {Melee=state.Melee! with {Magic=state.Party.ToImmutableDictionary(h=>h.Id,h=>Profile(h.Id==state.Party[0].Id)).Add(enemy.Id,Profile(false))}};
         }

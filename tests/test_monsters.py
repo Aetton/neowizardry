@@ -14,12 +14,14 @@ class MonsterTests(unittest.TestCase):
         row=bytearray(663)
         for offset,text in zip((0,48,96,144),('Fixture# internal','Fixtures','Creature','Creatures')):
             row[offset:offset+len(text)*2]=text.encode('utf-16le')
+        row[0x15d]=253;row[0x162]=100;row[0x169]=7;row[0x16d]=254
         self.row=bytes(row);self.data=struct.pack('<I',1)+self.row
     def read(self,data):
         path=self.root/'DATA.SLF';fixture(path,[('DATABASES/MONSTERS.DBS',data,0)])
         return monster_catalog(Resources(Archive(path)))
     def test_preserves_record_and_table_identity(self):
         c=self.read(self.data);r=c['monsters'][0]
+        self.assertEqual(c['schema'],2);self.assertEqual(c['monsters'][0]['defense'],{'armor_class':-3,'anatomy_code':0,'location_weights':[0,0,0,100,0,0,0],'location_armor':[0,0,0,7,0,0,0],'mode_armor':[-2,0,0,0,0,0,0,0,0]})
         self.assertEqual(c['count'],1);self.assertEqual(c['record_size'],663)
         self.assertEqual(r['label'],'Fixture# internal');self.assertEqual(r['text_slots'][1],'Fixtures')
         self.assertEqual(bytes.fromhex(r['raw_record_hex']),self.row)

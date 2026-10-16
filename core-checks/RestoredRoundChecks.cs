@@ -42,8 +42,9 @@ static class RestoredRoundChecks
         int count=0;void Check(bool ok,string message){if(!ok)throw new Exception(message);count++;}
         void Reject(Action action,string message){bool rejected=false;try{action();}catch(InvalidOperationException){rejected=true;}catch(InvalidDataException){rejected=true;}Check(rejected,message);}
         var catalog=MeleeTraining.Catalog();var state=MeleeTraining.Create(2,catalog,spells);
-        Check(state.Party[0].Profession=="Mage" && state.Melee!.Party[state.Party[0].Id].History[0].Profession==OriginalProfession.Mage,"Training mage identity and melee class agree");
-        foreach(var spell in spells.Spells.Where(RestoredMagic.SupportedSpell))for(int power=1;power<=7;power++)
+        state=state with {Melee=state.Melee! with {Magic=state.Melee.Magic!.SetItem("hero-1",state.Melee.Magic["hero-1"] with {BookSkill=80,RealmSkills=[80,80,80,80,80,80]})}};
+        Check(state.Party[0].Profession=="Bishop" && state.Melee!.Party[state.Party[0].Id].History[0].Profession==OriginalProfession.Bishop,"Training mage identity and melee class agree");
+        foreach(var spell in spells.Spells.Where(s=>RestoredMagic.SupportedSpell(s) && s.Id!=6))for(int power=1;power<=7;power++)
         {
             var order=new RestoredCastOrder(state.Party[0].Id,spell.Id,power);var before=Game.Save(state);
             var prepared=RestoredMagic.Prepare(state,order,spells);
@@ -60,7 +61,7 @@ static class RestoredRoundChecks
         Reject(()=>MeleeCombat.Advance(state,catalog,3,[command,command],spells),"Duplicate caster orders rejected");
         Reject(()=>MeleeCombat.Advance(state,catalog,5,[command],spells),"Out of room range rejected");
         var risky=state with {Melee=state.Melee! with {Magic=state.Melee.Magic!.SetItem(command.CasterId,state.Melee.Magic[command.CasterId] with {BookSkill=0,RealmSkills=[0,0,0,0,0,0],EffectiveCasterLevel=1})}};
-        Reject(()=>MeleeCombat.Advance(risky,catalog,3,[command],spells),"Unrecovered risky cast lifecycle stays gated");
+        Check(RestoredMagic.Prepare(risky,command,spells).Risk.FailureThreshold>0,"Risky cast is now admitted with its original threshold");
         var noCaster=state with {Party=state.Party.SetItem(0,state.Party[0] with {Hp=0})};
         Reject(()=>MeleeCombat.Advance(noCaster,catalog,3,[command],spells),"Dead caster cannot submit");
         var source=spells.Spells.Single(s=>s.Id==5);

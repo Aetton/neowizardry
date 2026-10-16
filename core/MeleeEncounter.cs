@@ -118,11 +118,30 @@ public static class MeleeCombat
             if(!turn.Enemy && casts.TryGetValue(turn.Id,out var cast))
             {
                 int index=Array.FindIndex(party,h=>h.Id==turn.Id);var caster=party[index];
-                _=OriginalMagicRules.ResolveCasting(cast.Risk.FailureThreshold,null,false);
-                var hit=RestoredMagic.Damage(cast,encounter.Magic![enemy.Id],ref rng);
-                int removed=Math.Min(enemy.Hp,hit.Damage);enemy=enemy with {Hp=enemy.Hp-removed};
+                int targetIndex=Array.FindIndex(party,h=>h.Id==cast.TargetId);
+                if(cast.Spell.Id==6 && (targetIndex<0 || party[targetIndex].Hp==0 || party[targetIndex].Captive))
+                {
+                    events.Add($"Queue {turn.Time}: {caster.Name} · {cast.Spell.Name} cancelled: target unavailable; no mana spent");continue;
+                }
+                var outcome=RestoredMagic.Outcome(cast,ref rng);
                 party[index]=caster with {Mana=caster.Mana!.Select(m=>m.Realm==cast.Spell.Realm?m with {Current=m.Current-cast.ManaCost}:m).ToImmutableList()};
-                events.Add($"Queue {turn.Time}: {caster.Name} → {enemy.Id} · {cast.Spell.Name} PL{cast.Power}: {removed} HP, resistance {hit.Reduction}%, {cast.ManaCost} {cast.Spell.Realm} mana");
+                string result;
+                if(outcome==CastingOutcome.Fizzle)result="Fizzle, no effect";
+                else if(cast.Spell.Id==6)
+                {
+                    var target=party[targetIndex];int missing=target.MaxHp-target.Hp;
+                    int restored=missing==0?0:Math.Min(missing,RestoredMagic.Amount(cast,ref rng));
+                    party[targetIndex]=target with {Hp=target.Hp+restored};result=$"{target.Name}: +{restored} HP";
+                }
+                else
+                {
+                    bool backfire=outcome==CastingOutcome.Backfire;
+                    var hit=RestoredMagic.Damage(cast,encounter.Magic![backfire?turn.Id:enemy.Id],ref rng);
+                    int removed=Math.Min(backfire?party[index].Hp:enemy.Hp,hit.Damage);
+                    if(backfire)party[index]=party[index] with {Hp=party[index].Hp-removed};else enemy=enemy with {Hp=enemy.Hp-removed};
+                    result=$"{(backfire?"Backfire → "+caster.Name:enemy.Id)}: {removed} HP, resistance {hit.Reduction}%";
+                }
+                events.Add($"Queue {turn.Time}: {caster.Name} · {cast.Spell.Name} PL{cast.Power}: {result}, {cast.ManaCost} {cast.Spell.Realm} mana");
                 continue;
             }
             var facts=turn.Enemy?encounter.Opponent:encounter.Party[turn.Id];

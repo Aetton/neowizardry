@@ -8,8 +8,8 @@ namespace NeoWizardry.Core;
 public sealed record RestoredMagicFacts(string SpellDatabaseHash,int BookSkill,ImmutableArray<int> RealmSkills,
     int EffectiveCasterLevel,int StrengthLevel,bool PowerCastEnabled,int PowerCastSkill,ImmutableArray<int> LearnedSpells,
     int TargetLevel,ImmutableArray<int> Resistances);
-public sealed record RestoredCastOrder(string CasterId,int SpellId,int Power);
-public sealed record PreparedRestoredCast(OriginalSpell Spell,RestoredMagicFacts Facts,int Power,int ManaCost,CastingRisk Risk);
+public sealed record RestoredCastOrder(string CasterId,int SpellId,int Power,string? TargetId=null);
+public sealed record PreparedRestoredCast(OriginalSpell Spell,RestoredMagicFacts Facts,int Power,int ManaCost,CastingRisk Risk,string TargetId);
 
 public static class RestoredMagic
 {
@@ -17,7 +17,8 @@ public static class RestoredMagic
     private static readonly ImmutableDictionary<int,string> Supported=new Dictionary<int,string>
     {
         [4]="323def4ad490e03ce010d1bac6a5da0d34b3291a48c6e3f25dd0d7d66bc54a86",
-        [5]="a47fb8735854c994ab5490ec4fb98aabc853f47bb6178ff9c453600dcc080f96"
+        [5]="a47fb8735854c994ab5490ec4fb98aabc853f47bb6178ff9c453600dcc080f96",
+        [6]="b7a067dbb113e75ed4e1ff57928cb463f65c8edba3ffb5bd1acb4df5a946df47"
     }.ToImmutableDictionary();
     public static bool SupportedSpell(OriginalSpell spell)=>Supported.TryGetValue(spell.Id,out var hash) &&
         spell.RecordSha256.Equals(hash,StringComparison.OrdinalIgnoreCase);
@@ -42,21 +43,33 @@ public static class RestoredMagic
         var spell=spells.Spells.SingleOrDefault(s=>s.Id==order.SpellId)??throw new InvalidOperationException("Unknown original spell");
         if(!facts.LearnedSpells.Contains(order.SpellId) || !SupportedSpell(spell))throw new InvalidOperationException("This original spell effect is not connected");
         var risk=OriginalMagicRules.OrdinaryCastingRisk(new(facts.BookSkill,facts.RealmSkills[spell.RealmCode],spell.Level,spell.Cost,order.Power,facts.EffectiveCasterLevel));
-        // The initial live subset admits safe ordinary casts only. Failure/backfire cost,
-        // interruption, redirection and training are not replaced with fixture policies.
-        if(risk.FailureThreshold!=0)throw new InvalidOperationException("Risky original casting is not connected yet; lower the power");
+        string targetId=order.TargetId??(spell.Id==6?hero.Id:state.Enemy.Id);
+        if(spell.Id==6)
+        {
+            if(!state.Party.Any(h=>h.Id==targetId && h.Hp>0 && !h.Captive))throw new InvalidOperationException("Select a living party member for Heal Wounds");
+        }
+        else if(targetId!=state.Enemy.Id)throw new InvalidOperationException("Select the opponent for this offensive spell");
         int cost=checked(spell.Cost*order.Power);
         if((hero.Mana??[]).SingleOrDefault(m=>m.Realm==spell.Realm)?.Current<cost || !(hero.Mana??[]).Any(m=>m.Realm==spell.Realm))
             throw new InvalidOperationException("Not enough mana");
-        return new(spell,facts,order.Power,cost,risk);
+        return new(spell,facts,order.Power,cost,risk,targetId);
+    }
+    // Source/context fixed to ordinary player casting. The native target classifier
+    // enables backfire for these two offensive rows, but not Heal Wounds (4ACA60).
+    public static CastingOutcome Outcome(PreparedRestoredCast cast,ref uint rng)=>OriginalMagicRules.ResolveCasting(
+        cast.Risk.FailureThreshold,cast.Risk.FailureThreshold==0?null:Dice.Exclusive(ref rng,100),cast.Spell.Id is 4 or 5);
+    public static int Amount(PreparedRestoredCast cast,ref uint rng)
+    {
+        var s=cast.Spell;int dice=checked(s.DamageDice*cast.Power);
+        if(dice>255)throw new InvalidOperationException("Native spell dice overflow");
+        int rolled=s.DamageConstant;for(int i=0;i<dice;i++)rolled=checked(rolled+Dice.Roll(ref rng,s.DamageSides));
+        return OriginalMagicRules.ScaleAmount(rolled,OriginalMagicRules.PowerCastBonus(cast.Facts.PowerCastEnabled,cast.Facts.PowerCastSkill));
     }
     public static (int Damage,int Reduction) Damage(PreparedRestoredCast cast,RestoredMagicFacts target,ref uint rng)
     {
         Validate(target);var s=cast.Spell;
-        int dice=checked(s.DamageDice*cast.Power);if(dice>255)throw new InvalidOperationException("Native spell dice overflow");
-        int rolled=s.DamageConstant;for(int i=0;i<dice;i++)rolled=checked(rolled+Dice.Roll(ref rng,s.DamageSides));
+        int rolled=Amount(cast,ref rng);
         int bonus=OriginalMagicRules.PowerCastBonus(cast.Facts.PowerCastEnabled,cast.Facts.PowerCastSkill);
-        rolled=OriginalMagicRules.ScaleAmount(rolled,bonus);
         int strength=OriginalMagicRules.ScaleAmount(OriginalMagicRules.BaseEffectStrength(cast.Facts.StrengthLevel,s.Level,s.Cost,cast.Power,false),bonus/2);
         var bounds=OriginalMagicRules.ResistanceBounds(target.TargetLevel,strength,target.Resistances[s.RealmCode]);
         int? first=bounds.Pressure>0?Dice.Exclusive(ref rng,bounds.FirstExclusive):null;
