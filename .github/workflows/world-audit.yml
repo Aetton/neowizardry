@@ -6,6 +6,7 @@ on:
       - '.github/workflows/world-audit.yml'
       - 'tools/world_audit.py'
       - 'tools/pvl.py'
+      - 'tools/textures.py'
       - 'client/WorldPreview.cs'
       - 'tools/windows/TestWorld.ps1'
       - 'tools/windows/FindOriginal.ps1'
@@ -52,7 +53,7 @@ jobs:
         run: |
           $dataRoot = Split-Path (Split-Path (Split-Path $env:NEO_LEVELS_ARCHIVE -Parent) -Parent) -Parent
           $worldRoot = Join-Path $dataRoot 'NeoWizardryWorld'
-          python -m tools.pvl "$env:NEO_LEVELS_ARCHIVE" --out "$worldRoot" --report "$env:RUNNER_TEMP/monastery-geometry.json"
+          python -m tools.pvl "$env:NEO_LEVELS_ARCHIVE" --out "$worldRoot" --report "$env:RUNNER_TEMP/monastery-geometry.json" --textures
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           "NEO_WORLD_CACHE=$worldRoot" >> $env:GITHUB_ENV
       - name: Prepare retained Godot tools

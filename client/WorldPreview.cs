@@ -10,6 +10,25 @@ public partial class WorldPreview : Node3D
     private bool _looking;
     private bool _smoke;
     private int _triangles;
+    private double _textureTime;
+    private readonly List<TextureCycle> _textureCycles = [];
+    private sealed record TextureCycle(BaseMaterial3D Material, Texture2D[] Frames, double Fps, bool Emissive)
+    {
+        public void Apply(double time)
+        {
+            var frame = (int)(Math.Floor(time * Fps) % Frames.Length);
+            Material.AlbedoTexture = Frames[frame];
+            if(Emissive)Material.EmissionTexture = Frames[frame];
+        }
+        public void Check()
+        {
+            Apply(1 / Fps + 0.000001);
+            if(Material.AlbedoTexture.GetRid() != Frames[1].GetRid())throw new InvalidDataException("IFL frame advance failed");
+            Apply(Frames.Length / Fps + 0.000001);
+            if(Material.AlbedoTexture.GetRid() != Frames[0].GetRid())throw new InvalidDataException("IFL loop failed");
+            Apply(0);
+        }
+    }
 
     public static bool Requested => OS.GetCmdlineUserArgs().Contains("--world");
 
@@ -29,8 +48,9 @@ public partial class WorldPreview : Node3D
             if(error != Error.Ok)throw new InvalidDataException($"GLB import failed: {error}");
             var scene = document.GenerateScene(state) ?? throw new InvalidDataException("GLB has no scene");
             AddChild(scene);
+            ConfigureTextures(state, args.Contains("--world-smoke"));
             Aabb? bounds = null;
-            int surfaces = 0;
+            int surfaces = 0, texturedSurfaces = 0;
             foreach(var mesh in Meshes(scene))
             {
                 if(mesh.Mesh is not ArrayMesh geometry)throw new InvalidDataException("Expected imported ArrayMesh");
@@ -39,17 +59,13 @@ public partial class WorldPreview : Node3D
                 for(int surface = 0; surface < geometry.GetSurfaceCount(); surface++)
                 {
                     surfaces++;
+                    if(geometry.SurfaceGetMaterial(surface) is BaseMaterial3D { AlbedoTexture: not null })texturedSurfaces++;
                     if(geometry.SurfaceGetPrimitiveType(surface) != Mesh.PrimitiveType.Triangles)
                         throw new InvalidDataException("World preview requires triangle primitives");
                     var count = geometry.SurfaceGetArrayIndexLen(surface);
                     _triangles += (count > 0 ? count : geometry.SurfaceGetArrayLen(surface)) / 3;
                 }
-                // Preview colors are authored; do not imply native material reconstruction.
-                mesh.MaterialOverride = new StandardMaterial3D {
-                    AlbedoColor = new Color(0.66f, 0.69f, 0.73f),
-                    CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-                    Roughness = 1
-                };
+
             }
             if(bounds is not {} world || surfaces == 0 || _triangles == 0 || !world.Position.IsFinite() || !world.Size.IsFinite())
                 throw new InvalidDataException("World preview has no finite triangle bounds");
@@ -67,7 +83,7 @@ public partial class WorldPreview : Node3D
             var layer = new CanvasLayer();AddChild(layer);
             var label = new Label { Position = new Vector2(16, 16), Text =
                 $"{Path.GetFileNameWithoutExtension(path)} · {surfaces} surfaces · {_triangles:N0} triangles\n" +
-                "STATIC GEOMETRY PREVIEW · textures / collision / encounters pending\n" +
+                $"TEXTURED WORLD PREVIEW · {texturedSurfaces} textured surfaces · {_textureCycles.Count} animated materials\nCollision / encounters pending\n" +
                 "WASD fly · Q/E down/up · right drag look · wheel speed · Home overview · Esc release" };
             layer.AddChild(label);
             _smoke = args.Contains("--world-smoke");
@@ -88,11 +104,66 @@ public partial class WorldPreview : Node3D
                     if(world.Position.DistanceTo(minimum) > tolerance || world.End.DistanceTo(maximum) > tolerance)
                         throw new InvalidDataException("Imported world bounds differ from PVL report");
                 }
+                foreach(var (option, actual) in new[] {("--world-textured", texturedSurfaces), ("--world-animations", _textureCycles.Count)})
+                {
+                    var at = Array.IndexOf(args, option);
+                    if(at >= 0 && (at + 1 >= args.Length || int.Parse(args[at + 1]) != actual))
+                        throw new InvalidDataException($"World material count mismatch: {option}");
+                }
+                foreach(var animation in _textureCycles)animation.Check();
+                GD.Print($"PASS: textures {texturedSurfaces} surfaces, {_textureCycles.Count} animations; decoded pixel hashes verified");
                 GD.Print($"PASS: world preview {_triangles} triangles, {surfaces} surfaces, finite bounds; no collision");
                 Callable.From(()=>GetTree().Quit()).CallDeferred();
             }
         }
         catch(Exception error) { GD.PushError(error.ToString());GetTree().Quit(1); }
+    }
+
+    private void ConfigureTextures(GltfState state, bool verifyPixels)
+    {
+        using var json = System.Text.Json.JsonDocument.Parse(Godot.Json.Stringify(state.Json));
+        var root = json.RootElement;
+        var images = state.GetImages();
+        if(root.TryGetProperty("images", out var definitions))
+        {
+            int index = 0;
+            foreach(var definition in definitions.EnumerateArray())
+            {
+                if(definition.TryGetProperty("extras", out var extras) && extras.TryGetProperty("neoPixelSha256", out var digest))
+                {
+                    if(index >= images.Count || images[index] is null)throw new InvalidDataException("Missing embedded image");
+                    using var pixels = images[index].GetImage() ?? throw new InvalidDataException("Image pixels unavailable");
+                    if(pixels.GetWidth() != extras.GetProperty("width").GetInt32() || pixels.GetHeight() != extras.GetProperty("height").GetInt32())
+                        throw new InvalidDataException("Texture dimensions differ from TGA export");
+                    if(verifyPixels)
+                    {
+                        pixels.ClearMipmaps();
+                        pixels.Convert(Image.Format.Rgba8);
+                        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(pixels.GetData())).ToLowerInvariant();
+                        if(hash != digest.GetString())throw new InvalidDataException("Decoded PNG pixels differ from TGA export");
+                    }
+                }
+                index++;
+            }
+        }
+        if(root.TryGetProperty("materials", out var materialDefinitions))
+        {
+            var materials = state.GetMaterials();
+            int index = 0;
+            foreach(var definition in materialDefinitions.EnumerateArray())
+            {
+                if(definition.TryGetProperty("extras", out var extras) && extras.TryGetProperty("neoAnimation", out var animation))
+                {
+                    if(index >= materials.Count || materials[index] is not BaseMaterial3D material)throw new InvalidDataException("Missing animated material");
+                    var frames = animation.GetProperty("images").EnumerateArray().Select(x=>images[x.GetInt32()]).ToArray();
+                    var fps = animation.GetProperty("fps").GetDouble();
+                    if(frames.Length < 2 || frames.Any(x=>x is null) || !double.IsFinite(fps) || fps <= 0 || fps > 240)
+                        throw new InvalidDataException("Invalid IFL animation");
+                    _textureCycles.Add(new TextureCycle(material, frames, fps, animation.GetProperty("emissive").GetBoolean()));
+                }
+                index++;
+            }
+        }
     }
 
     private static IEnumerable<MeshInstance3D> Meshes(Node node)
@@ -131,7 +202,10 @@ public partial class WorldPreview : Node3D
 
     public override void _Process(double delta)
     {
-        if(_view is null || _smoke || !DisplayServer.WindowIsFocused())return;
+        if(_view is null || _smoke)return;
+        _textureTime += delta;
+        foreach(var animation in _textureCycles)animation.Apply(_textureTime);
+        if(!DisplayServer.WindowIsFocused())return;
         var direction = new Vector3((Input.IsPhysicalKeyPressed(Key.D)?1:0)-(Input.IsPhysicalKeyPressed(Key.A)?1:0),
             (Input.IsPhysicalKeyPressed(Key.E)?1:0)-(Input.IsPhysicalKeyPressed(Key.Q)?1:0),
             (Input.IsPhysicalKeyPressed(Key.S)?1:0)-(Input.IsPhysicalKeyPressed(Key.W)?1:0));

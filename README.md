@@ -122,6 +122,6 @@ Original [physical](docs/original-combat-formulas.md) rules now drive a scoped p
 
 ## Original monastery geometry preview
 
-Iteration 042 adds a separate desktop viewer for original static geometry. Import locally with `python -m tools.pvl /path/Wizardry8/Levels/LEVELS.SLF --out local/world --report local/world-report.json`, then launch the Windows game with `NeoWizardry.exe -- --world "C:\path\local\world\monastery1.glb"` (or `monastery2.glb`). On the self-hosted runner, Actions retains generated files at `_work/wiz_data/NeoWizardryWorld`.
+Iteration 042 adds a separate desktop viewer for original static geometry. Import locally with `python -m tools.pvl /path/Wizardry8/Levels/LEVELS.SLF --out local/world --report local/world-report.json --textures`, then launch the Windows game with `NeoWizardry.exe -- --world "C:\path\local\world\monastery1.glb"` (or `monastery2.glb`). On the self-hosted runner, Actions retains generated files at `_work/wiz_data/NeoWizardryWorld`.
 
-WASD flies, Q/E moves vertically, right drag looks, wheel adjusts speed and Home restores overview. This preview uses debug materials; textures, collision, native spawn points and encounters are pending. Original geometry is not bundled in the downloadable game. See [iteration 042](docs/iteration-042.md).
+WASD flies, Q/E moves vertically, right drag looks, wheel adjusts speed and Home restores overview. Iteration 043 adds original embedded textures, pixel alpha and IFL frame animation. Native lighting/material parity, collision, native spawn points and encounters remain pending. Original geometry is not bundled in the downloadable game. See [iteration 042](docs/iteration-042.md) and [iteration 043](docs/iteration-043.md).

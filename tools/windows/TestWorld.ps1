@@ -9,7 +9,7 @@ foreach ($level in $reportData.levels) {
     $bounds=($values | ForEach-Object { ([double]$_).ToString('R',[Globalization.CultureInfo]::InvariantCulture) }) -join ','
     $start=[Diagnostics.ProcessStartInfo]::new()
     $start.FileName=$env:GODOT
-    $start.Arguments="--headless --path client -- --world `"$path`" --world-smoke --world-triangles $($level.triangles) --world-bounds $bounds"
+    $start.Arguments="--headless --path client -- --world `"$path`" --world-smoke --world-triangles $($level.triangles) --world-bounds $bounds --world-textured $($level.preview.textured_surfaces) --world-animations $($level.preview.animated_materials)"
     $start.UseShellExecute=$false
     $start.CreateNoWindow=$true
     $start.RedirectStandardOutput=$true
