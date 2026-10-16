@@ -119,6 +119,15 @@ public partial class WorldPreview : Node3D
         catch(Exception error) { GD.PushError(error.ToString());GetTree().Quit(1); }
     }
 
+    private static int JsonInteger(System.Text.Json.JsonElement value)
+    {
+        // Godot Variant JSON roundtrips integral metadata as e.g. 128.0.
+        var number = value.GetDouble();
+        if(!double.IsFinite(number) || number < 0 || number > int.MaxValue || number != Math.Truncate(number))
+            throw new InvalidDataException("Expected nonnegative integral texture metadata");
+        return (int)number;
+    }
+
     private void ConfigureTextures(GltfState state, bool verifyPixels)
     {
         using var json = System.Text.Json.JsonDocument.Parse(Godot.Json.Stringify(state.Json));
@@ -133,7 +142,7 @@ public partial class WorldPreview : Node3D
                 {
                     if(index >= images.Count || images[index] is null)throw new InvalidDataException("Missing embedded image");
                     using var pixels = images[index].GetImage() ?? throw new InvalidDataException("Image pixels unavailable");
-                    if(pixels.GetWidth() != extras.GetProperty("width").GetInt32() || pixels.GetHeight() != extras.GetProperty("height").GetInt32())
+                    if(pixels.GetWidth() != JsonInteger(extras.GetProperty("width")) || pixels.GetHeight() != JsonInteger(extras.GetProperty("height")))
                         throw new InvalidDataException("Texture dimensions differ from TGA export");
                     if(verifyPixels)
                     {
@@ -155,7 +164,7 @@ public partial class WorldPreview : Node3D
                 if(definition.TryGetProperty("extras", out var extras) && extras.TryGetProperty("neoAnimation", out var animation))
                 {
                     if(index >= materials.Count || materials[index] is not BaseMaterial3D material)throw new InvalidDataException("Missing animated material");
-                    var frames = animation.GetProperty("images").EnumerateArray().Select(x=>images[x.GetInt32()]).ToArray();
+                    var frames = animation.GetProperty("images").EnumerateArray().Select(x=>images[JsonInteger(x)]).ToArray();
                     var fps = animation.GetProperty("fps").GetDouble();
                     if(frames.Length < 2 || frames.Any(x=>x is null) || !double.IsFinite(fps) || fps <= 0 || fps > 240)
                         throw new InvalidDataException("Invalid IFL animation");

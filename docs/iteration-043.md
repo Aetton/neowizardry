@@ -21,3 +21,9 @@ Six new tests cover TGA origin/channel order, PNG decompression and CRCs, RLE ra
 Original-resource Actions additionally verifies unchanged triangle counts and bounds, the expected number of textured surfaces and animation materials, every embedded PNG's dimensions and decoded base-level RGBA hash, and frame advance/loop behavior. Mipmap data is excluded from pixel hashes. These checks validate decoding and material loading; they do not substitute for comparison with the original game's rendered lighting/materials.
 
 The same `--world .../monastery1.glb` command opens the textured preview once Actions has regenerated the private GLBs. Collision, native spawn points, doors, dynamic actors and exploration/combat persistence remain open.
+
+## Original texture intake
+
+The first original conversion run [38969584933](https://github.com/Aetton/neowizardry/actions/runs/38969584933) resolved all selected material textures and IFL frames and generated both private GLBs. Monastery1 embeds 254 images with 6 animated materials across 1373 textured surfaces; Monastery2 embeds 203 images with 6 animated materials across 731 textured surfaces. These are per-GLB image counts, not globally unique source-texture totals. All selected original images use uncompressed TGA type 2 with 24- or 32-bit pixels. Source alpha analysis found 18 nonopaque images in the first GLB and 30 in the second.
+
+The initial runtime check stopped at numeric metadata parsing: Godot's Variant JSON roundtrip emits integral values as floating-point literals. The loader now accepts finite, nonnegative whole numeric values while rejecting fractional and out-of-range dimensions/indices. This fixes metadata reading without relaxing pixel-hash validation.
