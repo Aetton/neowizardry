@@ -292,7 +292,7 @@ public partial class WorldPreview : Node3D
             _view.Rotation = new Vector3(Math.Clamp(_view.Rotation.X - motion.Relative.Y * 0.003f, -1.55f, 1.55f),
                 _view.Rotation.Y - motion.Relative.X * 0.003f, 0);
         }
-        if(input is InputEventKey key && key.Pressed)
+        if(input is InputEventKey key && key.Pressed && !key.Echo)
         {
             if(key.Keycode == Key.Home) { Home();_movementStatus.Text="FLIGHT · overview"; }
             if(key.Keycode == Key.F)

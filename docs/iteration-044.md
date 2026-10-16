@@ -27,3 +27,5 @@ The viewer loads a `.nwcol` sidecar next to its GLB and checks the embedded PVL 
 This controller is authored Godot movement: a 1.6-unit capsule, radius 0.28, speed 3, gravity 9.8, floor snap 0.3 and maximum slope 60 degrees. Static triangle collision is two-sided. It does not reproduce the original solver, stair stepping, party formation, dynamic doors, environment transitions or encounters. These remain separate gates before monastery gameplay.
 
 The runtime collision smoke checks a native walkable floor ray, capsule placement and settling, and a blocking wall sweep with a clear retreat. Linux CI also runs the controller on an authored floor/wall fixture. Original-data smoke runs on the self-hosted Windows runner; only count/provenance metadata is uploaded.
+
+Linux validation passed at commit `65574f51ac5155f9639a050b85a2d70dba7e6f49`: 52 Python tests, core/client/mobile checks, and the authored two-surface Godot collision smoke (floor ray, settling capsule, wall sweep). Run: https://github.com/Aetton/neowizardry/actions/runs/38980720583. Original-level runtime results are recorded after the self-hosted check completes.
