@@ -55,6 +55,11 @@ public partial class Main : Node3D
     }
     private void Initialize()
     {
+        if(WorldPreview.Requested)
+        {
+            SetProcessInput(false);SetProcessUnhandledInput(false);SetPhysicsProcess(false);
+            AddChild(new WorldPreview());return;
+        }
         _touchMode=OS.HasFeature("mobile") || OS.GetCmdlineUserArgs().Contains("--touch");
         BuildRoom();
         BuildUi();

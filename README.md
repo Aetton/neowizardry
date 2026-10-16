@@ -118,3 +118,10 @@ Latest progress: [iteration 032](docs/iteration-032.md). Archive/code review: [a
 Mobile prototype: [touch controls, Android build and device checklist](docs/mobile.md). Preview on desktop with `godot --path client -- --touch`.
 
 Original [physical](docs/original-combat-formulas.md) rules now drive a scoped playable [ordinary character duel](docs/iteration-032.md). Original [magic](docs/original-magic-formulas.md) remains independent reference/math work. Physical coverage includes attack budgets, per-attack swing allocation for the common melee/projectile path, weapon adjustments, attack-mode modifiers, ordinary character scores, primary-hand bonuses and [physical damage with neutral melee composition](docs/original-physical-damage.md). Full canonical combat is still in reconstruction. The older [guide model](docs/formula-sources.md) remains a source comparison.
+
+
+## Original monastery geometry preview
+
+Iteration 042 adds a separate desktop viewer for original static geometry. Import locally with `python -m tools.pvl /path/Wizardry8/Levels/LEVELS.SLF --out local/world --report local/world-report.json`, then launch the Windows game with `NeoWizardry.exe -- --world "C:\path\local\world\monastery1.glb"` (or `monastery2.glb`). On the self-hosted runner, Actions retains generated files at `_work/wiz_data/NeoWizardryWorld`.
+
+WASD flies, Q/E moves vertically, right drag looks, wheel adjusts speed and Home restores overview. This preview uses debug materials; textures, collision, native spawn points and encounters are pending. Original geometry is not bundled in the downloadable game. See [iteration 042](docs/iteration-042.md).

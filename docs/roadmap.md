@@ -164,3 +164,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 041 — runner-based monastery intake
 
 [Iteration 041](iteration-041.md) adds a scoped original-resource audit on the Windows runner, explicit `wiz_data/Wizardry8` discovery and metadata-only artifacts. Both self-hosted workflows reject originals inside checkout; the supplied folder remains outside it. Synthetic tests cover inventory, hashes and extraction rejection. Actual original PVL decoding and playable world integration remain open.
+
+
+## Iteration 042 — static monastery geometry
+
+[Iteration 042](iteration-042.md) adds a strict static PVL reader, private GLB export with UV seams preserved, and an independent desktop fly viewer. Actions validates original-derived meshes in Godot against parser triangle counts. OCT collision, native materials/lighting, doors, triggers, encounters and exploration/battle persistence remain open; static viewing does not close the playable-slice milestone.

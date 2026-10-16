@@ -71,9 +71,9 @@ Masks are exported as raw values. Subsequent iterations add selected weapon stat
 
 ## Levels
 
-Drive confirms `LEVELS.SLF` exists and reports **497064244 bytes**. Download was rejected with HTTP 413 by the connector's **268435456-byte** limit; no internal directory or checksum has been obtained here.
+The original `LEVELS.SLF` was verified on the self-hosted Windows runner in iteration 041: 497064244 bytes, SHA-256 `38e63c2109ac903ee122fe214264f331b598bdef0357d921303af56c1de081de`, 4956 active entries. Both monastery PVLs are present among 426 monastery resources. Drive's transfer-size limit no longer blocks research.
 
-Wizardry8Editor's [Level.cpp](https://github.com/anonidiot/Wizardry8Editor/blob/4d451e8e31106cc5d6ad86b69a00b0d2a3c26c01/src/Level.cpp) references `Monastery/Monastery1.PVL`, `Monastery/Monastery2.PVL` and `Swamp/Swamp.PVL`. These are investigation targets, not proof that the user's archive contains or has been decoded into those levels.
+[Iteration 042](iteration-042.md) documents the strictly parsed static PVL mesh prefix and private GLB export. Texture names and UVs are available; texture rendering, OCT collision and the remainder of PVL are not decoded. See the report for exact per-level prefix boundaries and remaining byte counts.
 
 ## Existing tools
 

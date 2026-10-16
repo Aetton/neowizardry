@@ -5,6 +5,9 @@ on:
     paths:
       - '.github/workflows/world-audit.yml'
       - 'tools/world_audit.py'
+      - 'tools/pvl.py'
+      - 'client/WorldPreview.cs'
+      - 'tools/windows/TestWorld.ps1'
       - 'tools/windows/FindOriginal.ps1'
   workflow_dispatch:
 permissions:
@@ -42,12 +45,31 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Inspect original archive without publishing resources
         run: |
+          Remove-Item "$env:RUNNER_TEMP/monastery-report.json","$env:RUNNER_TEMP/monastery-geometry.json" -ErrorAction SilentlyContinue
           python -m tools.world_audit "$env:NEO_LEVELS_ARCHIVE" --out "$env:RUNNER_TEMP/monastery-report.json"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Export private static monastery geometry
+        run: |
+          $dataRoot = Split-Path (Split-Path (Split-Path $env:NEO_LEVELS_ARCHIVE -Parent) -Parent) -Parent
+          $worldRoot = Join-Path $dataRoot 'NeoWizardryWorld'
+          python -m tools.pvl "$env:NEO_LEVELS_ARCHIVE" --out "$worldRoot" --report "$env:RUNNER_TEMP/monastery-geometry.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "NEO_WORLD_CACHE=$worldRoot" >> $env:GITHUB_ENV
+      - name: Prepare retained Godot tools
+        run: ./tools/windows/PrepareGodot.ps1 -ToolsRoot "$env:LOCALAPPDATA/NeoWizardryBuildTools/godot-4.5.1-v1"
+      - name: Build and verify original geometry in Godot
+        run: |
+          dotnet build client/NeoWizardry.csproj
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $env:GODOT --headless --editor --path client --import
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./tools/windows/TestWorld.ps1 -WorldRoot "$env:NEO_WORLD_CACHE" -Report "$env:RUNNER_TEMP/monastery-geometry.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: monastery-resource-report
-          path: ${{ runner.temp }}/monastery-report.json
+          path: |
+            ${{ runner.temp }}/monastery-report.json
+            ${{ runner.temp }}/monastery-geometry.json
           if-no-files-found: ignore
           retention-days: 7
