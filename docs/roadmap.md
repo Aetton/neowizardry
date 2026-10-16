@@ -181,3 +181,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 043 — textured monastery viewer
 
 [Iteration 043](iteration-043.md) connects original TGA textures, pixel alpha, source UVs and IFL material animation through self-contained private GLBs. Both levels pass Godot checks for all embedded pixel hashes, 2104 textured surfaces, 12 animation-material cycles and unchanged geometry bounds/counts. Windows preview 53 contains the verified viewer. Original lighting, special material/water parity, OCT collision and playable-world integration remain open.
+
+
+## Iteration 044 — original static collision and walking
+
+[Iteration 044](iteration-044.md) reads the original OCT/GameData physical banks and exports private collision sidecars bound to their PVL source hash. Both original levels pass Godot checks for walkable floor rays, capsule settling and blocking-wall sweeps (24,702 / 13,241 selected surfaces). Windows preview 56 adds F to enter/leave authored capsule walking while preserving flight and texture animation. Dynamic doors, transitions, original solver parity, encounters and world persistence remain open; this does not close the playable-slice milestone.
