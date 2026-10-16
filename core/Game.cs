@@ -15,7 +15,7 @@ public sealed record RoundResult(GameState State, ImmutableArray<string> Events)
 
 public static class Game
 {
-    public const int SaveSchema = 7;
+    public const int SaveSchema = 8;
 
     public static GameState Create(int size)
     {

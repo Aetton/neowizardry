@@ -10,10 +10,10 @@ static class MonsterCombatChecks
     {
         int checks=0;void Check(bool ok,string name){if(!ok)throw new Exception(name);checks++;}
         void Reject(Action action,string name){bool failed=false;try{action();}catch(ArgumentException){failed=true;}catch(InvalidOperationException){failed=true;}catch(InvalidDataException){failed=true;}Check(failed,name);}
-        var items=MeleeTraining.Catalog();var catalog=originals??MonsterCombat.FixtureCatalog();var ids=originals is null?new[]{0}:catalog.Monsters.Where(MonsterCombat.Supported).Select(m=>m.Id).ToArray();
+        var items=MeleeTraining.Catalog();var catalog=originals??MonsterCombat.FixtureCatalog();var ids=originals is null?new[]{0}:catalog.Monsters.Where(m=>m.Id is 18 or 282).Select(m=>m.Id).ToArray();
         foreach(int id in ids)
         {
-            var s=MonsterCombat.Create(3,3,items,catalog,id);string source=Game.Save(s);var native=s.Melee!.Field!.Monsters!;var d=MonsterCombat.Compile(native[s.Enemy.Id].Record);
+            var s=MonsterCombat.Create(3,3,items,catalog,id,profileVersion:1);string source=Game.Save(s);var native=s.Melee!.Field!.Monsters!;var d=MonsterCombat.Compile(native[s.Enemy.Id].Record);
             Check(s.Melee.Opponent is null && s.Melee.Field.Opponents.All(o=>o.Facts is null && o.WeaponId is null),"Native monster has no invented character facts or weapon");
             Check(s.Items!.Items.Length==3 && s.Items.Items.All(i=>s.Party.Any(h=>h.Id==i.Location.ContainerId)),"Only party-owned weapons exist in a native battle");
             Check(TacticalCombat.Enemies(s).All(e=>e.Hp>=d.Health.Constant+d.Health.Dice && e.Hp<=d.Health.Constant+d.Health.Dice*d.Health.Sides && e.XpReward==0),"Native HP rolls stay within imported dice; no invented XP");
@@ -50,7 +50,7 @@ static class MonsterCombatChecks
             var legacy=JsonNode.Parse(source)!;legacy["Schema"]=6;Reject(()=>Game.Load(legacy.ToJsonString(),items),"Schema six cannot smuggle in native actors");
             for(uint seed=1;seed<=4;seed++)
             {
-                var battle=MonsterCombat.Create(8,3,items,catalog,id) with {RandomState=seed};
+                var battle=MonsterCombat.Create(8,3,items,catalog,id,profileVersion:1) with {RandomState=seed};
                 for(int round=0;round<160 && !battle.RewardGranted && battle.Party.Any(h=>h.Hp>0);round++)battle=TacticalCombat.Advance(battle,items).State;
                 Check(battle.RewardGranted && TacticalCombat.Enemies(battle).All(e=>e.Hp==0),"Full multi-monster battle reaches victory");
                 Check(battle.Party.Sum(h=>h.Xp)==0 && !Inventory.Bag(battle).Any() && battle.Items!.Items.Length==8,"Monster victory invents no loot weapon or XP");
@@ -60,7 +60,7 @@ static class MonsterCombatChecks
         if(originals is not null)return checks;
         for(int party=1;party<=8;party++)for(int enemies=1;enemies<=8;enemies++)
         {
-            var s=MonsterCombat.Create(party,enemies,items,catalog,0);var next=TacticalCombat.Advance(s,items).State;
+            var s=MonsterCombat.Create(party,enemies,items,catalog,0,profileVersion:1);var next=TacticalCombat.Advance(s,items).State;
             Check(next.Melee!.Field!.Monsters!.Count==enemies && next.Melee.Field.Positions.Count==party+enemies,"All party/monster group sizes validate");
         }
         var charSave=JsonNode.Parse(Game.Save(MeleeTraining.CreateTactical(2,2,items)))!;charSave["Schema"]=6;charSave["Melee"]!["Field"]!.AsObject().Remove("Monsters");
@@ -71,7 +71,7 @@ static class MonsterCombatChecks
         Check(OriginalMonsterStrike.Resolve(input,damage,95,[]).Outcome==PhysicalStrikeOutcome.Miss,"Monster natural miss consumes no damage dice");
         Reject(()=>OriginalMonsterStrike.Resolve(input,damage,99,[0]),"Missed monster strike rejects extra damage RNG");
         Reject(()=>OriginalMonsterStrike.Contact(OriginalMonsterScores.Build(input with {AttackRating=100}),5),"Low untargeted monster score requires fumble implementation");
-        Reject(()=>OriginalMonsterStrike.Resolve(input with {Mode=OriginalAttackMode.Swing},damage,0,[0]),"Reject unreviewed monster modes");
+        Reject(()=>OriginalMonsterStrike.Resolve(input with {Mode=OriginalAttackMode.Throw},damage,0,[0]),"Reject projectile monster modes");
         return checks;
     }
 }

@@ -166,14 +166,26 @@ public partial class Main : Node3D
         var search=new LineEdit {PlaceholderText="Search monster names"};body.AddChild(search);
         var list=new ItemList {CustomMinimumSize=new(360,200)};body.AddChild(list);
         var detail=new Label {AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(360,100)};body.AddChild(detail);
-        OriginalMonster[] shown=[];
+        var readyOnly=new CheckBox {Text="Physical profiles ready only"};body.AddChild(readyOnly);
+        var launch=Button(body,"Fight selected record",()=>{});launch.Disabled=true;
+        OriginalMonster[] shown=[];OriginalMonster? selected=null;
+        var coverage=_monsterCatalog.Monsters.ToDictionary(m=>m.Id,MonsterCombat.Capability);
+        void Details(int index)
+        {
+            selected=shown[index];var m=selected;var capability=coverage[m.Id];launch.Disabled=!capability.Ready;
+            detail.Text=string.Join(" · ",m.TextSlots)+$"\nID {m.Id} · record {m.RecordSha256[..12]}\n"+
+                (capability.Ready?"Physical profile ready. Native spells/status effects, XP/loot and world AI are separate.":"Blocked: "+string.Join(", ",capability.Blockers))+"\n"+
+                (m.Defense is {} d?$"AC {d.ArmorClass} · zones {string.Join("/",d.LocationWeights)}":"");
+        }
         void Filter()
         {
-            shown=_monsterCatalog.Monsters.Where(m=>m.TextSlots.Any(t=>t.Contains(search.Text,StringComparison.OrdinalIgnoreCase))).ToArray();
-            list.Clear();foreach(var m in shown)list.AddItem($"{m.Id}: {m.Label}");
-            detail.Text=$"{shown.Length} / {_monsterCatalog.Count} definitions. Verified text/defense; {shown.Count(MonsterCombat.Supported)} reviewed physical records can enter the monster battle.";
+            shown=_monsterCatalog.Monsters.Where(m=>(!readyOnly.ButtonPressed || coverage[m.Id].Ready) && m.TextSlots.Any(t=>t.Contains(search.Text,StringComparison.OrdinalIgnoreCase))).ToArray();
+            list.Clear();foreach(var m in shown)list.AddItem($"{(coverage[m.Id].Ready?"READY":"BLOCKED")} {m.Id}: {m.Label}");
+            selected=null;launch.Disabled=true;
+            detail.Text=$"{shown.Length} shown; {coverage.Count(p=>p.Value.Ready)} / {_monsterCatalog.Count} physical profiles ready. All records audited. Select one for blockers.";
         }
-        search.TextChanged+=_=>Filter();list.ItemSelected+=i=>{var m=shown[(int)i];detail.Text=string.Join(" · ",m.TextSlots)+$"\nID {m.Id} · record {m.RecordSha256[..12]} · 663 native bytes preserved."+(m.Defense is { } d?$"\nAC {d.ArmorClass} · zones {string.Join("/",d.LocationWeights)}\nZone armor {string.Join("/",d.LocationArmor)} · mode armor {string.Join("/",d.ModeArmor)}":"");};
+        launch.Pressed+=()=>Try(()=>{if(selected is null || !coverage[selected.Id].Ready)return;NewMonsterBattle(_state.Party.Length,1,_monsterCatalog,selected.Id);dialog.Hide();dialog.QueueFree();ShowTactics();});
+        search.TextChanged+=_=>Filter();readyOnly.Toggled+=_=>Filter();list.ItemSelected+=i=>Details((int)i);
         Filter();dialog.PopupCentered(new Vector2I(400,400));
     }
 
@@ -333,17 +345,18 @@ public partial class Main : Node3D
         Button(body,"New tactical battle",()=>Try(()=>{NewTactical(size.Selected+1,opponents.Selected+1);dialog.Hide();dialog.QueueFree();ShowTactics();}));
         Button(body,"Tactical field",ShowTactics);
         var nativeOptions=_monsterCatalog?.Monsters.Where(MonsterCombat.Supported).ToArray()??[];
-        var monster=new OptionButton();monster.AddItem("Practice creature (synthetic)");foreach(var m in nativeOptions)monster.AddItem(m.Label);
+        var monster=new OptionButton {FitToLongestItem=false};monster.AddItem("Practice creature (synthetic)");foreach(var m in nativeOptions)monster.AddItem(m.Label);
         int dusk=Array.FindIndex(nativeOptions,m=>m.Id==282);if(dusk>=0)monster.Select(dusk+1);body.AddChild(monster);
         Button(body,"New monster battle",()=>Try(()=>
         {
             NewMonsterBattle(size.Selected+1,opponents.Selected+1,monster.Selected==0?MonsterCombat.FixtureCatalog():_monsterCatalog!,monster.Selected==0?0:nativeOptions[monster.Selected-1].Id);
             dialog.Hide();dialog.QueueFree();ShowTactics();
         }));
+        Button(body,"Mixed monster battle",()=>Try(()=>{dialog.Hide();dialog.QueueFree();ShowMonsterRoster(size.Selected+1,opponents.Selected+1);}));
         Button(body,"Spell sandbox",()=>Try(()=>{NewParty(size.Selected+1,false);dialog.QueueFree();}));
         Button(body,"Save",Save);Button(body,"Load",()=>{Load();size.Select(_state.Party.Length-1);});
-        Button(body,"Monster reference",ShowMonsters);Button(body,"Spell reference",ShowGrimoire);Button(body,"Combat facts",ShowCombatFacts);
-        Button(body,"Combination reference",ShowCombinations);
+        Button(body,"Monster reference",()=>{dialog.Hide();dialog.QueueFree();ShowMonsters();});Button(body,"Spell reference",()=>{dialog.Hide();dialog.QueueFree();ShowGrimoire();});Button(body,"Combat facts",()=>{dialog.Hide();dialog.QueueFree();ShowCombatFacts();});
+        Button(body,"Combination reference",()=>{dialog.Hide();dialog.QueueFree();ShowCombinations();});
         Button(body,"Talk to keeper",()=>Say("Test keeper: The real monastery is still being researched."));
         Button(body,"Capture test",()=>Try(()=>{_state=Game.CaptureFirst(_state);Refresh();}));
         Button(body,"Escape",()=>Try(()=>{_state=Game.Escape(_state);Refresh();}));
@@ -477,7 +490,7 @@ public partial class Main : Node3D
         if(encounter.Field?.Monsters is {} monsters)
             foreach(var pair in monsters)
             {
-                var m=MonsterCombat.Compile(pair.Value.Record);lines.Add($"{pair.Key}: {m.Label} · native ID {pair.Value.Record.DefinitionId}\nHP roll {m.Health.Constant}+{m.Health.Dice}d{m.Health.Sides} → max {pair.Value.MaxHp}\nINT/DEX/SPD/SEN {m.Attributes.Intelligence}/{m.Attributes.Dexterity}/{m.Attributes.Speed}/{m.Attributes.Senses}\nInitiative {m.Initiative} · groups {m.Groups} · max swings {m.MaximumSwings}\nThrust rating {m.Rating}, damage {m.Damage.Constant}+{m.Damage.Dice}d{m.Damage.Sides} · AC {m.Defense.ArmorClass}\nNeutral physical slice; XP/loot and magic not connected.\n");
+                var m=MonsterCombat.Compile(pair.Value.Record);lines.Add($"{pair.Key}: {m.Label} · native ID {pair.Value.Record.DefinitionId}\nHP roll {m.Health.Constant}+{m.Health.Dice}d{m.Health.Sides} → max {pair.Value.MaxHp}\nINT/DEX/SPD/SEN {m.Attributes.Intelligence}/{m.Attributes.Dexterity}/{m.Attributes.Speed}/{m.Attributes.Senses}\nInitiative {m.Initiative} · groups {m.Groups} · max swings {m.MaximumSwings}\nPhysical absorption {m.Absorption}% · AC {m.Defense.ArmorClass}\n{string.Join("; ",m.Attacks.Select(a=>$"slot {a.Slot}: {string.Join("/",a.Modes)}, rating {a.Rating}, damage {a.Damage.Constant}+{a.Damage.Dice}d{a.Damage.Sides}"))}\nNeutral physical slice; XP/loot and magic not connected.\n");
             }
         text.Text=string.Join("\n",lines);dialog.PopupCentered(new Vector2I(440,400));
     }

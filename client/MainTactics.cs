@@ -14,6 +14,27 @@ public partial class Main
         _state=MonsterCombat.Create(heroes,count,_catalog!,monsters,definitionId);_autosaveBlocked=false;_selectedHeroId=_state.Party[0].Id;Refresh();
         Say("Monster physical slice: native HP/stats/initiative/attack budgets/defense; authored grid AI. Magic and XP/loot are not connected in this mode.");
     }
+    private void ShowMonsterRoster(int heroes,int count)
+    {
+        var catalog=_monsterCatalog??MonsterCombat.FixtureCatalog();var ready=catalog.Monsters.Where(MonsterCombat.Supported).ToArray();
+        if(ready.Length==0){Say("No complete physical profiles in this catalog. Inspect Monster reference for blockers.");return;}
+        _dialogs++;_touchInput.Reset();Input.MouseMode=Input.MouseModeEnum.Visible;
+        var dialog=new AcceptDialog {Name="MonsterRoster",Theme=_hudTheme,Title="Mixed monster roster"};AddChild(dialog);
+        dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
+        var body=new VBoxContainer();dialog.AddChild(body);var choices=new List<OptionButton>();
+        body.AddChild(new Label {Text=$"Choose {count} enemies · {ready.Length}/{catalog.Count} physical profiles ready",AutowrapMode=TextServer.AutowrapMode.WordSmart});
+        int start=Math.Max(0,Array.FindIndex(ready,m=>m.Id==282));
+        for(int i=0;i<count;i++)
+        {
+            var choose=new OptionButton {Name=$"Roster{i}",FitToLongestItem=false,CustomMinimumSize=new(250,0)};foreach(var row in ready)choose.AddItem($"{row.Id}: {row.Label}");choose.Select((start+i)%ready.Length);body.AddChild(choose);choices.Add(choose);
+        }
+        var begin=Button(body,"Start mixed battle",()=>Try(()=>
+        {
+            _state=MonsterCombat.CreateRoster(heroes,_catalog!,catalog,choices.Select(c=>ready[c.Selected].Id).ToArray());
+            _autosaveBlocked=false;_selectedHeroId=_state.Party[0].Id;Refresh();dialog.Hide();dialog.QueueFree();ShowTactics();
+        }));begin.Name="StartMonsterRoster";
+        var screen=GetViewport().GetVisibleRect().Size;dialog.PopupCentered(new Vector2I((int)Math.Min(380,screen.X-24),(int)Math.Min(Math.Min(620,150+count*42),screen.Y-24)));
+    }
     private void ShowTactics()
     {
         if(_state.Melee?.Field is null){Say("Menu → New tactical battle to test multiple opponents and positions.");return;}
@@ -115,6 +136,13 @@ public partial class Main
         ShowCombatFacts();GetChildren().OfType<AcceptDialog>().Last().Free();
         var saved=Game.Save(_state);var expected=Game.Save(TacticalCombat.Advance(_state,_catalog!).State);
         if(Game.Save(TacticalCombat.Advance(Game.Load(saved,_catalog),_catalog!).State)!=expected)throw new Exception("Monster UI save continuation failed");
+        ShowMonsterRoster(3,2);
+        var roster=GetChildren().OfType<AcceptDialog>().Single(d=>d.Name=="MonsterRoster");
+        Walk(roster).OfType<Button>().Single(b=>b.Name=="StartMonsterRoster").EmitSignal(Godot.Button.SignalName.Pressed);
+        if(_state.Melee!.Field!.Monsters?.Count!=2 || _state.Melee.Field.Monsters.Values.Any(m=>m.Record.ProfileVersion!=2))throw new Exception("Mixed roster UI did not create general profiles");
+        RemoveChild(roster);roster.Free();
+        var mixed=GetChildren().OfType<AcceptDialog>().Single(d=>d.Name=="TacticalDialog");RemoveChild(mixed);mixed.Free();
+        GD.Print("PASS: mixed monster roster UI and general physical profiles");
         _state=original;Refresh();GD.Print("PASS: monster actor battle, native combat facts UI and save continuation");
     }
 

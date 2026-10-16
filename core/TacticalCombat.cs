@@ -171,35 +171,67 @@ public static class TacticalCombat
             if(order.TargetId is not {} targetId || !Alive(s,targetId) || !InReach(s,turn.Id,targetId)){events.Add("Attack cancelled: target dead or out of reach");continue;}
             if(MonsterCombat.Actor(s,turn.Id) is {} monster)
             {
-                var d=MonsterCombat.Compile(monster.Record);
+                var d=MonsterCombat.Compile(monster.Record);bool modern=monster.Record.ProfileVersion==2;
+                var choices=d.Attacks.SelectMany(a=>a.Modes.Select(mode=>new MonsterPhysicalChoice(a.Slot,mode,targetId))).ToArray();
+                var choice=modern?OriginalMonsterAttackSequence.SelectChoice(choices,Dice.Exclusive(ref rng,choices.Length))!:new MonsterPhysicalChoice(0,OriginalAttackMode.Thrust,targetId);
+                var selectedAttack=d.Attacks.Single(a=>a.Slot==choice.AttackSlot);var mode=choice.Mode;
                 var group=OriginalMonsterAttackSequence.BeginGroup(monsterBudgets[turn.Id],true,Dice.Exclusive(ref rng,d.MaximumSwings));var budget=group.State;
-                while(budget.SwingsRemaining>0 && Alive(s,targetId))
+                while(budget.SwingsRemaining>0 && Alive(s,targetId) && Alive(s,turn.Id))
                 {
-                    var df=Facts(s,targetId);var armor=OriginalDefenseAdapter.Prepare(new(MainHand:Weapon(s,targetId,catalog))) with {Body=df.BodyArmor};
-                    var defense=OriginalCharacterDefense.Build(new(df.Attributes.Speed,df.Stealth,0,0,false),armor,new(0,0,false,false,false),new(0,0,0,false));
-                    var location=OriginalCharacterDefense.SelectLocation(Dice.Roll(ref rng,100)-1);
-                    var thresholds=OriginalCharacterDefense.Against(defense,location,OriginalAttackMode.Thrust,new(false,false,false));
-                    var input=new MonsterPhysicalScoreInput(d.Rating,0,0,d.Attributes,df.Attributes,OriginalAttackMode.Thrust,thresholds.Hit,thresholds.Penetration,0,MonsterAttackFatiguePolicy.FullHitOnly);
-                    var scores=OriginalMonsterScores.Build(input);int contact=Dice.Roll(ref rng,100)-1;var outcome=OriginalMonsterStrike.Contact(scores,contact);
-                    int[] draws=outcome==PhysicalStrikeOutcome.Damage?Enumerable.Range(0,d.Damage.Dice).Select(_=>Dice.Roll(ref rng,d.Damage.Sides)-1).ToArray():[];
-                    var strike=OriginalMonsterStrike.Resolve(input,d.Damage,contact,draws);int amount=Math.Min(Hp(s,targetId),strike.Damage?.Damage??0);
-                    s=WithHp(s,targetId,-amount);budget=OriginalMonsterAttackSequence.CompleteSwing(budget,!Alive(s,targetId));
-                    events.Add($"{turn.Id} ({d.Label}) → {targetId} · Thrust · {location}: {strike.Outcome}, {amount} damage [d100 {contact+1}; hit {scores.HitScore}; pen {scores.PenetrationScore}]");
+                    string actual=targetId;int contact;bool redirected=false;
+                    MonsterPhysicalScoreInput Input(string victim,out string location,out int absorption)
+                    {
+                        TargetDefenseThresholds thresholds;PhysicalCombatAttributes attributes;absorption=0;
+                        if(MonsterCombat.Actor(s,victim) is {} nativeTarget)
+                        {
+                            var td=MonsterCombat.Compile(nativeTarget.Record);var zone=OriginalMonsterDefense.SelectLocation(td.Defense.LocationWeights,Dice.Roll(ref rng,100)-1);
+                            thresholds=OriginalMonsterDefense.Against(td.Defense,new(0,0,0,0,false),zone.Location,mode,new(false,false,false,false));
+                            attributes=td.Attributes;location=zone.Location.ToString();absorption=td.Absorption;
+                        }
+                        else
+                        {
+                            var df=Facts(s,victim);var armor=OriginalDefenseAdapter.Prepare(new(MainHand:Weapon(s,victim,catalog))) with {Body=df.BodyArmor};
+                            var defense=OriginalCharacterDefense.Build(new(df.Attributes.Speed,df.Stealth,0,0,false),armor,new(0,0,false,false,false),new(0,0,0,false));
+                            var hitLocation=OriginalCharacterDefense.SelectLocation(Dice.Roll(ref rng,100)-1);
+                            thresholds=OriginalCharacterDefense.Against(defense,hitLocation,mode,new(false,false,false));attributes=df.Attributes;location=hitLocation.ToString();
+                        }
+                        return new(selectedAttack.Rating,0,0,d.Attributes,attributes,mode,thresholds.Hit,thresholds.Penetration,0,OriginalMonsterAttackAdapter.FatiguePolicy(selectedAttack.NativeKind));
+                    }
+                    var input=Input(actual,out var location,out int absorption);var scores=OriginalMonsterScores.Build(input);contact=Dice.Roll(ref rng,100)-1;
+                    if(modern)
+                    {
+                        var alternatives=s.Party.Where(h=>h.Id!=targetId && h.Hp>0 && !h.Captive && InReach(s,turn.Id,h.Id)).Select(h=>h.Id)
+                            .Concat(Enemies(s).Where(e=>e.Hp>0 && (e.Id==turn.Id || InReach(s,turn.Id,e.Id))).Select(e=>e.Id)).ToArray();
+                        int threshold=OriginalMonsterFumble.Threshold(scores.UntargetedHitScore,alternatives.Length);
+                        if(OriginalMonsterFumble.Redirects(threshold,contact))
+                        {
+                            actual=alternatives[Dice.Exclusive(ref rng,alternatives.Length)];redirected=true;
+                            // New contact roll is native; target-zone timing remains the laboratory delivery policy.
+                            input=Input(actual,out location,out absorption);scores=OriginalMonsterScores.Build(input);contact=Dice.Roll(ref rng,100)-1;
+                            events.Add($"{turn.Id}: fumble redirects {targetId} → {actual} (threshold {threshold})");
+                        }
+                    }
+                    var outcome=OriginalMonsterStrike.Contact(scores,contact,modern,redirected);
+                    int repetitions=mode==OriginalAttackMode.Berserk?2:1;
+                    int[] draws=outcome==PhysicalStrikeOutcome.Damage?Enumerable.Range(0,selectedAttack.Damage.Dice*repetitions).Select(_=>Dice.Roll(ref rng,selectedAttack.Damage.Sides)-1).ToArray():[];
+                    var strike=OriginalMonsterStrike.Resolve(input,selectedAttack.Damage,contact,draws,absorption,modern,redirected);int amount=Math.Min(Hp(s,actual),strike.Damage?.Damage??0);
+                    s=WithHp(s,actual,-amount);budget=OriginalMonsterAttackSequence.CompleteSwing(budget,!Alive(s,targetId) || !Alive(s,turn.Id));
+                    events.Add($"{turn.Id} ({d.Label}) → {actual} · {mode} · {location}: {strike.Outcome}, {amount} damage [slot {choice.AttackSlot}; d100 {contact+1}; hit {scores.HitScore}; pen {scores.PenetrationScore}; redirect {redirected}]");
                 }
                 monsterBudgets[turn.Id]=budget;
-                if(turn.Remaining>1 && Alive(s,turn.Id) && OriginalInitiative.NextAttackTime(turn.Time,0,turn.Time,turn.Remaining-1) is int time)queue.Add((turn.Id,time,turn.Remaining-1));
+                if(turn.Remaining>1 && Alive(s,turn.Id) && OriginalInitiative.NextMonsterGroupTime(turn.Time,0,turn.Time,turn.Remaining-1) is int time)queue.Add((turn.Id,time,turn.Remaining-1));
                 continue;
             }
             var facts=Facts(s,turn.Id);var weapon=Weapon(s,turn.Id,catalog);var prepared=MeleeCombat.Prepare(facts,weapon);
             int swings=OriginalCombatRules.AllocateSwings(prepared.Budget.MaximumSwings,weapon.BonusSwings,Dice.Roll(ref rng,prepared.Budget.MaximumSwings)-1).AllocatedSwings;
             for(int n=0;n<swings && Alive(s,targetId);n++)
             {
-                TargetDefenseThresholds thresholds;PhysicalCombatAttributes targetAttributes;string loc;
+                TargetDefenseThresholds thresholds;PhysicalCombatAttributes targetAttributes;string loc;int absorption=0;
                 if(MonsterCombat.Actor(s,targetId) is {} targetMonster)
                 {
                     var d=MonsterCombat.Compile(targetMonster.Record);var zone=OriginalMonsterDefense.SelectLocation(d.Defense.LocationWeights,Dice.Roll(ref rng,100)-1);
                     thresholds=OriginalMonsterDefense.Against(d.Defense,new(0,0,0,0,false),zone.Location,OriginalAttackMode.Swing,new(false,false,false,false));
-                    targetAttributes=d.Attributes;loc=zone.Location.ToString();
+                    targetAttributes=d.Attributes;loc=zone.Location.ToString();absorption=d.Absorption;
                 }
                 else
                 {
@@ -211,7 +243,7 @@ public static class TacticalCombat
                 var input=new OrdinaryPhysicalScoreInput(prepared.Budget.BaseAttackRating,prepared.Hand.ToHit,0,0,0,facts.Attributes,targetAttributes,OriginalAttackMode.Swing,thresholds.Hit,thresholds.Penetration,ModernWeapon:prepared.Weapon.ModernWeapon);
                 var scores=OriginalPhysicalScores.OrdinaryCharacter(input);int contact=Dice.Roll(ref rng,100)-1;
                 var outcome=OriginalMeleeStrike.Contact(scores,contact);int[] draws=outcome==PhysicalStrikeOutcome.Damage?Enumerable.Range(0,prepared.Weapon.Damage.Dice).Select(_=>Dice.Roll(ref rng,prepared.Weapon.Damage.Sides)-1).ToArray():[];
-                var strike=OriginalMeleeStrike.Resolve(input,prepared.Weapon.Damage,prepared.Hand.DamagePercent,0,0,contact,draws);int amount=Math.Min(Hp(s,targetId),strike.Damage?.Damage??0);
+                var strike=OriginalMeleeStrike.Resolve(input,prepared.Weapon.Damage,prepared.Hand.DamagePercent,0,absorption,contact,draws);int amount=Math.Min(Hp(s,targetId),strike.Damage?.Damage??0);
                 s=WithHp(s,targetId,-amount);events.Add($"{turn.Id} → {targetId} · {loc}: {strike.Outcome}, {amount} damage [d100 {contact+1}; hit {scores.HitScore}; pen {scores.PenetrationScore}]");
             }
             if(turn.Remaining>1 && Alive(s,turn.Id) && OriginalInitiative.NextAttackTime(turn.Time,0,turn.Time,turn.Remaining-1) is int next)queue.Add((turn.Id,next,turn.Remaining-1));

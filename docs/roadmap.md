@@ -146,3 +146,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 037 — reviewed original monster actors
 
 [Iteration 037](iteration-037.md) connects Dusk Bat and Shrieker Bat to an opt-in physical monster encounter: native HP dice, neutral effective attributes, initiative, group/swing budgets, intrinsic Thrust damage and seven-zone defense. Actors carry private validated record snapshots, no fake class/weapon facts, and use the existing authored tactical AI. Schema 7 preserves complete continuation; public tests use an authored creature. Other definitions, low-score fumbles, target magic resistance/level facts, status/special attacks, native AI, XP and loot remain open. TOC-41/42/43 remain in progress.
+
+
+## Iteration 038 — complete audit and general physical profiles
+
+[Iteration 038](iteration-038.md) replaces new-battle species allowlisting with complete-slot capability checks: 76/595 supplied records admit a neutral physical profile, 519 retain explicit blockers. Multi-slot/mode choice, seven melee modes, native cubic fumble arithmetic/redirected contact flags, actual-target damage/absorption, byte-sized group continuation, mixed rosters and a searchable READY/BLOCKED catalog are connected. Schema 8 preserves old profile-1 action/RNG semantics. Shrieker's missing spell action is now surfaced; its old physical-only saves remain compatible. Effects, categories 1–3, spells, projectiles, rewards and native world/AI policies remain open. This is progress on adding all monsters, not completion of all 595.

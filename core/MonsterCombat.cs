@@ -8,38 +8,75 @@ using NeoWizardry.Core.Rules;
 namespace NeoWizardry.Core;
 
 // Complete private record snapshot; derived fields cannot be independently edited in saves.
-public sealed record MonsterRecordSnapshot(int DefinitionId,string DatabaseSha256,string RecordSha256,string RawRecordHex);
+public sealed record MonsterRecordSnapshot(int DefinitionId,string DatabaseSha256,string RecordSha256,string RawRecordHex,int ProfileVersion=1);
 public sealed record MonsterCombatant(MonsterRecordSnapshot Record,int MaxHp);
+public sealed record CompiledMonsterAttack(int Slot,int NativeKind,int Rating,ImmutableArray<OriginalAttackMode> Modes,PhysicalDamageDice Damage);
+public sealed record MonsterCapability(bool Ready,ImmutableArray<string> Blockers);
 public sealed record CompiledMonster(string Label,PhysicalDamageDice Health,PhysicalCombatAttributes Attributes,int Initiative,
-    int Groups,int MaximumSwings,int Rating,PhysicalDamageDice Damage,MonsterDefenseDefinition Defense);
+    int Groups,int MaximumSwings,int Rating,PhysicalDamageDice Damage,MonsterDefenseDefinition Defense,ImmutableArray<CompiledMonsterAttack> Attacks,int Absorption);
 public static class MonsterCombat
 {
     private static readonly ConditionalWeakTable<MonsterRecordSnapshot,CompiledMonster> Cache=new();
-    // Reviewed, ordinary one-slot Thrust slice. No guessed status/spell/ranged eligibility.
+    // Legacy profile-1 contract only. New profile-2 admission is structural and checks every enabled action.
     private static readonly ImmutableDictionary<int,string> Allowed=new Dictionary<int,string>{
         [18]="fdae11562fdd033674d82346a270bc5e793cd732da208528e4e2afb20e606d1b",
         [282]="1910b7650bb045cef83b3acea628a10607a4e8cae2dc5b55fb5a6554cf789c74"}.ToImmutableDictionary();
     private static bool Hash(string? value)=>value is {Length:64} && value.All(Uri.IsHexDigit);
-    public static bool Supported(OriginalMonster m)=>Allowed.TryGetValue(m.Id,out var hash) && hash.Equals(m.RecordSha256,StringComparison.OrdinalIgnoreCase);
+    public static bool Supported(OriginalMonster m)=>Capability(m).Ready;
+    public static MonsterCapability Capability(OriginalMonster m)
+    {
+        if(m.RawRecordHex is not {Length:1326} || !m.RawRecordHex.All(Uri.IsHexDigit))return new(false,["invalid_record"]);
+        byte[] raw=Convert.FromHexString(m.RawRecordHex);
+        if(!Hash(m.RecordSha256) || !Convert.ToHexString(SHA256.HashData(raw)).Equals(m.RecordSha256,StringComparison.OrdinalIgnoreCase))return new(false,["record_hash_mismatch"]);
+        return Assess(raw);
+    }
+    private static MonsterCapability Assess(byte[] raw)
+    {
+        var blockers=ImmutableArray.CreateBuilder<string>();
+        int constant=BinaryPrimitives.ReadInt16LittleEndian(raw.AsSpan(0xd6));
+        if(constant+raw[0xd8]<1 || raw[0xd8]>0 && raw[0xd9]==0)blockers.Add("unsupported_hp_expression");
+        if(raw[0xe1]!=0)blockers.Add("spell_action");
+        if(raw[0xe5]==0 || raw[0xe6]==0)blockers.Add("no_physical_budget");
+        int enabled=0;
+        for(int slot=0;slot<3;slot++)
+        {
+            int at=0xe7+slot*0x22;if(raw[at]==0)continue;enabled++;
+            if(raw[at+3]!=0)blockers.Add($"slot_{slot}:special_category_{raw[at+3]}");
+            if(raw[(at+5)..(at+21)].Any(b=>b!=0))blockers.Add($"slot_{slot}:effect_payload");
+            int modes=BinaryPrimitives.ReadUInt16LittleEndian(raw.AsSpan(at+21))&511;
+            if(modes==0)blockers.Add($"slot_{slot}:no_modes");
+            if((modes&0x110)!=0)blockers.Add($"slot_{slot}:projectile_mode");
+            if(raw[at+25]>0 && raw[at+26]==0)blockers.Add($"slot_{slot}:invalid_damage_dice");
+        }
+        if(enabled==0)blockers.Add("no_physical_attack");
+        return new(blockers.Count==0,blockers.ToImmutable());
+    }
     public static CompiledMonster Compile(MonsterRecordSnapshot record)=>Cache.GetValue(record,r=>
     {
         if(!Hash(r.DatabaseSha256) || !Hash(r.RecordSha256) || r.RawRecordHex is not {Length:1326} || !r.RawRecordHex.All(Uri.IsHexDigit))throw new InvalidDataException("Invalid monster combat record");
         byte[] raw=Convert.FromHexString(r.RawRecordHex);
-        if(!Convert.ToHexString(SHA256.HashData(raw)).Equals(r.RecordSha256,StringComparison.OrdinalIgnoreCase) ||
-            !(Allowed.TryGetValue(r.DefinitionId,out var allowed) && allowed.Equals(r.RecordSha256,StringComparison.OrdinalIgnoreCase)) &&
-            !(r.DefinitionId==0 && r.RecordSha256.Equals(FixtureHash,StringComparison.OrdinalIgnoreCase)))throw new InvalidDataException("Unsupported or modified ordinary monster record");
+        if(r.DefinitionId<0 || r.ProfileVersion is not (1 or 2) || !Convert.ToHexString(SHA256.HashData(raw)).Equals(r.RecordSha256,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Invalid monster record identity/version");
+        if(r.ProfileVersion==1 && !(Allowed.TryGetValue(r.DefinitionId,out var allowed) && allowed.Equals(r.RecordSha256,StringComparison.OrdinalIgnoreCase)) &&
+            !(r.DefinitionId==0 && r.RecordSha256.Equals(FixtureHash,StringComparison.OrdinalIgnoreCase)))throw new InvalidDataException("Unsupported or modified legacy monster record");
+        if(r.ProfileVersion==2 && Assess(raw) is {Ready:false} capability)throw new InvalidDataException("Monster blockers: "+string.Join(", ",capability.Blockers));
         string Text(int offset){var value=new UnicodeEncoding(false,false,true).GetString(raw,offset,48);int end=value.IndexOf('\0');if(end<0)throw new InvalidDataException("Unterminated monster label");return value[..end];}
         for(int i=0;i<4;i++)_=Text(i*48);
         PhysicalDamageDice DiceAt(int offset)=>new(BinaryPrimitives.ReadInt16LittleEndian(raw.AsSpan(offset)),raw[offset+2],raw[offset+3]);
         var hp=DiceAt(0xd6);var damage=DiceAt(0xe7+0x17);
-        if(raw[0xcf]!=0 || hp.Constant<1 || hp.Dice>0 && hp.Sides==0 || raw[0xe5]==0 || raw[0xe6]==0 || raw[0xe7]!=1 || raw[0xe8]!=0 || raw[0xea]!=0 || raw[0xeb]<110 ||
+        if(r.ProfileVersion==1 && (raw[0xcf]!=0 || hp.Constant<1 || hp.Dice>0 && hp.Sides==0 || raw[0xe5]==0 || raw[0xe6]==0 || raw[0xe7]!=1 || raw[0xe8]!=0 || raw[0xea]!=0 || raw[0xeb]<110 ||
             raw[(0xe7+5)..(0xe7+21)].Any(x=>x!=0) || BinaryPrimitives.ReadUInt16LittleEndian(raw.AsSpan(0xfc))!=2 || damage.Dice>0 && damage.Sides==0 ||
-            raw[0x109]!=0 || raw[0x12b]!=0)throw new InvalidDataException("Monster is outside the ordinary physical slice");
+            raw[0x109]!=0 || raw[0x12b]!=0))throw new InvalidDataException("Monster is outside the legacy physical slice");
         int Stat(int offset)=>Math.Clamp((int)raw[offset],1,125); // Neutral signed modifiers; native 4E5D00 clamps effective stats.
         MonsterLocationValues Zones(int offset,bool signed)=>new(signed?(sbyte)raw[offset]:raw[offset],signed?(sbyte)raw[offset+1]:raw[offset+1],signed?(sbyte)raw[offset+2]:raw[offset+2],signed?(sbyte)raw[offset+3]:raw[offset+3],signed?(sbyte)raw[offset+4]:raw[offset+4],signed?(sbyte)raw[offset+5]:raw[offset+5],signed?(sbyte)raw[offset+6]:raw[offset+6]);
         var a=raw[0x16d..0x176].Select(b=>(int)(sbyte)b).ToArray();
         var defense=new MonsterDefenseDefinition((sbyte)raw[0x15d],Zones(0x15f,false),Zones(0x166,true),new(a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8]));
-        return new(Text(0),hp,new(Stat(0xd2),Stat(0xd3),Stat(0xd4),Stat(0xd5)),raw[0xe4],raw[0xe5],raw[0xe6],raw[0xeb],damage,defense);
+        var attacks=ImmutableArray.CreateBuilder<CompiledMonsterAttack>();
+        for(int slot=0;slot<3;slot++)
+        {
+            int at=0xe7+slot*0x22;if(raw[at]==0)continue;
+            attacks.Add(new(slot,raw[at+1],raw[at+4],OriginalMonsterAttackSequence.Modes(BinaryPrimitives.ReadUInt16LittleEndian(raw.AsSpan(at+21))).ToImmutableArray(),DiceAt(at+23)));
+        }
+        return new(Text(0),hp,new(Stat(0xd2),Stat(0xd3),Stat(0xd4),Stat(0xd5)),raw[0xe4],raw[0xe5],raw[0xe6],raw[0xeb],damage,defense,attacks.ToImmutable(),raw[0xcf]);
     });
     public static MonsterCombatant? Actor(GameState state,string id)=>state.Melee?.Field?.Monsters?.GetValueOrDefault(id);
     public static void Validate(GameState s)
@@ -52,23 +89,28 @@ public static class MonsterCombat
         {
             if(!monsters.TryGetValue(enemy.Id,out var actor) || actor is null || actor.Record is null)throw new InvalidDataException("Missing monster actor");
             var d=Compile(actor.Record);long minimum=d.Health.Constant+d.Health.Dice,maximum=d.Health.Constant+(long)d.Health.Dice*d.Health.Sides;
-            if(actor.MaxHp<minimum || actor.MaxHp>maximum || enemy.Hp>actor.MaxHp || enemy.Power!=0 || enemy.XpReward!=0 || enemy.LootItemId is not null || enemy.Speed!=d.Attributes.Speed ||
+            if(actor.MaxHp<minimum || actor.MaxHp>maximum || enemy.Hp>actor.MaxHp || enemy.Power!=0 || enemy.XpReward!=0 || enemy.LootItemId is not null || enemy.Speed!=d.Attributes.Speed || s.Items!.Items.Any(i=>i.Location.ContainerId==enemy.Id) ||
                 f.Brains[enemy.Id].MaxHp!=actor.MaxHp)throw new InvalidDataException("Invalid monster HP or neutral scenario state");
         }
         if(monsters.Values.Select(m=>m.Record.DatabaseSha256).Distinct(StringComparer.OrdinalIgnoreCase).Count()!=1)throw new InvalidDataException("Mixed monster databases");
     }
-    public static GameState Create(int size,int count,ItemCatalog items,MonsterCatalog monsters,int definitionId)
+    public static GameState Create(int size,int count,ItemCatalog items,MonsterCatalog monsters,int definitionId,int profileVersion=2)
     {
-        monsters.Validate();var row=monsters.Monsters.Single(m=>m.Id==definitionId);
-        if(!Supported(row) && !(row.Id==0 && row.RecordSha256.Equals(FixtureHash,StringComparison.OrdinalIgnoreCase)))throw new InvalidOperationException("This monster's full ordinary attack slice is not connected");
-        var record=new MonsterRecordSnapshot(row.Id,monsters.DatabaseSha256,row.RecordSha256,row.RawRecordHex);var compiled=Compile(record);
-        var s=MeleeTraining.CreateTactical(size,count,items,ai:false);var f=s.Melee!.Field!;uint rng=s.RandomState;
+        if(count is <1 or >8)throw new ArgumentOutOfRangeException(nameof(count));
+        return CreateRoster(size,items,monsters,Enumerable.Repeat(definitionId,count).ToArray(),profileVersion);
+    }
+    public static GameState CreateRoster(int size,ItemCatalog items,MonsterCatalog monsters,IReadOnlyList<int> definitions,int profileVersion=2)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);if(definitions.Count is <1 or >8)throw new ArgumentOutOfRangeException(nameof(definitions));
+        monsters.Validate();
+        var records=definitions.Select(id=>{var row=monsters.Monsters.Single(m=>m.Id==id);var record=new MonsterRecordSnapshot(row.Id,monsters.DatabaseSha256,row.RecordSha256,row.RawRecordHex,profileVersion);_=Compile(record);return record;}).ToArray();
+        var s=MeleeTraining.CreateTactical(size,records.Length,items,ai:false);var f=s.Melee!.Field!;uint rng=s.RandomState;
         var native=ImmutableDictionary.CreateBuilder<string,MonsterCombatant>();var brains=ImmutableDictionary.CreateBuilder<string,EnemyBrain>();
         var ids=TacticalCombat.Enemies(s).Select(e=>e.Id).ToArray();var replacements=new Dictionary<string,Enemy>();
         int ordinal=0;
         foreach(var oldId in ids)
         {
-            string id=$"monster-{++ordinal}";
+            var record=records[ordinal];var compiled=Compile(record);string id=$"monster-{++ordinal}";
             int hp=compiled.Health.Constant;for(int n=0;n<compiled.Health.Dice;n++)hp=checked(hp+Dice.Roll(ref rng,compiled.Health.Sides));
             native.Add(id,new(record,hp));brains.Add(id,new(new((EnemyTactic)((native.Count-1)%4)),hp));
             replacements.Add(oldId,new(id,hp,compiled.Attributes.Speed,0,0));
