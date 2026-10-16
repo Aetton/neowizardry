@@ -164,18 +164,24 @@ public partial class Main : Node3D
         dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var body=new VBoxContainer();dialog.AddChild(body);
         var search=new LineEdit {PlaceholderText="Search monster names"};body.AddChild(search);
-        var list=new ItemList {CustomMinimumSize=new(360,200)};body.AddChild(list);
-        var detail=new Label {AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(360,100)};body.AddChild(detail);
+        var list=new ItemList {Name="MonsterReferenceList",CustomMinimumSize=new(360,150)};body.AddChild(list);
+        var detail=new RichTextLabel {Name="MonsterReferenceDetails",CustomMinimumSize=new(360,160)};body.AddChild(detail);
         var readyOnly=new CheckBox {Text="Physical profiles ready only"};body.AddChild(readyOnly);
-        var launch=Button(body,"Fight selected record",()=>{});launch.Disabled=true;
+        var launch=Button(body,"Fight selected record",()=>{});launch.Name="MonsterReferenceFight";launch.Disabled=true;
         OriginalMonster[] shown=[];OriginalMonster? selected=null;
         var coverage=_monsterCatalog.Monsters.ToDictionary(m=>m.Id,MonsterCombat.Capability);
         void Details(int index)
         {
             selected=shown[index];var m=selected;var capability=coverage[m.Id];launch.Disabled=!capability.Ready;
+            var attacks=MonsterAttackInspector.Inspect(m);
             detail.Text=string.Join(" · ",m.TextSlots)+$"\nID {m.Id} · record {m.RecordSha256[..12]}\n"+
                 (capability.Ready?"Physical profile ready. Native spells/status effects, XP/loot and world AI are separate.":"Blocked: "+string.Join(", ",capability.Blockers))+"\n"+
-                (m.Defense is {} d?$"AC {d.ArmorClass} · zones {string.Join("/",d.LocationWeights)}":"");
+                (m.Defense is {} d?$"AC {d.ArmorClass} · zones {string.Join("/",d.LocationWeights)}":"")+
+                $"\nEffect source level {attacks.DefinitionLevel} · strength {attacks.EffectStrength}\n"+
+                string.Join("\n",attacks.Attacks.Select(a=>$"Slot {a.Slot}: {string.Join("/",a.Modes)} · rating {a.Rating} · category {a.NativeCategory}\n"+
+                    (a.Effects.Any(e=>e.Probability>0)?string.Join("\n",a.Effects.Where(e=>e.Probability>0).Select(e=>$"  Effect {e.Index}: {Math.Min(e.Probability,100)}% (raw {e.Probability}) · "+
+                        (e.Condition is {} route?$"condition {route.ConditionId}, realm {route.RealmIndex}"+(route.Permanent?", permanent":route.Secondary?$", secondary parameter {a.SecondaryParameter}":""):"special/resource policy"))):"  No on-hit effect chances")))+
+                "\nReference only: requests/resistance recovered; status application and lifecycle are not connected.";
         }
         void Filter()
         {
@@ -880,7 +886,16 @@ public partial class Main : Node3D
             if((_spellsRequested || Godot.FileAccess.FileExists("res://demo-items.spells.json")) && _spellCatalog is null)throw new Exception("Requested spell reference was not loaded");
             if(_spellCatalog is not null) { _spellCatalog.Validate();GD.Print($"PASS: spell reference {_spellCatalog.Count} records with raw record hashes"); }
             if(_monstersRequested && _monsterCatalog is null)throw new Exception("Requested monster catalog was not loaded");
-            if(_monsterCatalog is not null){_monsterCatalog.Validate();ShowMonsters();GetChildren().OfType<AcceptDialog>().Last().Free();GD.Print($"PASS: monster reference {_monsterCatalog.Count} records and browser");}
+            if(_monsterCatalog is not null)
+            {
+                _monsterCatalog.Validate();ShowMonsters();var reference=GetChildren().OfType<AcceptDialog>().Last();
+                var list=reference.FindChild("MonsterReferenceList",true,false) as ItemList??throw new Exception("Missing monster reference list");
+                int index=Array.FindIndex(_monsterCatalog.Monsters.ToArray(),m=>MonsterAttackInspector.Inspect(m).Attacks.Any(a=>a.Effects.Any(e=>e.Probability>0)));
+                int selected=Math.Max(0,index);list.Select(selected);list.EmitSignal(ItemList.SignalName.ItemSelected,(long)selected);
+                var detail=reference.FindChild("MonsterReferenceDetails",true,false) as RichTextLabel;
+                if(detail is null || !detail.Text.Contains("Effect source level") || index>=0 && (!detail.Text.Contains("  Effect ") || reference.FindChild("MonsterReferenceFight",true,false) is not Button {Disabled:true}))throw new Exception("Monster effect reference/gate UI failed");
+                reference.Free();GD.Print($"PASS: monster reference {_monsterCatalog.Count} records, selected effect details and blocked fight gate");
+            }
             if(_catalogRequested && _catalog is null) throw new Exception("Requested smoke catalog was not loaded");
             _player.Position=new(0,0.9f,-4);
             CheckTacticalInterface();CheckMonsterInterface();

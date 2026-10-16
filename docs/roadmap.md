@@ -151,3 +151,7 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 038 — complete audit and general physical profiles
 
 [Iteration 038](iteration-038.md) replaces new-battle species allowlisting with complete-slot capability checks: 76/595 supplied records admit a neutral physical profile, 519 retain explicit blockers. Multi-slot/mode choice, seven melee modes, native cubic fumble arithmetic/redirected contact flags, actual-target damage/absorption, byte-sized group continuation, mixed rosters and a searchable READY/BLOCKED catalog are connected. Schema 8 preserves old profile-1 action/RNG semantics. Shrieker's missing spell action is now surfaced; its old physical-only saves remain compatible. Effects, categories 1–3, spells, projectiles, rewards and native world/AI policies remain open. This is progress on adding all monsters, not completion of all 595.
+
+## Iteration 039 — original attack-effect request boundary
+
+[Iteration 039](iteration-039.md) recovers sixteen raw payload chances, the +24F source-level strength producer, ten ordinary condition routes, common/secondary duration stages, binary condition resistance and a selected-effect executor with explicit draw traces. The browser exposes effect details for blocked records. All 595 original rows are inspected; 479 contain enabled payloads. Immunity producers, status persistence/ticks and action/stat consumers remain open; live admission stays 76/595 and saves remain schema 8. No status-bearing monster is declared complete from request arithmetic alone.

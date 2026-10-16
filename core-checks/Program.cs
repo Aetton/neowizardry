@@ -356,7 +356,7 @@ checks+=ProjectileExecutionChecks.Run(restricted);
 checks+=MeleeEncounterChecks.Run();
 checks+=TacticalCombatChecks.Run();
 checks+=EnemyAiChecks.Run();
-checks+=MonsterCombatChecks.Run();checks+=GeneralMonsterChecks.Run();
+checks+=MonsterCombatChecks.Run();checks+=GeneralMonsterChecks.Run();checks+=AttackEffectChecks.Run();
 checks+=RestoredRoundChecks.Run();
 checks+=MonsterCatalogChecks.Run();
 if(args.Length==2 && args[0]=="--fixture")
@@ -372,7 +372,7 @@ if(args.Length==2 && args[0]=="--fixture")
 }
 else if(args.Length==2 && args[0]=="--monsters")
 {
-    var monsters=MonsterCatalog.Parse(File.ReadAllText(args[1]));checks+=MonsterCatalogChecks.Run(monsters);checks+=MonsterCombatChecks.Run(monsters);checks+=GeneralMonsterChecks.Run(monsters);
+    var monsters=MonsterCatalog.Parse(File.ReadAllText(args[1]));checks+=MonsterCatalogChecks.Run(monsters);checks+=MonsterCombatChecks.Run(monsters);checks+=GeneralMonsterChecks.Run(monsters);checks+=AttackEffectChecks.Run(monsters);
     Console.WriteLine($"PASS: {monsters.Count} native monster reference records");
 }
 else if(args.Length==2 && args[0]=="--spell-formulas")
