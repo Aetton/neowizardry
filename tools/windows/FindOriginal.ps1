@@ -1,12 +1,12 @@
-# Read only the explicitly configured installation or wiz_data beside the runner checkout.
+# Read only the explicitly configured installation or wiz_data outside the runner checkout.
 $ErrorActionPreference = 'Stop'
 $explicit = @($env:WIZ8_INSTALLATION, $env:NEO_WIZ8_ROOT) | Where-Object { $_ } | Select-Object -First 1
 if ($explicit) {
     $roots = @($explicit)
 } else {
     # GitHub workspace = _work/repo/repo; runner workspace = _work/repo.
-    # Support wiz_data in the checkout, beside it, or directly in _work.
-    $workspaces = @($env:GITHUB_WORKSPACE, $env:RUNNER_WORKSPACE)
+    # Keep originals outside checkout: beside it or directly in _work.
+    $workspaces = @($env:RUNNER_WORKSPACE)
     if ($env:RUNNER_WORKSPACE) { $workspaces += Split-Path $env:RUNNER_WORKSPACE -Parent }
     $roots = @($workspaces | Where-Object { $_ } | Select-Object -Unique | ForEach-Object {
         Join-Path $_ 'wiz_data/Wizardry8'

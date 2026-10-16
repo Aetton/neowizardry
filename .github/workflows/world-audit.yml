@@ -21,6 +21,12 @@ jobs:
       run:
         shell: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
     steps:
+      - name: Protect originals from checkout replacement
+        shell: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          if (Test-Path -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'wiz_data')) {
+            throw 'Move wiz_data outside the checkout to the runner _work directory before continuing. Checkout archive fallback can replace the whole checkout even with clean=false.'
+          }
       - uses: actions/checkout@v4
         with:
           clean: false

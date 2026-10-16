@@ -10,7 +10,7 @@ Status checked against code and iteration reports through **040**. Iteration **0
 | Magic | 150-record metadata/reference, original ordinary casting-risk/backfire, Power Cast, base strength and resistance helpers | Learning/book/class policy, source/context modifiers, one complete original damage/healing path, resource/condition/training flow and live integration |
 | Inventory | One authoritative typed instance model in gameplay, equipment, fixture crafting and schema-2 saves; old-save migration, split/merge/transfer/resources | Original use/recharge/curse policy and remaining equipment coverage |
 | Crafting | 36-record original recipe reference, recovered native combination arithmetic and clean transaction simulation | Actor skill/time/progression policy, original combinations in gameplay and result previews; proper crafting menu remains a separate rework |
-| World | SLF reader, patch/loose overlay and runner-based monastery inventory workflow for `wiz_data/Wizardry8` | Original archive validation on the runner, PVL geometry/collision, dependencies and connected monastery content |
+| World | SLF reader, patch/loose overlay and runner-based monastery inventory workflow for `wiz_data/Wizardry8` | PVL geometry/collision, dependencies and connected monastery content; runner audit confirms 4956 resources and both monastery PVLs |
 
 Recovered ordinary character formulas now execute in the default new training duel (032), with real owned weapons, explicit authored effective facts, contact/penetration/HP, RNG continuation and scenario rewards. Iteration 033 adds recovered ordinary character initiative / repeated-attack scheduling and safe original Frost / Energy Blast through that executor. Actors, room, immediate delivery, ties and target selection remain authored; real stat derivation and complete original combat/magic remain integration gates. MONSTERS.DBS import now covers 595 record/text/hash definitions with a browser; Iteration 034 maps verified defense fields into the original defense rules; HP/attacks/AI and executable monster actors remain open. It also connects ordinary fizzle/backfire and Heal Wounds, with native reactions/progression still excluded.
 
@@ -93,7 +93,7 @@ Review early/mid/late-game contribution, gadget/component availability and usefu
 - Canonical formulas require documented evidence or original-game fixtures.
 
 ## Current blocker
-LEVELS.SLF exceeds the Drive connector limit. The user will supply `wiz_data/Wizardry8` in the self-hosted runner work directory; [iteration 041](iteration-041.md) adds an Actions audit of `Levels/LEVELS.SLF` there. Original archive validation and PVL decoding remain gates. The immediate priority is a small connected monastery section with exploration → encounter → exploration and saved world state; complete monster/spell coverage is not a prerequisite to start.
+LEVELS.SLF exceeds the Drive connector limit. The supplied `wiz_data/Wizardry8` in the self-hosted runner work directory is now verified: [iteration 041](iteration-041.md) successfully audited 4956 active resources, including 426 monastery resources and both required PVLs. Resource access is unblocked; PVL decoding remains the next gate. The immediate priority is a small connected monastery section with exploration → encounter → exploration and saved world state; complete monster/spell coverage is not a prerequisite to start.
 
 ## Original-data research progress
 Iteration 011 decodes 150 native spell metadata records and 160 indexed description entries, preserving provenance and unknown raw bytes. A separate read-only reference is available in the client. This does not establish original effect execution, learning, success/resistance, timing or recipe rules; see [spell format evidence](spell-format.md).
@@ -163,4 +163,4 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 
 ## Iteration 041 — runner-based monastery intake
 
-[Iteration 041](iteration-041.md) adds a scoped original-resource audit on the Windows runner, explicit `wiz_data/Wizardry8` discovery and metadata-only artifacts. Both self-hosted workflows preserve the supplied folder at checkout. Synthetic tests cover inventory, hashes and extraction rejection. Actual original PVL decoding and playable world integration remain open.
+[Iteration 041](iteration-041.md) adds a scoped original-resource audit on the Windows runner, explicit `wiz_data/Wizardry8` discovery and metadata-only artifacts. Both self-hosted workflows reject originals inside checkout; the supplied folder remains outside it. Synthetic tests cover inventory, hashes and extraction rejection. Actual original PVL decoding and playable world integration remain open.
