@@ -24,6 +24,8 @@ public static class GameSaveMigration
             throw new InvalidDataException("Monster actors require save schema 7");
         if(schema<=7 && root["Melee"]?["Field"]?["Monsters"] is JsonObject priorMonsters && priorMonsters.Any(p=>(p.Value?["Record"]?["ProfileVersion"]?.GetValue<int>()??1)!=1))
             throw new InvalidDataException("General monster profiles require save schema 8");
+        if(schema<=8 && (root["Melee"]?["Field"]?["Conditions"] is not null || root["Melee"]?["Field"]?["Monsters"] is JsonObject versioned && versioned.Any(p=>(p.Value?["Record"]?["ProfileVersion"]?.GetValue<int>()??1)>=3)))
+            throw new InvalidDataException("Native condition profiles require save schema 9");
         if(schema is 2 or 3)
         {
             if(root.ContainsKey("Bag") || root["Party"] is JsonArray oldParty && oldParty.Any(h=>h?.AsObject().ContainsKey("EquippedItemId")==true))
@@ -35,7 +37,7 @@ public static class GameSaveMigration
             if(catalog is not null){Equipment.ValidateLoadedEquipment(upgraded,catalog,catalog.Provenance.Sha256);ProjectileExecution.Validate(upgraded,catalog);}
             return upgraded;
         }
-        if(schema is 4 or 5 or 6 or 7 || schema==Game.SaveSchema)
+        if(schema is 4 or 5 or 6 or 7 or 8 || schema==Game.SaveSchema)
         {
             if(root.ContainsKey("Bag") || root["Party"] is JsonArray party && party.Any(h=>h?.AsObject().ContainsKey("EquippedItemId")==true))
                 throw new InvalidDataException("Conflicting legacy inventory fields in instance save");

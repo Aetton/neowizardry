@@ -25,7 +25,7 @@ static class GeneralMonsterChecks
             foreach(var row in originals.Monsters)
             {
                 var capability=MonsterCombat.Capability(row);
-                var snapshot=new MonsterRecordSnapshot(row.Id,originals.DatabaseSha256,row.RecordSha256,row.RawRecordHex,2);
+                var snapshot=new MonsterRecordSnapshot(row.Id,originals.DatabaseSha256,row.RecordSha256,row.RawRecordHex,3);
                 if(!capability.Ready)
                 {
                     blocked++;foreach(var reason in capability.Blockers.Select(s=>s.Contains(':')?s[(s.IndexOf(':')+1)..]:s).Distinct())blockers[reason]=blockers.GetValueOrDefault(reason)+1;

@@ -43,7 +43,7 @@ public partial class Main
         dialog.Confirmed+=dialog.QueueFree;dialog.CloseRequested+=dialog.QueueFree;dialog.TreeExited+=()=>{_dialogs=Math.Max(0,_dialogs-1);_touchInput.Reset();};
         var scroll=new ScrollContainer();dialog.AddChild(scroll);var body=new VBoxContainer {SizeFlagsHorizontal=Control.SizeFlags.ExpandFill};scroll.AddChild(body);
         body.AddChild(new Label {Text="Choose hero and order, then tap a cell.\nOne step or adjacent melee; spells need clear sight.\nUnordered heroes attack nearby enemies or wait.\nAI: Brute closes in; Hunter targets wounded;\nFlanker spreads out; Skirmisher retreats at low HP.",AutowrapMode=TextServer.AutowrapMode.WordSmart});
-        if(_state.Melee.Field.Monsters is not null)body.AddChild(new Label {Text="Monster physical test: spellcasting and XP/loot are not connected.",AutowrapMode=TextServer.AutowrapMode.WordSmart});
+        if(_state.Melee.Field.Monsters is not null)body.AddChild(new Label {Text="Monster test: condition 16 blocks actions and weakens defense.\nTimers lose one unit at each round end. Party target level/resistance are training facts.\nSpellcasting and XP/loot are not connected.",AutowrapMode=TextServer.AutowrapMode.WordSmart});
         var actor=new OptionButton {Name="TacticalActor"};foreach(var h in _state.Party)actor.AddItem(h.Name);body.AddChild(actor);
         var mode=new OptionButton();foreach(var text in new[]{"Move","Attack","Spell"})mode.AddItem(text);body.AddChild(mode);
         OriginalSpell[] magic=_state.Melee.Magic is null?[]:_spellCatalog?.Spells.Where(RestoredMagic.SupportedSpell).ToArray()??[];
@@ -67,6 +67,7 @@ public partial class Main
                 string? id=f.Positions.Where(p=>p.Value==cell).OrderByDescending(p=>TacticalCombat.Alive(_state,p.Key)).Select(p=>p.Key).FirstOrDefault();
                 int index=Array.FindIndex(_state.Party.ToArray(),h=>h.Id==id);var enemy=TacticalCombat.Enemies(_state).FirstOrDefault(e=>e.Id==id);
                 string text=wall?"▩":id is null?"·":index>=0?$"P{index+1}\n{_state.Party[index].Hp}":$"E{Array.FindIndex(TacticalCombat.Enemies(_state).ToArray(),e=>e.Id==id)+1}\n{enemy!.Hp}";
+                if(id is not null && NativeConditions.Remaining(_state,id)>0)text+=$"\nC16:{NativeConditions.Remaining(_state,id)}";
                 var b=new Button {Text=text,Name=$"Cell{x}_{y}",CustomMinimumSize=new(36,40),SizeFlagsHorizontal=Control.SizeFlags.ExpandFill,Disabled=wall,TooltipText=$"({x},{y}) {id}"};
                 b.Modulate=wall?new Color(.5f,.5f,.5f):id==heroId?new Color(1,.85f,.3f):index>=0?new Color(.5f,.8f,1):enemy is not null?new Color(1,.55f,.5f):Colors.White;
                 b.Pressed+=()=>Attempt(()=>
@@ -127,11 +128,15 @@ public partial class Main
     private void CheckMonsterInterface()
     {
         var original=_state;var catalog=_monsterCatalog?.Monsters.Any(m=>m.Id==282 && MonsterCombat.Supported(m))==true?_monsterCatalog:MonsterCombat.FixtureCatalog();
-        NewMonsterBattle(3,3,catalog!,catalog!.Count==1?0:282);ShowTactics();
+        NewMonsterBattle(3,3,catalog!,catalog!.Count==1?0:282);
+        var field=_state.Melee!.Field!;
+        _state=_state with {Melee=_state.Melee with {Field=field with {Conditions=field.Conditions! with {Condition16=field.Conditions.Condition16.Add("hero-1",2).Add(_state.Enemy.Id,2)}}}};
+        ShowTactics();
         var dialog=GetChildren().OfType<AcceptDialog>().Single(d=>d.Name=="TacticalDialog");
         IEnumerable<Node> Walk(Node node)=>node.GetChildren().SelectMany(c=>new[]{c}.Concat(Walk(c)));
+        if(Walk(dialog).OfType<Button>().Count(b=>b.Text.Contains("C16:2"))!=2)throw new Exception("Native condition timers missing from tactical grid");
         Walk(dialog).OfType<Button>().Single(b=>b.Name=="TacticalResolve").EmitSignal(Godot.Button.SignalName.Pressed);
-        if(_state.Round!=1 || _state.Melee!.Opponent is not null || _state.Melee.Field!.Monsters?.Count!=3 || _state.Items!.Items.Any(i=>i.Location.ContainerId.StartsWith("monster-")))throw new Exception("Monster battle UI did not use native unarmed actors");
+        if(_state.Round!=1 || NativeConditions.Remaining(_state,"hero-1")!=1 || NativeConditions.Remaining(_state,_state.Enemy.Id)!=1 || _state.Melee!.Opponent is not null || _state.Melee.Field!.Monsters?.Count!=3 || _state.Items!.Items.Any(i=>i.Location.ContainerId.StartsWith("monster-")))throw new Exception("Monster battle UI did not preserve native actors/timer transitions");
         RemoveChild(dialog);dialog.Free();
         ShowCombatFacts();GetChildren().OfType<AcceptDialog>().Last().Free();
         var saved=Game.Save(_state);var expected=Game.Save(TacticalCombat.Advance(_state,_catalog!).State);
@@ -139,7 +144,7 @@ public partial class Main
         ShowMonsterRoster(3,2);
         var roster=GetChildren().OfType<AcceptDialog>().Single(d=>d.Name=="MonsterRoster");
         Walk(roster).OfType<Button>().Single(b=>b.Name=="StartMonsterRoster").EmitSignal(Godot.Button.SignalName.Pressed);
-        if(_state.Melee!.Field!.Monsters?.Count!=2 || _state.Melee.Field.Monsters.Values.Any(m=>m.Record.ProfileVersion!=2))throw new Exception("Mixed roster UI did not create general profiles");
+        if(_state.Melee!.Field!.Monsters?.Count!=2 || _state.Melee.Field.Monsters.Values.Any(m=>m.Record.ProfileVersion!=3))throw new Exception("Mixed roster UI did not create condition-aware profiles");
         RemoveChild(roster);roster.Free();
         var mixed=GetChildren().OfType<AcceptDialog>().Single(d=>d.Name=="TacticalDialog");RemoveChild(mixed);mixed.Free();
         GD.Print("PASS: mixed monster roster UI and general physical profiles");

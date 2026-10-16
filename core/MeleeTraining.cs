@@ -40,6 +40,9 @@ public static class MeleeTraining
         foreach(var o in extra)items=ItemInventory.Move(items,o.WeaponId!,new(o.Actor.Id,Equipment.WeaponSlot),Inventory.Rules(catalog));
         s=s with {Items=items,Melee=original with {Field=field}};MeleeCombat.Validate(s,catalog);return ai?EnemyAi.Enable(s,48):s;
     }
+    // Authored neutral targets for the condition laboratory, not character progression/equipment derivation.
+    internal static ImmutableDictionary<string,ConditionTargetFacts> ConditionTargetFixtures(GameState state)=>
+        state.Party.ToImmutableDictionary(h=>h.Id,_=>new ConditionTargetFacts(10,[0,0,0,0,0,0]));
     private static MeleeCharacterFacts Facts(OriginalProfession profession,bool opponent=false)=>new(opponent?60:80,
         new(50,opponent?60:80,opponent?60:80,70),opponent?60:80,opponent?60:80,[new(profession,10)],20,
         opponent?new(18,18,18,18,18):new(0,0,0,0,0),new(10,false,0));

@@ -166,7 +166,7 @@ public partial class Main : Node3D
         var search=new LineEdit {PlaceholderText="Search monster names"};body.AddChild(search);
         var list=new ItemList {Name="MonsterReferenceList",CustomMinimumSize=new(360,150)};body.AddChild(list);
         var detail=new RichTextLabel {Name="MonsterReferenceDetails",CustomMinimumSize=new(360,160)};body.AddChild(detail);
-        var readyOnly=new CheckBox {Text="Physical profiles ready only"};body.AddChild(readyOnly);
+        var readyOnly=new CheckBox {Text="Supported combat profiles only"};body.AddChild(readyOnly);
         var launch=Button(body,"Fight selected record",()=>{});launch.Name="MonsterReferenceFight";launch.Disabled=true;
         OriginalMonster[] shown=[];OriginalMonster? selected=null;
         var coverage=_monsterCatalog.Monsters.ToDictionary(m=>m.Id,MonsterCombat.Capability);
@@ -175,13 +175,13 @@ public partial class Main : Node3D
             selected=shown[index];var m=selected;var capability=coverage[m.Id];launch.Disabled=!capability.Ready;
             var attacks=MonsterAttackInspector.Inspect(m);
             detail.Text=string.Join(" · ",m.TextSlots)+$"\nID {m.Id} · record {m.RecordSha256[..12]}\n"+
-                (capability.Ready?"Physical profile ready. Native spells/status effects, XP/loot and world AI are separate.":"Blocked: "+string.Join(", ",capability.Blockers))+"\n"+
+                (capability.Ready?"Supported combat profile ready. Condition 16 is connected; other statuses, spells and XP/loot remain separate.":"Blocked: "+string.Join(", ",capability.Blockers))+"\n"+
                 (m.Defense is {} d?$"AC {d.ArmorClass} · zones {string.Join("/",d.LocationWeights)}":"")+
                 $"\nEffect source level {attacks.DefinitionLevel} · strength {attacks.EffectStrength}\n"+
                 string.Join("\n",attacks.Attacks.Select(a=>$"Slot {a.Slot}: {string.Join("/",a.Modes)} · rating {a.Rating} · category {a.NativeCategory}\n"+
                     (a.Effects.Any(e=>e.Probability>0)?string.Join("\n",a.Effects.Where(e=>e.Probability>0).Select(e=>$"  Effect {e.Index}: {Math.Min(e.Probability,100)}% (raw {e.Probability}) · "+
                         (e.Condition is {} route?$"condition {route.ConditionId}, realm {route.RealmIndex}"+(route.Permanent?", permanent":route.Secondary?$", secondary parameter {a.SecondaryParameter}":""):"special/resource policy"))):"  No on-hit effect chances")))+
-                "\nReference only: requests/resistance recovered; status application and lifecycle are not connected.";
+                "\nCondition 16: live application, action block, defense cap, saved timer. Other routes remain reference only.";
         }
         void Filter()
         {
@@ -498,6 +498,13 @@ public partial class Main : Node3D
             {
                 var m=MonsterCombat.Compile(pair.Value.Record);lines.Add($"{pair.Key}: {m.Label} · native ID {pair.Value.Record.DefinitionId}\nHP roll {m.Health.Constant}+{m.Health.Dice}d{m.Health.Sides} → max {pair.Value.MaxHp}\nINT/DEX/SPD/SEN {m.Attributes.Intelligence}/{m.Attributes.Dexterity}/{m.Attributes.Speed}/{m.Attributes.Senses}\nInitiative {m.Initiative} · groups {m.Groups} · max swings {m.MaximumSwings}\nPhysical absorption {m.Absorption}% · AC {m.Defense.ArmorClass}\n{string.Join("; ",m.Attacks.Select(a=>$"slot {a.Slot}: {string.Join("/",a.Modes)}, rating {a.Rating}, damage {a.Damage.Constant}+{a.Damage.Dice}d{a.Damage.Sides}"))}\nNeutral physical slice; XP/loot and magic not connected.\n");
             }
+        if(encounter.Field?.Conditions is {} conditions)
+        {
+            lines.Add("Condition 16 laboratory: one timer unit per round end.\nParty target facts are authored; monster level/base resistance come from its record.");
+            foreach(var (id,target) in conditions.PartyTargets)lines.Add($"{id}: target level {target.Level} · realm resistances {string.Join("/",target.Resistances)} · C16 {NativeConditions.Remaining(_state,id)}");
+            foreach(var (id,native) in encounter.Field.Monsters!)
+            {var m=MonsterCombat.Compile(native.Record);lines.Add($"{id}: target level {m.Level} · realm resistances {string.Join("/",m.Resistances)} · C16 {NativeConditions.Remaining(_state,id)}");}
+        }
         text.Text=string.Join("\n",lines);dialog.PopupCentered(new Vector2I(440,400));
     }
 

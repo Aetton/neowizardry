@@ -155,3 +155,7 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 039 — original attack-effect request boundary
 
 [Iteration 039](iteration-039.md) recovers sixteen raw payload chances, the +24F source-level strength producer, ten ordinary condition routes, common/secondary duration stages, binary condition resistance and a selected-effect executor with explicit draw traces. The browser exposes effect details for blocked records. All 595 original rows are inspected; 479 contain enabled payloads. Immunity producers, status persistence/ticks and action/stat consumers remain open; live admission stays 76/595 and saves remain schema 8. No status-bearing monster is declared complete from request arithmetic alone.
+
+## Iteration 040 — first connected native condition
+
+[Iteration 040](iteration-040.md) connects condition 16 to post-damage application, maximum-duration merge, action cancellation, incapacitation defense, per-actor saved timers and the tactical grid. Native target level/base resistances are compiled for monsters; party targets remain explicit training fixtures. Timers use an authored one-unit-per-round clock, not native world-time parity. Schema 9/profile 3 preserves earlier profile contracts. RFS-81, Soldier Ant and Wasp raise supported coverage to 79/595 records; 516 remain blocked. Other statuses, spells, special/projectile delivery, world/native AI and rewards remain open.

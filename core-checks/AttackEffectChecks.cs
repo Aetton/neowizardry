@@ -19,7 +19,7 @@ static class AttackEffectChecks
                 foreach(var a in reference.Attacks)
                     Check(a.Effects.Select(e=>e.Probability).SequenceEqual(raw[(0xe7+34*a.Slot+5)..(0xe7+34*a.Slot+21)].Select(b=>(int)b)) && a.SecondaryParameter==raw[0xe7+34*a.Slot+27],"Every original effect chance/parameter matches its unmodified record");
                 if(reference.Attacks.Any(a=>a.Effects.Any(e=>e.Probability!=0)))
-                {withEffects++;Check(!MonsterCombat.Supported(row),"Recovered effect requests never silently unlock missing status consumers");}
+                {withEffects++;Check(!MonsterCombat.Supported(row) || reference.Attacks.All(a=>a.Effects.All(e=>e.Probability==0 || e.Index==1)),"Only connected condition 16 may cross the payload admission gate");}
             }
             Console.WriteLine($"PASS: attack effects inspected for {originals.Count} original records, {withEffects} with enabled payloads; admission remains conservative");
             return checks;

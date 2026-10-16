@@ -7,7 +7,7 @@ namespace NeoWizardry.Core;
 public readonly record struct BattleCell(int X,int Y);
 public sealed record TacticalOpponent(Enemy Actor,MeleeCharacterFacts? Facts,string? WeaponId,RestoredMagicFacts? Magic=null);
 public sealed record TacticalField(int Width,int Height,ImmutableDictionary<string,BattleCell> Positions,
-    ImmutableArray<BattleCell> Walls,ImmutableArray<TacticalOpponent> Opponents,ImmutableDictionary<string,EnemyBrain>? Brains=null,ImmutableDictionary<string,MonsterCombatant>? Monsters=null);
+    ImmutableArray<BattleCell> Walls,ImmutableArray<TacticalOpponent> Opponents,ImmutableDictionary<string,EnemyBrain>? Brains=null,ImmutableDictionary<string,MonsterCombatant>? Monsters=null,NativeConditionBattle? Conditions=null);
 public enum TacticalAction { Attack, Move, Wait, Cast }
 public sealed record TacticalOrder(string ActorId,TacticalAction Action,string? TargetId=null,BattleCell? Destination=null,RestoredCastOrder? Spell=null);
 
@@ -30,6 +30,7 @@ public static class TacticalCombat
             throw new InvalidDataException("Invalid tactical positions");
         EnemyAi.Validate(state);
         MonsterCombat.Validate(state);
+        NativeConditions.Validate(state);
         if(f.Monsters is not null)return;
         foreach(var o in f.Opponents)
         {
@@ -117,6 +118,7 @@ public static class TacticalCombat
         var monsterBudgets=new Dictionary<string,MonsterAttackBudget>();
         foreach(var id in ids)
         {
+            if(NativeConditions.Incapacitated(s,id)){events.Add($"{id}: native condition 16 blocks actions");continue;}
             if(MonsterCombat.Actor(s,id) is {} native)
             {
                 var d=MonsterCombat.Compile(native.Record);monsterBudgets[id]=OriginalMonsterAttackSequence.Start(d.Groups,d.MaximumSwings);
@@ -136,6 +138,7 @@ public static class TacticalCombat
         {
             var turn=queue.OrderBy(t=>t.Time).ThenBy(t=>Enemies(s).Any(e=>e.Id==t.Id)).ThenBy(t=>t.Id,StringComparer.Ordinal).First();queue.Remove(turn);
             if(!Alive(s,turn.Id))continue;
+            if(NativeConditions.Incapacitated(s,turn.Id)){events.Add($"{turn.Id}: native condition 16 cancels queued action");continue;}
             bool enemy=Enemies(s).Any(e=>e.Id==turn.Id);
             if(enemy && s.Melee!.Field!.Brains is not null)
             {
@@ -171,12 +174,12 @@ public static class TacticalCombat
             if(order.TargetId is not {} targetId || !Alive(s,targetId) || !InReach(s,turn.Id,targetId)){events.Add("Attack cancelled: target dead or out of reach");continue;}
             if(MonsterCombat.Actor(s,turn.Id) is {} monster)
             {
-                var d=MonsterCombat.Compile(monster.Record);bool modern=monster.Record.ProfileVersion==2;
+                var d=MonsterCombat.Compile(monster.Record);bool modern=monster.Record.ProfileVersion>=2;
                 var choices=d.Attacks.SelectMany(a=>a.Modes.Select(mode=>new MonsterPhysicalChoice(a.Slot,mode,targetId))).ToArray();
                 var choice=modern?OriginalMonsterAttackSequence.SelectChoice(choices,Dice.Exclusive(ref rng,choices.Length))!:new MonsterPhysicalChoice(0,OriginalAttackMode.Thrust,targetId);
                 var selectedAttack=d.Attacks.Single(a=>a.Slot==choice.AttackSlot);var mode=choice.Mode;
                 var group=OriginalMonsterAttackSequence.BeginGroup(monsterBudgets[turn.Id],true,Dice.Exclusive(ref rng,d.MaximumSwings));var budget=group.State;
-                while(budget.SwingsRemaining>0 && Alive(s,targetId) && Alive(s,turn.Id))
+                while(budget.SwingsRemaining>0 && Alive(s,targetId) && Alive(s,turn.Id) && !NativeConditions.Incapacitated(s,turn.Id))
                 {
                     string actual=targetId;int contact;bool redirected=false;
                     MonsterPhysicalScoreInput Input(string victim,out string location,out int absorption)
@@ -185,13 +188,13 @@ public static class TacticalCombat
                         if(MonsterCombat.Actor(s,victim) is {} nativeTarget)
                         {
                             var td=MonsterCombat.Compile(nativeTarget.Record);var zone=OriginalMonsterDefense.SelectLocation(td.Defense.LocationWeights,Dice.Roll(ref rng,100)-1);
-                            thresholds=OriginalMonsterDefense.Against(td.Defense,new(0,0,0,0,false),zone.Location,mode,new(false,false,false,false));
+                            thresholds=OriginalMonsterDefense.Against(td.Defense,new(0,0,0,0,NativeConditions.Incapacitated(s,victim)),zone.Location,mode,new(false,false,false,false));
                             attributes=td.Attributes;location=zone.Location.ToString();absorption=td.Absorption;
                         }
                         else
                         {
                             var df=Facts(s,victim);var armor=OriginalDefenseAdapter.Prepare(new(MainHand:Weapon(s,victim,catalog))) with {Body=df.BodyArmor};
-                            var defense=OriginalCharacterDefense.Build(new(df.Attributes.Speed,df.Stealth,0,0,false),armor,new(0,0,false,false,false),new(0,0,0,false));
+                            var defense=OriginalCharacterDefense.Build(new(df.Attributes.Speed,df.Stealth,0,0,false),armor,new(0,0,false,false,NativeConditions.Incapacitated(s,victim)),new(0,0,0,false));
                             var hitLocation=OriginalCharacterDefense.SelectLocation(Dice.Roll(ref rng,100)-1);
                             thresholds=OriginalCharacterDefense.Against(defense,hitLocation,mode,new(false,false,false));attributes=df.Attributes;location=hitLocation.ToString();
                         }
@@ -215,7 +218,9 @@ public static class TacticalCombat
                     int repetitions=mode==OriginalAttackMode.Berserk?2:1;
                     int[] draws=outcome==PhysicalStrikeOutcome.Damage?Enumerable.Range(0,selectedAttack.Damage.Dice*repetitions).Select(_=>Dice.Roll(ref rng,selectedAttack.Damage.Sides)-1).ToArray():[];
                     var strike=OriginalMonsterStrike.Resolve(input,selectedAttack.Damage,contact,draws,absorption,modern,redirected);int amount=Math.Min(Hp(s,actual),strike.Damage?.Damage??0);
-                    s=WithHp(s,actual,-amount);budget=OriginalMonsterAttackSequence.CompleteSwing(budget,!Alive(s,targetId) || !Alive(s,turn.Id));
+                    s=WithHp(s,actual,-amount);
+                    if(monster.Record.ProfileVersion==3 && amount>0)s=NativeConditions.OnMonsterDamage(s,turn.Id,actual,selectedAttack.Condition16Chance,ref rng,events);
+                    budget=OriginalMonsterAttackSequence.CompleteSwing(budget,!Alive(s,targetId) || !Alive(s,turn.Id) || NativeConditions.Incapacitated(s,turn.Id));
                     events.Add($"{turn.Id} ({d.Label}) → {actual} · {mode} · {location}: {strike.Outcome}, {amount} damage [slot {choice.AttackSlot}; d100 {contact+1}; hit {scores.HitScore}; pen {scores.PenetrationScore}; redirect {redirected}]");
                 }
                 monsterBudgets[turn.Id]=budget;
@@ -230,7 +235,7 @@ public static class TacticalCombat
                 if(MonsterCombat.Actor(s,targetId) is {} targetMonster)
                 {
                     var d=MonsterCombat.Compile(targetMonster.Record);var zone=OriginalMonsterDefense.SelectLocation(d.Defense.LocationWeights,Dice.Roll(ref rng,100)-1);
-                    thresholds=OriginalMonsterDefense.Against(d.Defense,new(0,0,0,0,false),zone.Location,OriginalAttackMode.Swing,new(false,false,false,false));
+                    thresholds=OriginalMonsterDefense.Against(d.Defense,new(0,0,0,0,NativeConditions.Incapacitated(s,targetId)),zone.Location,OriginalAttackMode.Swing,new(false,false,false,false));
                     targetAttributes=d.Attributes;loc=zone.Location.ToString();absorption=d.Absorption;
                 }
                 else
@@ -248,6 +253,7 @@ public static class TacticalCombat
             }
             if(turn.Remaining>1 && Alive(s,turn.Id) && OriginalInitiative.NextAttackTime(turn.Time,0,turn.Time,turn.Remaining-1) is int next)queue.Add((turn.Id,next,turn.Remaining-1));
         }
+        s=NativeConditions.EndRound(s,events);
         s=s with {Round=checked(s.Round+1),RandomState=rng};
         if(!Enemies(s).Any(e=>e.Hp>0) && !s.RewardGranted && s.Party.Any(h=>h.Hp>0 && !h.Captive))
         {
