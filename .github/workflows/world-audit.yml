@@ -7,6 +7,7 @@ on:
       - 'tools/world_audit.py'
       - 'tools/pvl.py'
       - 'tools/textures.py'
+      - 'tools/oct.py'
       - 'client/WorldPreview.cs'
       - 'tools/windows/TestWorld.ps1'
       - 'tools/windows/FindOriginal.ps1'
@@ -56,6 +57,11 @@ jobs:
           python -m tools.pvl "$env:NEO_LEVELS_ARCHIVE" --out "$worldRoot" --report "$env:RUNNER_TEMP/monastery-geometry.json" --textures
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           "NEO_WORLD_CACHE=$worldRoot" >> $env:GITHUB_ENV
+      - name: Read original processed collision surfaces
+        run: |
+          Remove-Item "$env:RUNNER_TEMP/monastery-collision.json" -ErrorAction SilentlyContinue
+          python -m tools.oct "$env:NEO_LEVELS_ARCHIVE" --out "$env:NEO_WORLD_CACHE" --report "$env:RUNNER_TEMP/monastery-collision.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Prepare retained Godot tools
         run: ./tools/windows/PrepareGodot.ps1 -ToolsRoot "$env:LOCALAPPDATA/NeoWizardryBuildTools/godot-4.5.1-v1"
       - name: Build and verify original geometry in Godot
@@ -72,5 +78,6 @@ jobs:
           path: |
             ${{ runner.temp }}/monastery-report.json
             ${{ runner.temp }}/monastery-geometry.json
+            ${{ runner.temp }}/monastery-collision.json
           if-no-files-found: ignore
           retention-days: 7
