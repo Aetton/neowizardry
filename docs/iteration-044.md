@@ -17,3 +17,13 @@ The native surface test at 0x41cf90 skips flags 0x18 and treats 0x1080 as specia
 `python -m tools.oct /path/Wizardry8/Levels/LEVELS.SLF --out local/world --report local/collision-report.json` reads both originals before writing. The NWCOL001 sidecar contains PVL/OCT provenance hashes and static triangles using the same `(x,y,-z) * 0.0013` preview convention. Original-derived collision bytes remain private beside the original installation; only the metadata report is uploaded by Actions.
 
 Four initial synthetic tests cover exact layout/end boundaries, physical selection, binary provenance/coordinates and malformed inputs. Original-resource findings and controller validation follow below.
+
+## Original intake and walking preview
+
+Both installed OCT files pass the reader, including exact end-of-file. Monastery1 contains 12,667 physical vertices and 24,706 GameData surfaces; 24,702 static surfaces are selected, including 4,815 walkable faces. Monastery2 contains 7,290 vertices and 13,243 surfaces; 13,241 are selected, including 2,282 walkable faces. Four/two crossing/environment faces are excluded respectively. Original intake Actions run: https://github.com/Aetton/neowizardry/actions/runs/38972505566.
+
+The viewer loads a `.nwcol` sidecar next to its GLB and checks the embedded PVL SHA-256 against GLB provenance. Missing sidecars retain flight mode; mismatched or malformed sidecars fail loading. F aims a ray through the center crosshair, requires a native walkable surface and clear capsule space, then places the capsule above it. WASD walks, right drag looks, F returns to flight, and Home returns to the overview.
+
+This controller is authored Godot movement: a 1.6-unit capsule, radius 0.28, speed 3, gravity 9.8, floor snap 0.3 and maximum slope 60 degrees. Static triangle collision is two-sided. It does not reproduce the original solver, stair stepping, party formation, dynamic doors, environment transitions or encounters. These remain separate gates before monastery gameplay.
+
+The runtime collision smoke checks a native walkable floor ray, capsule placement and settling, and a blocking wall sweep with a clear retreat. Linux CI also runs the controller on an authored floor/wall fixture. Original-data smoke runs on the self-hosted Windows runner; only count/provenance metadata is uploaded.

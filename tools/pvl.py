@@ -152,11 +152,13 @@ def summary(level: Level, data: bytes, resource: str) -> dict:
                         'collision': False, 'native_spawn': False, 'gameplay_connected': False}}
 
 
-def glb(level: Level, textures: Textures | None = None) -> bytes:
+def glb(level: Level, textures: Textures | None = None, source_hash: str | None = None) -> bytes:
     binary = bytearray()
     doc = {'asset': {'version': '2.0', 'generator': 'NeoWizardry static PVL preview'},
            'scene': 0, 'scenes': [{'nodes': []}], 'nodes': [], 'meshes': [],
            'bufferViews': [], 'accessors': [], 'materials': []}
+    if source_hash is not None:
+        doc['extras'] = {'neoSourcePVL': source_hash}
     image_indices = {}
     if textures is not None:
         doc.update(images=[], textures=[], samplers=[{'wrapS': 10497, 'wrapT': 10497,
@@ -280,7 +282,7 @@ def export(archive: Path, out: Path, report: Path, *, textured: bool = False):
     if out.resolve().is_relative_to(archive.resolve().parent):
         raise FormatError('Preview destination must be outside the original Levels directory')
     texture_sets = [Textures(source, resource) if textured else None for _, _, _, resource in levels]
-    payloads = [glb(level, texture_set) for (_, level, _, _), texture_set in zip(levels, texture_sets)]
+    payloads = [glb(level, texture_set, hashlib.sha256(data).hexdigest()) for (_, level, data, _), texture_set in zip(levels, texture_sets)]
     out.mkdir(parents=True, exist_ok=True)
     for (number, level, data, resource), payload, texture_set in zip(levels, payloads, texture_sets):
         target = out / f'monastery{number}.glb'

@@ -1,6 +1,6 @@
 using Godot;
 
-// Research viewer only: static geometry has no collision, encounter or save semantics.
+// Research world: original static collision plus authored capsule walking; no encounters or world saves.
 public partial class WorldPreview : Node3D
 {
     private Camera3D _view = null!;
@@ -11,6 +11,10 @@ public partial class WorldPreview : Node3D
     private bool _smoke;
     private int _triangles;
     private double _textureTime;
+    private WorldCollision? _collision;
+    private WorldWalker? _walker;
+    private bool _walking, _enterWalk;
+    private Label _movementStatus = null!;
     private readonly List<TextureCycle> _textureCycles = [];
     private sealed record TextureCycle(BaseMaterial3D Material, Texture2D[] Frames, double Fps, bool Emissive)
     {
@@ -49,6 +53,15 @@ public partial class WorldPreview : Node3D
             var scene = document.GenerateScene(state) ?? throw new InvalidDataException("GLB has no scene");
             AddChild(scene);
             ConfigureTextures(state, args.Contains("--world-smoke"));
+            var collisionPath = Path.ChangeExtension(path,".nwcol");
+            if(System.IO.File.Exists(collisionPath))
+            {
+                using var metadata = System.Text.Json.JsonDocument.Parse(Godot.Json.Stringify(state.Json));
+                var root = metadata.RootElement;
+                var hash = root.TryGetProperty("extras",out var extras) && extras.TryGetProperty("neoSourcePVL",out var sourceHash)?sourceHash.GetString():null;
+                _collision = WorldCollision.Load(collisionPath,hash ?? "");AddChild(_collision);
+                _walker = new WorldWalker();AddChild(_walker);
+            }
             Aabb? bounds = null;
             int surfaces = 0, texturedSurfaces = 0;
             foreach(var mesh in Meshes(scene))
@@ -83,9 +96,14 @@ public partial class WorldPreview : Node3D
             var layer = new CanvasLayer();AddChild(layer);
             var label = new Label { Position = new Vector2(16, 16), Text =
                 $"{Path.GetFileNameWithoutExtension(path)} · {surfaces} surfaces · {_triangles:N0} triangles\n" +
-                $"TEXTURED WORLD PREVIEW · {texturedSurfaces} textured surfaces · {_textureCycles.Count} animated materials\nCollision / encounters pending\n" +
-                "WASD fly · Q/E down/up · right drag look · wheel speed · Home overview · Esc release" };
+                $"TEXTURED WORLD PREVIEW · {texturedSurfaces} textured surfaces · {_textureCycles.Count} animated materials\nStatic collision: {(_collision is null?"not loaded":_collision.Faces.Length.ToString("N0"))} · encounters pending\n" +
+                "WASD move · F walk at aimed floor / return to flight · Q/E fly vertically · right drag look · Home overview" };
             layer.AddChild(label);
+            _movementStatus = new Label { Position=new Vector2(16,112),Text="FLIGHT · aim at a floor and press F to walk" };
+            layer.AddChild(_movementStatus);
+            var crosshair=new Label { Text="+",MouseFilter=Control.MouseFilterEnum.Ignore };
+            crosshair.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);
+            crosshair.Position-=new Vector2(4,10);layer.AddChild(crosshair);
             _smoke = args.Contains("--world-smoke");
             if(_smoke)
             {
@@ -112,9 +130,80 @@ public partial class WorldPreview : Node3D
                 }
                 foreach(var animation in _textureCycles)animation.Check();
                 GD.Print($"PASS: textures {texturedSurfaces} surfaces, {_textureCycles.Count} animations; decoded pixel hashes verified");
-                GD.Print($"PASS: world preview {_triangles} triangles, {surfaces} surfaces, finite bounds; no collision");
-                Callable.From(()=>GetTree().Quit()).CallDeferred();
+                GD.Print($"PASS: world preview {_triangles} triangles, {surfaces} surfaces, finite bounds");
+                if(args.Contains("--world-collision-smoke"))Callable.From(CollisionSmoke).CallDeferred();
+                else Callable.From(()=>GetTree().Quit()).CallDeferred();
             }
+        }
+        catch(Exception error) { GD.PushError(error.ToString());GetTree().Quit(1); }
+    }
+
+    public override void _PhysicsProcess(double delta)
+    {
+        if(_view is null || _smoke)return;
+        if(_enterWalk)
+        {
+            _enterWalk=false;
+            if(_collision is null || _walker is null) { _movementStatus.Text="No original collision data loaded";return; }
+            var hit = _collision.Ray(_view.GlobalPosition,_view.GlobalPosition-_view.GlobalBasis.Z*_span*2);
+            if(!_collision.IsWalkableHit(hit)) { _movementStatus.Text="Aim at a walkable floor, then press F";return; }
+            var center=hit["position"].AsVector3()+Vector3.Up*(WorldWalker.Height/2+0.05f);
+            if(!_walker.CanStand(center)) { _movementStatus.Text="Not enough room for the walking capsule";return; }
+            _walker.GlobalPosition=center;_walker.Velocity=Vector3.Zero;_walking=true;
+        }
+        if(!_walking || _walker is null)return;
+        var direction = Vector3.Zero;
+        if(DisplayServer.WindowIsFocused())
+        {
+            var input=new Vector3((Input.IsPhysicalKeyPressed(Key.D)?1:0)-(Input.IsPhysicalKeyPressed(Key.A)?1:0),0,
+                (Input.IsPhysicalKeyPressed(Key.S)?1:0)-(Input.IsPhysicalKeyPressed(Key.W)?1:0));
+            direction=new Basis(Vector3.Up,_view.GlobalRotation.Y)*input.Normalized();
+        }
+        _walker.Step(delta,direction);
+        _view.GlobalPosition=_walker.GlobalPosition+Vector3.Up*WorldWalker.EyeOffset;
+        _movementStatus.Text=_walker.IsOnFloor()?"WALKING · F returns to flight":"AIRBORNE · F returns to flight";
+    }
+
+    private async void CollisionSmoke()
+    {
+        try
+        {
+            if(_collision is null || _walker is null)throw new InvalidDataException("Original collision data missing");
+            var args=OS.GetCmdlineUserArgs();var at=Array.IndexOf(args,"--world-colliders");
+            if(at<0 || at+1>=args.Length || int.Parse(args[at+1])!=_collision.Faces.Length)
+                throw new InvalidDataException("Collision surface count mismatch");
+            await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);
+            await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);
+            WorldCollision.Face? floor=null;
+            foreach(var face in _collision.Faces.Where(f=>f.Walkable && f.Normal.Y>0.99f && f.AreaSquared>0.1f).OrderByDescending(f=>f.AreaSquared).Take(256))
+            {
+                var hit=_collision.Ray(face.Center+Vector3.Up*0.15f,face.Center-Vector3.Up*0.15f);
+                if(_collision.IsWalkableHit(hit) && _walker.CanStand(face.Center+Vector3.Up*(WorldWalker.Height/2+0.05f))) { floor=face;break; }
+            }
+            if(floor is null)throw new InvalidDataException("No clear original floor found for capsule test");
+            _walker.GlobalPosition=floor.Center+Vector3.Up*(WorldWalker.Height/2+0.05f);
+            _walker.Velocity=Vector3.Zero;
+            for(int step=0;step<45;step++)
+            {
+                _walker.Step(1.0/60,Vector3.Zero);
+                await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);
+            }
+            if(!_walker.IsOnFloor() || Math.Abs(_walker.GlobalPosition.Y-floor.Center.Y-WorldWalker.Height/2)>0.12f)
+                throw new InvalidDataException("Capsule did not settle on original floor");
+            bool blocked=false;
+            foreach(var face in _collision.Faces.Where(f=>Math.Abs(f.Normal.Y)<0.05f && f.Normal.LengthSquared()>0.5f && f.AreaSquared>0.1f).OrderByDescending(f=>f.AreaSquared).Take(256))
+            {
+                var normal=face.Normal.Normalized();
+                var center=face.Center+normal*(WorldWalker.Radius+0.15f);
+                if(!_walker.CanStand(center))continue;
+                using var contact=new KinematicCollision3D();
+                var transform=new Transform3D(Basis.Identity,center);
+                if(_walker.TestMove(transform,-normal*(WorldWalker.Radius+0.4f),contact) &&
+                   contact.GetNormal().Dot(normal)>0.8f && !_walker.TestMove(transform,normal*0.1f)) { blocked=true;break; }
+            }
+            if(!blocked)throw new InvalidDataException("Capsule wall sweep did not find a blocking original wall");
+            GD.Print($"PASS: collision {_collision.Faces.Length} static surfaces; native walkable floor, settled capsule and blocking wall sweep");
+            GetTree().Quit();
         }
         catch(Exception error) { GD.PushError(error.ToString());GetTree().Quit(1); }
     }
@@ -183,6 +272,7 @@ public partial class WorldPreview : Node3D
 
     private void Home()
     {
+        _walking=false;
         _view.Position = _center + new Vector3(0.55f, 0.65f, 0.8f) * _span;
         _view.LookAt(_center);
     }
@@ -204,7 +294,12 @@ public partial class WorldPreview : Node3D
         }
         if(input is InputEventKey key && key.Pressed)
         {
-            if(key.Keycode == Key.Home)Home();
+            if(key.Keycode == Key.Home) { Home();_movementStatus.Text="FLIGHT · overview"; }
+            if(key.Keycode == Key.F)
+            {
+                if(_walking) { _walking=false;_movementStatus.Text="FLIGHT"; }
+                else _enterWalk=true;
+            }
             if(key.Keycode == Key.Escape) { _looking = false;Input.MouseMode = Input.MouseModeEnum.Visible; }
         }
     }
@@ -214,7 +309,7 @@ public partial class WorldPreview : Node3D
         if(_view is null || _smoke)return;
         _textureTime += delta;
         foreach(var animation in _textureCycles)animation.Apply(_textureTime);
-        if(!DisplayServer.WindowIsFocused())return;
+        if(_walking || !DisplayServer.WindowIsFocused())return;
         var direction = new Vector3((Input.IsPhysicalKeyPressed(Key.D)?1:0)-(Input.IsPhysicalKeyPressed(Key.A)?1:0),
             (Input.IsPhysicalKeyPressed(Key.E)?1:0)-(Input.IsPhysicalKeyPressed(Key.Q)?1:0),
             (Input.IsPhysicalKeyPressed(Key.S)?1:0)-(Input.IsPhysicalKeyPressed(Key.W)?1:0));
