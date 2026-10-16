@@ -5,9 +5,9 @@ namespace NeoWizardry.Core;
 
 // Authored grid laboratory. Coordinates, reach, movement, AI and sight are NOT recovered Wiz8 rules.
 public readonly record struct BattleCell(int X,int Y);
-public sealed record TacticalOpponent(Enemy Actor,MeleeCharacterFacts Facts,string WeaponId,RestoredMagicFacts? Magic=null);
+public sealed record TacticalOpponent(Enemy Actor,MeleeCharacterFacts? Facts,string? WeaponId,RestoredMagicFacts? Magic=null);
 public sealed record TacticalField(int Width,int Height,ImmutableDictionary<string,BattleCell> Positions,
-    ImmutableArray<BattleCell> Walls,ImmutableArray<TacticalOpponent> Opponents,ImmutableDictionary<string,EnemyBrain>? Brains=null);
+    ImmutableArray<BattleCell> Walls,ImmutableArray<TacticalOpponent> Opponents,ImmutableDictionary<string,EnemyBrain>? Brains=null,ImmutableDictionary<string,MonsterCombatant>? Monsters=null);
 public enum TacticalAction { Attack, Move, Wait, Cast }
 public sealed record TacticalOrder(string ActorId,TacticalAction Action,string? TargetId=null,BattleCell? Destination=null,RestoredCastOrder? Spell=null);
 
@@ -21,14 +21,16 @@ public static class TacticalCombat
     {
         var f=state.Melee!.Field!;
         if(f.Width is <4 or >16 || f.Height is <4 or >16 || f.Positions is null || f.Walls.IsDefault || f.Opponents.IsDefault || f.Opponents.Length>7 ||
-            f.Opponents.Any(o=>o is null || o.Actor is null || o.Facts is null || o.Actor.Hp<0 || o.Actor.Speed<0 || o.Actor.Power!=0 || o.Actor.XpReward<0 || o.Actor.LootItemId is not null || o.Actor.Effects is {Count:>0} || o.Facts.Initiative is null) ||
-            state.Melee.Opponent.Initiative is null || state.Melee.Party.Values.Any(p=>p.Initiative is null))throw new InvalidDataException("Invalid tactical actors or board");
+            f.Opponents.Any(o=>o is null || o.Actor is null || f.Monsters is null && o.Facts is null || o.Actor.Hp<0 || o.Actor.Speed<0 || o.Actor.Power!=0 || o.Actor.XpReward<0 || o.Actor.LootItemId is not null || o.Actor.Effects is {Count:>0} || f.Monsters is null && o.Facts!.Initiative is null) ||
+            f.Monsters is null && state.Melee.Opponent?.Initiative is null || state.Melee.Party.Values.Any(p=>p.Initiative is null))throw new InvalidDataException("Invalid tactical actors or board");
         var ids=state.Party.Select(h=>h.Id).Concat(Enemies(state).Select(e=>e.Id)).ToArray();
         if(ids.Any(string.IsNullOrWhiteSpace) || ids.Distinct().Count()!=ids.Length || f.Positions.Count!=ids.Length || ids.Any(id=>!f.Positions.ContainsKey(id)) ||
             f.Positions.Values.Any(p=>!Inside(f,p)) || f.Walls.Distinct().Count()!=f.Walls.Length || f.Walls.Any(p=>!Inside(f,p)) ||
             f.Positions.Any(p=>f.Walls.Contains(p.Value)) || ids.Where(id=>Alive(state,id)).Select(id=>f.Positions[id]).Distinct().Count()!=ids.Count(id=>Alive(state,id)))
             throw new InvalidDataException("Invalid tactical positions");
         EnemyAi.Validate(state);
+        MonsterCombat.Validate(state);
+        if(f.Monsters is not null)return;
         foreach(var o in f.Opponents)
         {
             if(state.Items!.Items.SingleOrDefault(i=>i.Id==o.WeaponId) is not {Quantity:1} w || w.Location!=(state.RewardGranted?Inventory.BagLocation:new ItemLocation(o.Actor.Id,Equipment.WeaponSlot)))throw new InvalidDataException("Missing tactical opponent weapon");
@@ -36,7 +38,7 @@ public static class TacticalCombat
             if(o.Magic is not null)RestoredMagic.Validate(o.Magic);
         }
     }
-    internal static MeleeCharacterFacts Facts(GameState s,string id)=>s.Melee!.Party.GetValueOrDefault(id)??(id==s.Enemy.Id?s.Melee.Opponent:s.Melee.Field!.Opponents.Single(o=>o.Actor.Id==id).Facts);
+    internal static MeleeCharacterFacts Facts(GameState s,string id)=>MonsterCombat.Actor(s,id) is not null?throw new InvalidOperationException("Monster has no character-class facts"):s.Melee!.Party.GetValueOrDefault(id)??(id==s.Enemy.Id?s.Melee.Opponent!:s.Melee.Field!.Opponents.Single(o=>o.Actor.Id==id).Facts!);
     internal static ItemDefinition Weapon(GameState s,string id,ItemCatalog c)=>s.Melee!.Field!.Opponents.FirstOrDefault(o=>o.Actor.Id==id) is {} o
         ?MeleeCombat.OrdinaryWeapon(c.Find(s.Items!.Items.Single(i=>i.Id==o.WeaponId).DefinitionId)):MeleeCombat.Weapon(s,id,c);
     internal static RestoredMagicFacts MagicFacts(GameState s,string id)=>s.Melee!.Magic?.GetValueOrDefault(id)??s.Melee.Field!.Opponents.Single(o=>o.Actor.Id==id).Magic??throw new InvalidOperationException("Missing target magic facts");
@@ -109,11 +111,17 @@ public static class TacticalCombat
         // Validate every weapon before consuming RNG, even if it will only be used for defense.
         var ids=state.Party.Where(h=>h.Hp>0 && !h.Captive).Select(h=>h.Id).Concat(Enemies(state).Where(e=>e.Hp>0).Select(e=>e.Id)).ToArray();
         if(state.Party.Any(h=>h.Effects is {Count:>0}) || state.Enemy.Effects is {Count:>0})throw new InvalidOperationException("Synthetic effects cannot enter tactical combat");
-        foreach(var id in ids)_=MeleeCombat.Prepare(Facts(state,id),Weapon(state,id,catalog));
+        foreach(var id in ids)if(MonsterCombat.Actor(state,id) is null)_=MeleeCombat.Prepare(Facts(state,id),Weapon(state,id,catalog));
         var s=state;uint rng=s.RandomState;var events=new List<string>();
         var queue=new List<(string Id,int Time,int Remaining)>();
+        var monsterBudgets=new Dictionary<string,MonsterAttackBudget>();
         foreach(var id in ids)
         {
+            if(MonsterCombat.Actor(s,id) is {} native)
+            {
+                var d=MonsterCombat.Compile(native.Record);monsterBudgets[id]=OriginalMonsterAttackSequence.Start(d.Groups,d.MaximumSwings);
+                queue.Add((id,OriginalInitiative.FirstTime(d.Initiative,null,Dice.Roll(ref rng,4)-1),d.Groups));continue;
+            }
             var f=Facts(s,id);var w=Weapon(s,id,catalog);bool other=Enemies(s).Any(e=>e.Id==id);
             if(!other && !selected.ContainsKey(id))
             {
@@ -161,14 +169,46 @@ public static class TacticalCombat
                 events.Add($"{turn.Id} → {target}: {c.Spell.Name} PL{c.Power}, {outcome}, amount {amount}, mana {c.ManaCost}");continue;
             }
             if(order.TargetId is not {} targetId || !Alive(s,targetId) || !InReach(s,turn.Id,targetId)){events.Add("Attack cancelled: target dead or out of reach");continue;}
+            if(MonsterCombat.Actor(s,turn.Id) is {} monster)
+            {
+                var d=MonsterCombat.Compile(monster.Record);
+                var group=OriginalMonsterAttackSequence.BeginGroup(monsterBudgets[turn.Id],true,Dice.Exclusive(ref rng,d.MaximumSwings));var budget=group.State;
+                while(budget.SwingsRemaining>0 && Alive(s,targetId))
+                {
+                    var df=Facts(s,targetId);var armor=OriginalDefenseAdapter.Prepare(new(MainHand:Weapon(s,targetId,catalog))) with {Body=df.BodyArmor};
+                    var defense=OriginalCharacterDefense.Build(new(df.Attributes.Speed,df.Stealth,0,0,false),armor,new(0,0,false,false,false),new(0,0,0,false));
+                    var location=OriginalCharacterDefense.SelectLocation(Dice.Roll(ref rng,100)-1);
+                    var thresholds=OriginalCharacterDefense.Against(defense,location,OriginalAttackMode.Thrust,new(false,false,false));
+                    var input=new MonsterPhysicalScoreInput(d.Rating,0,0,d.Attributes,df.Attributes,OriginalAttackMode.Thrust,thresholds.Hit,thresholds.Penetration,0,MonsterAttackFatiguePolicy.FullHitOnly);
+                    var scores=OriginalMonsterScores.Build(input);int contact=Dice.Roll(ref rng,100)-1;var outcome=OriginalMonsterStrike.Contact(scores,contact);
+                    int[] draws=outcome==PhysicalStrikeOutcome.Damage?Enumerable.Range(0,d.Damage.Dice).Select(_=>Dice.Roll(ref rng,d.Damage.Sides)-1).ToArray():[];
+                    var strike=OriginalMonsterStrike.Resolve(input,d.Damage,contact,draws);int amount=Math.Min(Hp(s,targetId),strike.Damage?.Damage??0);
+                    s=WithHp(s,targetId,-amount);budget=OriginalMonsterAttackSequence.CompleteSwing(budget,!Alive(s,targetId));
+                    events.Add($"{turn.Id} ({d.Label}) → {targetId} · Thrust · {location}: {strike.Outcome}, {amount} damage [d100 {contact+1}; hit {scores.HitScore}; pen {scores.PenetrationScore}]");
+                }
+                monsterBudgets[turn.Id]=budget;
+                if(turn.Remaining>1 && Alive(s,turn.Id) && OriginalInitiative.NextAttackTime(turn.Time,0,turn.Time,turn.Remaining-1) is int time)queue.Add((turn.Id,time,turn.Remaining-1));
+                continue;
+            }
             var facts=Facts(s,turn.Id);var weapon=Weapon(s,turn.Id,catalog);var prepared=MeleeCombat.Prepare(facts,weapon);
             int swings=OriginalCombatRules.AllocateSwings(prepared.Budget.MaximumSwings,weapon.BonusSwings,Dice.Roll(ref rng,prepared.Budget.MaximumSwings)-1).AllocatedSwings;
             for(int n=0;n<swings && Alive(s,targetId);n++)
             {
-                var df=Facts(s,targetId);var armor=OriginalDefenseAdapter.Prepare(new(MainHand:Weapon(s,targetId,catalog))) with {Body=df.BodyArmor};
-                var defense=OriginalCharacterDefense.Build(new(df.Attributes.Speed,df.Stealth,0,0,false),armor,new(0,0,false,false,false),new(0,0,0,false));
-                var loc=OriginalCharacterDefense.SelectLocation(Dice.Roll(ref rng,100)-1);var thresholds=OriginalCharacterDefense.Against(defense,loc,OriginalAttackMode.Swing,new(false,false,false));
-                var input=new OrdinaryPhysicalScoreInput(prepared.Budget.BaseAttackRating,prepared.Hand.ToHit,0,0,0,facts.Attributes,df.Attributes,OriginalAttackMode.Swing,thresholds.Hit,thresholds.Penetration,ModernWeapon:prepared.Weapon.ModernWeapon);
+                TargetDefenseThresholds thresholds;PhysicalCombatAttributes targetAttributes;string loc;
+                if(MonsterCombat.Actor(s,targetId) is {} targetMonster)
+                {
+                    var d=MonsterCombat.Compile(targetMonster.Record);var zone=OriginalMonsterDefense.SelectLocation(d.Defense.LocationWeights,Dice.Roll(ref rng,100)-1);
+                    thresholds=OriginalMonsterDefense.Against(d.Defense,new(0,0,0,0,false),zone.Location,OriginalAttackMode.Swing,new(false,false,false,false));
+                    targetAttributes=d.Attributes;loc=zone.Location.ToString();
+                }
+                else
+                {
+                    var df=Facts(s,targetId);var armor=OriginalDefenseAdapter.Prepare(new(MainHand:Weapon(s,targetId,catalog))) with {Body=df.BodyArmor};
+                    var defense=OriginalCharacterDefense.Build(new(df.Attributes.Speed,df.Stealth,0,0,false),armor,new(0,0,false,false,false),new(0,0,0,false));
+                    var location=OriginalCharacterDefense.SelectLocation(Dice.Roll(ref rng,100)-1);thresholds=OriginalCharacterDefense.Against(defense,location,OriginalAttackMode.Swing,new(false,false,false));
+                    targetAttributes=df.Attributes;loc=location.ToString();
+                }
+                var input=new OrdinaryPhysicalScoreInput(prepared.Budget.BaseAttackRating,prepared.Hand.ToHit,0,0,0,facts.Attributes,targetAttributes,OriginalAttackMode.Swing,thresholds.Hit,thresholds.Penetration,ModernWeapon:prepared.Weapon.ModernWeapon);
                 var scores=OriginalPhysicalScores.OrdinaryCharacter(input);int contact=Dice.Roll(ref rng,100)-1;
                 var outcome=OriginalMeleeStrike.Contact(scores,contact);int[] draws=outcome==PhysicalStrikeOutcome.Damage?Enumerable.Range(0,prepared.Weapon.Damage.Dice).Select(_=>Dice.Roll(ref rng,prepared.Weapon.Damage.Sides)-1).ToArray():[];
                 var strike=OriginalMeleeStrike.Resolve(input,prepared.Weapon.Damage,prepared.Hand.DamagePercent,0,0,contact,draws);int amount=Math.Min(Hp(s,targetId),strike.Damage?.Damage??0);

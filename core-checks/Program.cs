@@ -75,7 +75,7 @@ for(int size=1;size<=8;size++)
 }
 Throws(() => Game.Create(0), "No empty party");
 Throws(() => Game.Create(9), "UI limit enforced");
-Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 6", "\"Schema\": 99")), "Reject unknown save version");
+Throws(() => Game.Load(Game.Save(solo).Replace("\"Schema\": 7", "\"Schema\": 99")), "Reject unknown save version");
 Throws(() => Game.Validate(solo with { Party = [solo.Party[0], solo.Party[0]] }), "Reject duplicate IDs");
 Throws(() => Game.Escape(solo), "Escape requires capture");
 var fast = solo with { Party = [solo.Party[0] with { Speed = 0, Hp = 1 }] };
@@ -356,6 +356,7 @@ checks+=ProjectileExecutionChecks.Run(restricted);
 checks+=MeleeEncounterChecks.Run();
 checks+=TacticalCombatChecks.Run();
 checks+=EnemyAiChecks.Run();
+checks+=MonsterCombatChecks.Run();
 checks+=RestoredRoundChecks.Run();
 checks+=MonsterCatalogChecks.Run();
 if(args.Length==2 && args[0]=="--fixture")
@@ -371,7 +372,7 @@ if(args.Length==2 && args[0]=="--fixture")
 }
 else if(args.Length==2 && args[0]=="--monsters")
 {
-    var monsters=MonsterCatalog.Parse(File.ReadAllText(args[1]));checks+=MonsterCatalogChecks.Run(monsters);
+    var monsters=MonsterCatalog.Parse(File.ReadAllText(args[1]));checks+=MonsterCatalogChecks.Run(monsters);checks+=MonsterCombatChecks.Run(monsters);
     Console.WriteLine($"PASS: {monsters.Count} native monster reference records");
 }
 else if(args.Length==2 && args[0]=="--spell-formulas")

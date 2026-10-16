@@ -23,7 +23,7 @@ static class RestoredRoundChecks
         Check(OriginalInitiative.NextAttackTime(60,0,60,2)==73 && OriginalInitiative.NextAttackTime(73,0,73,1)==86,"Remaining attack spacing and end-of-round boundary");
         var cat=MeleeTraining.Catalog();var state=MeleeTraining.Create(2,cat);
         Check(Game.Save(Game.Load(Game.Save(state),cat))==Game.Save(state),"Initiative facts persist");
-        var legacy=state with {Melee=state.Melee! with {Party=state.Melee.Party.ToImmutableDictionary(x=>x.Key,x=>x.Value with {Initiative=null}),Opponent=state.Melee.Opponent with {Initiative=null}}};
+        var legacy=state with {Melee=state.Melee! with {Party=state.Melee.Party.ToImmutableDictionary(x=>x.Key,x=>x.Value with {Initiative=null}),Opponent=state.Melee.Opponent! with {Initiative=null}}};
         Check(Game.Attack(legacy,cat,3).State.Round==1,"Old authored encounter keeps its stored speed policy");
         bool interleaved=false;
         for(uint seed=1;seed<=30;seed++)
@@ -68,7 +68,7 @@ static class RestoredRoundChecks
         var tampered=spells with {Spells=spells.Spells.Replace(source,source with {Cost=0})};
         Reject(()=>MeleeCombat.Advance(state,catalog,3,[command],tampered),"Pinned record hash cannot authenticate forged typed spell fields");
         bool skipped=false;
-        var lethal=state with {Party=state.Party.SetItem(0,state.Party[0] with {Hp=1}),Melee=state.Melee! with {Opponent=state.Melee.Opponent with {Initiative=new(255,true,125)}}};
+        var lethal=state with {Party=state.Party.SetItem(0,state.Party[0] with {Hp=1}),Melee=state.Melee! with {Opponent=state.Melee.Opponent! with {Initiative=new(255,true,125)}}};
         for(uint seed=1;seed<=40;seed++)
         {
             var round=MeleeCombat.Advance(lethal with {RandomState=seed},catalog,3,[command],spells);

@@ -141,3 +141,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 036 — enemy behavior profiles
 
 [Iteration 036](iteration-036.md) adds four authored tactical behavior profiles, target perception with expiring last-position memory, allied target distribution, wounded-target selection, low-HP retreat, same-round retargeting between attack groups, explanations/profile selection in the UI and schema-six brain persistence. Existing schema-five tactical saves keep legacy pursuit. Original monster actor import and native AI recovery remain open; training characters exercise the new controller without inventing monster stats. TOC-41/42/43 remain in progress.
+
+
+## Iteration 037 — reviewed original monster actors
+
+[Iteration 037](iteration-037.md) connects Dusk Bat and Shrieker Bat to an opt-in physical monster encounter: native HP dice, neutral effective attributes, initiative, group/swing budgets, intrinsic Thrust damage and seven-zone defense. Actors carry private validated record snapshots, no fake class/weapon facts, and use the existing authored tactical AI. Schema 7 preserves complete continuation; public tests use an authored creature. Other definitions, low-score fumbles, target magic resistance/level facts, status/special attacks, native AI, XP and loot remain open. TOC-41/42/43 remain in progress.

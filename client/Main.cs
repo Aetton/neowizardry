@@ -171,7 +171,7 @@ public partial class Main : Node3D
         {
             shown=_monsterCatalog.Monsters.Where(m=>m.TextSlots.Any(t=>t.Contains(search.Text,StringComparison.OrdinalIgnoreCase))).ToArray();
             list.Clear();foreach(var m in shown)list.AddItem($"{m.Id}: {m.Label}");
-            detail.Text=$"{shown.Length} / {_monsterCatalog.Count} definitions. Verified text and defense fields; executable monster actors pending.";
+            detail.Text=$"{shown.Length} / {_monsterCatalog.Count} definitions. Verified text/defense; {shown.Count(MonsterCombat.Supported)} reviewed physical records can enter the monster battle.";
         }
         search.TextChanged+=_=>Filter();list.ItemSelected+=i=>{var m=shown[(int)i];detail.Text=string.Join(" · ",m.TextSlots)+$"\nID {m.Id} · record {m.RecordSha256[..12]} · 663 native bytes preserved."+(m.Defense is { } d?$"\nAC {d.ArmorClass} · zones {string.Join("/",d.LocationWeights)}\nZone armor {string.Join("/",d.LocationArmor)} · mode armor {string.Join("/",d.ModeArmor)}":"");};
         Filter();dialog.PopupCentered(new Vector2I(400,400));
@@ -330,8 +330,16 @@ public partial class Main : Node3D
         var size=new OptionButton();for(int i=1;i<=8;i++)size.AddItem($"{i} adventurer{(i==1?"":"s")}");size.Select(_state.Party.Length-1);body.AddChild(size);
         Button(body,"New party",()=>Try(()=>{NewParty(size.Selected+1);dialog.QueueFree();}));
         var opponents=new OptionButton();for(int n=1;n<=8;n++)opponents.AddItem($"{n} opponents");opponents.Select(3);body.AddChild(opponents);
-        Button(body,"New tactical battle",()=>Try(()=>{NewTactical(size.Selected+1,opponents.Selected+1);dialog.QueueFree();ShowTactics();}));
+        Button(body,"New tactical battle",()=>Try(()=>{NewTactical(size.Selected+1,opponents.Selected+1);dialog.Hide();dialog.QueueFree();ShowTactics();}));
         Button(body,"Tactical field",ShowTactics);
+        var nativeOptions=_monsterCatalog?.Monsters.Where(MonsterCombat.Supported).ToArray()??[];
+        var monster=new OptionButton();monster.AddItem("Practice creature (synthetic)");foreach(var m in nativeOptions)monster.AddItem(m.Label);
+        int dusk=Array.FindIndex(nativeOptions,m=>m.Id==282);if(dusk>=0)monster.Select(dusk+1);body.AddChild(monster);
+        Button(body,"New monster battle",()=>Try(()=>
+        {
+            NewMonsterBattle(size.Selected+1,opponents.Selected+1,monster.Selected==0?MonsterCombat.FixtureCatalog():_monsterCatalog!,monster.Selected==0?0:nativeOptions[monster.Selected-1].Id);
+            dialog.Hide();dialog.QueueFree();ShowTactics();
+        }));
         Button(body,"Spell sandbox",()=>Try(()=>{NewParty(size.Selected+1,false);dialog.QueueFree();}));
         Button(body,"Save",Save);Button(body,"Load",()=>{Load();size.Select(_state.Party.Length-1);});
         Button(body,"Monster reference",ShowMonsters);Button(body,"Spell reference",ShowGrimoire);Button(body,"Combat facts",ShowCombatFacts);
@@ -461,11 +469,16 @@ public partial class Main : Node3D
         var scroll=new ScrollContainer {CustomMinimumSize=new(360,280)};dialog.AddChild(scroll);
         var text=new Label {Name="CombatFactsText",AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(340,0),SizeFlagsHorizontal=Control.SizeFlags.ExpandFill};scroll.AddChild(text);
         var lines=new List<string>{"Authored training combatants; recovered ordinary melee formulas.\nRecovered initiative for new parties; target selection is a training rule.\n"};
-        foreach(var (name,facts) in _state.Party.Select(h=>(h.Name,encounter.Party[h.Id])).Append((_state.Enemy.Id,encounter.Opponent)))
+        foreach(var (name,facts) in _state.Party.Select(h=>(h.Name,encounter.Party[h.Id])).Concat(encounter.Opponent is {} opposing?new[]{(_state.Enemy.Id,opposing)}:[]))
             lines.Add($"{name}\nSTR {facts.Strength} · INT {facts.Attributes.Intelligence} · DEX {facts.Attributes.Dexterity} · SPD {facts.Attributes.Speed} · SEN {facts.Attributes.Senses}\n"+
                 $"Combat {facts.CombatSkill} · weapon skill {facts.WeaponSkill} · stealth {facts.Stealth}\n"+
                 string.Join(", ",facts.History.Select(h=>$"{h.Profession} level {h.Levels}"))+"\nBody protection: "+
                 $"{facts.BodyArmor.Head}/{facts.BodyArmor.Torso}/{facts.BodyArmor.Legs}/{facts.BodyArmor.Hands}/{facts.BodyArmor.Feet}\n");
+        if(encounter.Field?.Monsters is {} monsters)
+            foreach(var pair in monsters)
+            {
+                var m=MonsterCombat.Compile(pair.Value.Record);lines.Add($"{pair.Key}: {m.Label} · native ID {pair.Value.Record.DefinitionId}\nHP roll {m.Health.Constant}+{m.Health.Dice}d{m.Health.Sides} → max {pair.Value.MaxHp}\nINT/DEX/SPD/SEN {m.Attributes.Intelligence}/{m.Attributes.Dexterity}/{m.Attributes.Speed}/{m.Attributes.Senses}\nInitiative {m.Initiative} · groups {m.Groups} · max swings {m.MaximumSwings}\nThrust rating {m.Rating}, damage {m.Damage.Constant}+{m.Damage.Dice}d{m.Damage.Sides} · AC {m.Defense.ArmorClass}\nNeutral physical slice; XP/loot and magic not connected.\n");
+            }
         text.Text=string.Join("\n",lines);dialog.PopupCentered(new Vector2I(440,400));
     }
 
@@ -857,7 +870,7 @@ public partial class Main : Node3D
             if(_monsterCatalog is not null){_monsterCatalog.Validate();ShowMonsters();GetChildren().OfType<AcceptDialog>().Last().Free();GD.Print($"PASS: monster reference {_monsterCatalog.Count} records and browser");}
             if(_catalogRequested && _catalog is null) throw new Exception("Requested smoke catalog was not loaded");
             _player.Position=new(0,0.9f,-4);
-            CheckTacticalInterface();
+            CheckTacticalInterface();CheckMonsterInterface();
             var expectedMelee=Game.Attack(_state,_catalog,_player.Position.DistanceTo(_enemyPosition));
             Attack();
             if(_state.Melee is null || _state.Round!=1 || Game.Save(_state)!=Game.Save(expectedMelee.State) ||

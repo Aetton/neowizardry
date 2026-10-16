@@ -58,7 +58,7 @@ static class EnemyAiChecks
         var waiting=EnemyAi.Decide(blocked,id);Check(waiting.Brain.Mode==EnemyAiMode.Blocked && waiting.Order.Action==TacticalAction.Wait,"Unreachable remembered position produces bounded wait");
         Check(EnemyAi.Decide(retreat with {Enemy=retreat.Enemy with {Hp=0}},id).Order.Action==TacticalAction.Wait,"Dead enemy emits no action");
         var legacy=JsonNode.Parse(Game.Save(MeleeTraining.CreateTactical(2,2,catalog)))!;legacy["Schema"]=5;legacy["Melee"]!["Field"]!.AsObject().Remove("Brains");
-        var old=Game.Load(legacy.ToJsonString(),catalog);Check(old.Schema==6 && old.Melee!.Field!.Brains is null,"Schema-five tactical save retains legacy pursuit without fabricated brains");
+        var old=Game.Load(legacy.ToJsonString(),catalog);Check(old.Schema==Game.SaveSchema && old.Melee!.Field!.Brains is null,"Schema-five tactical save retains legacy pursuit without fabricated brains");
         var forged=JsonNode.Parse(Game.Save(s))!;forged["Schema"]=5;Reject(()=>Game.Load(forged.ToJsonString(),catalog),"Old save schema cannot carry new brain state");
         var brain=s.Melee!.Field!.Brains![id];
         foreach(var bad in new[]{brain with {MaxHp=1},brain with {Profile=brain.Profile with {Vision=0}},brain with {Profile=brain.Profile with {Tactic=(EnemyTactic)90}},brain with {TargetId="hero-1"},brain with {TargetId="unknown",LastSeen=new(1,1),SeenRound=0},brain with {TargetId="hero-1",LastSeen=new(1,1),SeenRound=1}})
@@ -70,7 +70,7 @@ static class EnemyAiChecks
         for(uint seed=1;seed<=80 && !retargeted;seed++)
         {
             var duel=MeleeTraining.CreateTactical(2,1,catalog);duel=TacticalCombatChecks.Place(duel,(id,4,1),("hero-1",3,0),("hero-2",3,2));
-            duel=duel with {RandomState=seed,Party=duel.Party.SetItem(0,duel.Party[0] with {Hp=1}),Melee=duel.Melee! with {Opponent=duel.Melee!.Opponent with {Attributes=duel.Melee.Opponent.Attributes with {Dexterity=125,Speed=125,Senses=125},CombatSkill=125,WeaponSkill=125}}};
+            duel=duel with {RandomState=seed,Party=duel.Party.SetItem(0,duel.Party[0] with {Hp=1}),Melee=duel.Melee! with {Opponent=duel.Melee!.Opponent! with {Attributes=duel.Melee.Opponent!.Attributes with {Dexterity=125,Speed=125,Senses=125},CombatSkill=125,WeaponSkill=125}}};
             var round=TacticalCombat.Advance(duel,catalog,[new("hero-1",TacticalAction.Wait),new("hero-2",TacticalAction.Wait)]);
             retargeted=round.State.Party[0].Hp==0 && round.Events.Any(e=>e.StartsWith(id+" → hero-2"));
         }

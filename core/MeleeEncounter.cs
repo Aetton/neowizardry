@@ -8,7 +8,7 @@ namespace NeoWizardry.Core;
 public sealed record MeleeCharacterFacts(int Strength,PhysicalCombatAttributes Attributes,int CombatSkill,int WeaponSkill,
     ImmutableArray<ProfessionLevels> History,int Stealth,BodyArmor BodyArmor,CharacterInitiativeFacts? Initiative=null);
 public sealed record MeleeEncounter(string Ruleset,string ItemDatabaseHash,ImmutableDictionary<string,MeleeCharacterFacts> Party,
-    MeleeCharacterFacts Opponent,string? OpponentWeaponId,ImmutableDictionary<string,RestoredMagicFacts>? Magic=null,TacticalField? Field=null);
+    MeleeCharacterFacts? Opponent,string? OpponentWeaponId,ImmutableDictionary<string,RestoredMagicFacts>? Magic=null,TacticalField? Field=null);
 
 public static class MeleeCombat
 {
@@ -23,7 +23,13 @@ public static class MeleeCombat
             state.ProjectileActions is {Count:>0})
             throw new InvalidDataException("Invalid or mixed melee encounter");
         if(encounter.Field is not null)TacticalCombat.ValidateStructure(state);
-        foreach(var facts in encounter.Party.Values.Append(encounter.Opponent).Concat(encounter.Field?.Opponents.Select(o=>o.Facts)??[]))ValidateFacts(facts);
+        if(encounter.Field?.Monsters is not null)
+        {
+            foreach(var facts in encounter.Party.Values){ValidateFacts(facts);if(facts.Initiative is null)throw new InvalidDataException("Monster battle needs party initiative");}
+            return;
+        }
+        if(encounter.Opponent is null)throw new InvalidDataException("Missing opposing character facts");
+        foreach(var facts in encounter.Party.Values.Append(encounter.Opponent).Concat(encounter.Field?.Opponents.Select(o=>o.Facts!)??[]))ValidateFacts(facts);
         var initiativeCount=encounter.Party.Values.Append(encounter.Opponent).Count(f=>f.Initiative is not null);
         if(initiativeCount!=0 && initiativeCount!=state.Party.Length+1)throw new InvalidDataException("Mixed initiative profiles");
         if(encounter.Magic is { } magic)
@@ -101,15 +107,15 @@ public static class MeleeCombat
             if(!casts.ContainsKey(h.Id))_=Prepare(encounter.Party[h.Id],Weapon(state,h.Id,catalog));
         }
         if(state.Enemy.Effects is {Count:>0})throw new InvalidOperationException("Synthetic enemy effects cannot enter the restored melee encounter");
-        _=Prepare(encounter.Opponent,Weapon(state,state.Enemy.Id,catalog));
+        _=Prepare(encounter.Opponent!,Weapon(state,state.Enemy.Id,catalog));
         var party=state.Party.ToArray();var enemy=state.Enemy;uint rng=state.RandomState;
         var events=new List<string>();
         // The character opponent is scheduled as a character, never as a native monster.
-        bool initiative=encounter.Opponent.Initiative is not null;
+        bool initiative=encounter.Opponent!.Initiative is not null;
         var queue=new List<(string Id,bool Enemy,int Time,int Remaining,int Last)>();
         foreach(var entry in party.Where(h=>h.Hp>0 && !h.Captive).Select(h=>(h.Id,Enemy:false)).Append((enemy.Id,Enemy:true)))
         {
-            var facts=entry.Enemy?encounter.Opponent:encounter.Party[entry.Id];
+            var facts=entry.Enemy?encounter.Opponent!:encounter.Party[entry.Id];
             var weapon=Weapon(state,entry.Id,catalog);var prepared=Prepare(facts,weapon);
             int time=initiative?OriginalInitiative.FirstTime(OriginalInitiative.Character(facts.Attributes.Speed,facts.Attributes.Senses,facts.Initiative!),
                 casts.ContainsKey(entry.Id)?null:weapon.Initiative,Dice.Roll(ref rng,4)-1):125-facts.Attributes.Speed;
@@ -150,7 +156,7 @@ public static class MeleeCombat
                 events.Add($"Queue {turn.Time}: {caster.Name} · {cast.Spell.Name} PL{cast.Power}: {result}, {cast.ManaCost} {cast.Spell.Realm} mana");
                 continue;
             }
-            var facts=turn.Enemy?encounter.Opponent:encounter.Party[turn.Id];
+            var facts=turn.Enemy?encounter.Opponent!:encounter.Party[turn.Id];
             var weapon=Weapon(state,turn.Id,catalog);var prepared=Prepare(facts,weapon);
             events.Add($"Queue {turn.Time}: {(turn.Enemy?enemy.Id:actor!.Name)}");
             for(int attack=0;attack<(initiative?1:prepared.Budget.Attacks) && enemy.Hp>0;attack++)
@@ -163,7 +169,7 @@ public static class MeleeCombat
                     int target=turn.Enemy?Array.FindIndex(party,h=>h.Hp>0 && !h.Captive):-1;
                     if(turn.Enemy && target<0)break;
                     string targetId=turn.Enemy?party[target].Id:enemy.Id;
-                    var defenseFacts=turn.Enemy?encounter.Party[targetId]:encounter.Opponent;
+                    var defenseFacts=turn.Enemy?encounter.Party[targetId]:encounter.Opponent!;
                     var targetWeapon=Weapon(state,targetId,catalog);
                     var armor=OriginalDefenseAdapter.Prepare(new(MainHand:targetWeapon)) with {Body=defenseFacts.BodyArmor};
                     var defense=OriginalCharacterDefense.Build(new(defenseFacts.Attributes.Speed,defenseFacts.Stealth,0,0,false),

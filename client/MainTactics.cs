@@ -9,6 +9,11 @@ public partial class Main
         _state=MeleeTraining.CreateTactical(heroes,enemies,_catalog!,_spellCatalog);_autosaveBlocked=false;
         _selectedHeroId=_state.Party[0].Id;Refresh();Say($"Tactical laboratory: {heroes} heroes, {enemies} opponents. Movement and sight use authored grid rules.");
     }
+    private void NewMonsterBattle(int heroes,int count,MonsterCatalog monsters,int definitionId)
+    {
+        _state=MonsterCombat.Create(heroes,count,_catalog!,monsters,definitionId);_autosaveBlocked=false;_selectedHeroId=_state.Party[0].Id;Refresh();
+        Say("Monster physical slice: native HP/stats/initiative/attack budgets/defense; authored grid AI. Magic and XP/loot are not connected in this mode.");
+    }
     private void ShowTactics()
     {
         if(_state.Melee?.Field is null){Say("Menu → New tactical battle to test multiple opponents and positions.");return;}
@@ -19,7 +24,7 @@ public partial class Main
         body.AddChild(new Label {Text="Choose hero and order, then tap a cell.\nOne step or adjacent melee; spells need clear sight.\nUnordered heroes attack nearby enemies or wait.\nAI: Brute closes in; Hunter targets wounded;\nFlanker spreads out; Skirmisher retreats at low HP.",AutowrapMode=TextServer.AutowrapMode.WordSmart});
         var actor=new OptionButton {Name="TacticalActor"};foreach(var h in _state.Party)actor.AddItem(h.Name);body.AddChild(actor);
         var mode=new OptionButton();foreach(var text in new[]{"Move","Attack","Spell"})mode.AddItem(text);body.AddChild(mode);
-        var magic=_spellCatalog?.Spells.Where(RestoredMagic.SupportedSpell).ToArray()??[];
+        OriginalSpell[] magic=_state.Melee.Magic is null?[]:_spellCatalog?.Spells.Where(RestoredMagic.SupportedSpell).ToArray()??[];
         var spell=new OptionButton();foreach(var s in magic)spell.AddItem(s.Name);spell.Disabled=magic.Length==0;body.AddChild(spell);
         var power=new OptionButton();for(int i=1;i<=7;i++)power.AddItem($"Power {i}");body.AddChild(power);
         var feedback=new Label {AutowrapMode=TextServer.AutowrapMode.WordSmart};body.AddChild(feedback);
@@ -53,7 +58,7 @@ public partial class Main
             }
             var brains=f.Brains;
             aiLabel.Text=brains is null?"Legacy pursuit AI. Start a new battle for behavior profiles.":
-                string.Join("\n",TacticalCombat.Enemies(_state).Select((e,i)=>{var b=brains[e.Id];return $"E{i+1}: {b.Profile.Tactic} · {b.Mode} · target {b.TargetId??"—"} · seen {b.LastSeen?.ToString()??"—"}";}));
+                string.Join("\n",TacticalCombat.Enemies(_state).Select((e,i)=>{var b=brains[e.Id];return $"E{i+1} {(MonsterCombat.Actor(_state,e.Id) is {} native?MonsterCombat.Compile(native.Record).Label:e.Id)}: {b.Profile.Tactic} · {b.Mode} · target {b.TargetId??"—"} · seen {b.LastSeen?.ToString()??"—"}";}));
             tactic.Disabled=brains is null;
             if(brains is not null)tactic.Select((int)brains[TacticalCombat.Enemies(_state).ElementAt(inspect.Selected).Id].Profile.Tactic);
             summary.Text=$"Round {_state.Round} · {TacticalCombat.Enemies(_state).Count(e=>e.Hp>0)} enemies alive\n"+
@@ -97,4 +102,19 @@ public partial class Main
         _state=Game.Load(saved,_catalog);if(Game.Save(TacticalCombat.Advance(_state,_catalog!).State)!=continuation)throw new Exception("Tactical client save continuation failed");
         RemoveChild(dialog);dialog.Free();_state=original;Refresh();
     }
+    private void CheckMonsterInterface()
+    {
+        var original=_state;var catalog=_monsterCatalog?.Monsters.Any(m=>m.Id==282 && MonsterCombat.Supported(m))==true?_monsterCatalog:MonsterCombat.FixtureCatalog();
+        NewMonsterBattle(3,3,catalog!,catalog!.Count==1?0:282);ShowTactics();
+        var dialog=GetChildren().OfType<AcceptDialog>().Single(d=>d.Name=="TacticalDialog");
+        IEnumerable<Node> Walk(Node node)=>node.GetChildren().SelectMany(c=>new[]{c}.Concat(Walk(c)));
+        Walk(dialog).OfType<Button>().Single(b=>b.Name=="TacticalResolve").EmitSignal(Godot.Button.SignalName.Pressed);
+        if(_state.Round!=1 || _state.Melee!.Opponent is not null || _state.Melee.Field!.Monsters?.Count!=3 || _state.Items!.Items.Any(i=>i.Location.ContainerId.StartsWith("monster-")))throw new Exception("Monster battle UI did not use native unarmed actors");
+        RemoveChild(dialog);dialog.Free();
+        ShowCombatFacts();GetChildren().OfType<AcceptDialog>().Last().Free();
+        var saved=Game.Save(_state);var expected=Game.Save(TacticalCombat.Advance(_state,_catalog!).State);
+        if(Game.Save(TacticalCombat.Advance(Game.Load(saved,_catalog),_catalog!).State)!=expected)throw new Exception("Monster UI save continuation failed");
+        _state=original;Refresh();GD.Print("PASS: monster actor battle, native combat facts UI and save continuation");
+    }
+
 }

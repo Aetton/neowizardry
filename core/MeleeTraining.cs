@@ -37,7 +37,7 @@ public static class MeleeTraining
         for(int n=0;n<extra.Count;n++)positions=positions.Add(extra[n].Actor.Id,new(6,n+1));
         var field=new TacticalField(8,8,positions,[new(3,3),new(3,4)],extra.ToImmutable());
         var items=s.Items!;
-        foreach(var o in extra)items=ItemInventory.Move(items,o.WeaponId,new(o.Actor.Id,Equipment.WeaponSlot),Inventory.Rules(catalog));
+        foreach(var o in extra)items=ItemInventory.Move(items,o.WeaponId!,new(o.Actor.Id,Equipment.WeaponSlot),Inventory.Rules(catalog));
         s=s with {Items=items,Melee=original with {Field=field}};MeleeCombat.Validate(s,catalog);return ai?EnemyAi.Enable(s,48):s;
     }
     private static MeleeCharacterFacts Facts(OriginalProfession profession,bool opponent=false)=>new(opponent?60:80,
