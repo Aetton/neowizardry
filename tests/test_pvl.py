@@ -47,7 +47,9 @@ class PvlTest(unittest.TestCase):
                     self.assertEqual(len(level.meshes[0].indices), 2)
                     self.assertEqual(level.materials[0]['textures'][0], 'wall.tga')
                     self.assertEqual(data[level.geometry_end:], b'UNPARSED_AUTHORED_TAIL')
-                    self.assertFalse(summary(level, data, 'authored')['preview']['collision'])
+                    preview = summary(level, data, 'authored')['preview']
+                    self.assertFalse(preview['collision'])
+                    self.assertEqual(preview['render_bounds'], [[0, 0, -1.3], [1.3, 0, 0]])
 
     def test_rejects_indices_and_nonfinite_geometry(self):
         for options in ({'uv_index': 5}, {'vertex_index': 4}, {'material_index': 1}):

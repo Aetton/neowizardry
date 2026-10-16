@@ -24,8 +24,19 @@ Both monastery PVLs must parse before output is generated. GLBs contain original
 
 `--world` enters a separate static viewer, skipping the training room, game state and autosaves. WASD flies; Q/E moves down/up; right drag looks; wheel changes speed; Home frames the complete level. This is a desktop research viewer, not a playable monastery or a native spawn point.
 
-Actions generates private GLBs beside the original installation at `wiz_data/NeoWizardryWorld`. Its public artifact contains only metadata reports. A separate Godot process loads each original-derived GLB, checks finite bounds and compares the imported triangle count with the PVL report. Timeouts, import errors and missing success markers fail the job.
+Actions generates private GLBs beside the original installation at `wiz_data/NeoWizardryWorld`. Its public artifact contains only metadata reports. A separate Godot process loads each original-derived GLB, checks finite bounds and compares imported triangle counts and transformed bounds with the PVL report (bounds tolerance is max(0.0001, world diagonal × 0.00001)). Timeouts, import errors and missing success markers fail the job.
 
 ## Validation
 
 42 Python tests include six new geometry checks: conditional layouts and tail boundary; index/non-finite rejection; truncation/count/sentinel rejection; GLB structure, triangle counts and UV seams; both-level preflight; private export and original-source preservation. The client compiles with zero warnings/errors. Original-resource and Godot runtime results are recorded after the Actions run; synthetic fixtures alone do not validate original geometry.
+
+## Original-resource evidence
+
+The first [original import run](https://github.com/Aetton/neowizardry/actions/runs/38967349165) parsed both PVLs without scanning for sentinels or using guessed offsets. Source hashes match iteration 041. Godot loaded the first level with all 35804 triangles and 1373 surfaces. The PowerShell 5.1 process wrapper then misreported process completion after the success marker; the wrapper now owns a `System.Diagnostics.Process` handle, drains both redirected streams asynchronously and checks its exit code before disposal. A successful first-level message alone is not treated as validation of both levels.
+
+| Level | Meshes | Source vertices | Triangles | Materials | Static prefix ends | Unparsed tail bytes |
+|---|---:|---:|---:|---:|---:|---:|
+| Monastery1 | 314 | 24868 | 35804 | 209 | 3175364 | 2895178 |
+| Monastery2 | 127 | 12964 | 19728 | 192 | 1747998 | 2330545 |
+
+Both original levels use material type 4. Header field values 221 and 113 remain unresolved. Many bytes remain after the static prefix; this importer makes no claim to decode those sections.

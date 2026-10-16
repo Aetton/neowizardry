@@ -76,6 +76,18 @@ public partial class WorldPreview : Node3D
                 var expected = Array.IndexOf(args, "--world-triangles");
                 if(expected >= 0 && (expected + 1 >= args.Length || int.Parse(args[expected + 1]) != _triangles))
                     throw new InvalidDataException("Imported world triangle count differs from PVL report");
+                var expectedBounds = Array.IndexOf(args, "--world-bounds");
+                if(expectedBounds >= 0)
+                {
+                    if(expectedBounds + 1 >= args.Length)throw new InvalidDataException("Missing expected world bounds");
+                    var values = args[expectedBounds + 1].Split(',').Select(x=>float.Parse(x,System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+                    if(values.Length != 6 || values.Any(x=>!float.IsFinite(x)))throw new InvalidDataException("Invalid expected world bounds");
+                    var minimum = new Vector3(values[0],values[1],values[2]);
+                    var maximum = new Vector3(values[3],values[4],values[5]);
+                    var tolerance = Math.Max(_span * 0.00001f, 0.0001f);
+                    if(world.Position.DistanceTo(minimum) > tolerance || world.End.DistanceTo(maximum) > tolerance)
+                        throw new InvalidDataException("Imported world bounds differ from PVL report");
+                }
                 GD.Print($"PASS: world preview {_triangles} triangles, {surfaces} surfaces, finite bounds; no collision");
                 Callable.From(()=>GetTree().Quit()).CallDeferred();
             }

@@ -140,7 +140,9 @@ def summary(level: Level, data: bytes, resource: str) -> dict:
             'native_bounds': bounds([p for m in level.meshes for p in m.positions]),
             'material_types': dict(Counter(m['type'] for m in level.materials)),
             'texture_references': sorted({t for m in level.materials for t in m['textures'] if t}),
-            'preview': {'scale': PREVIEW_SCALE, 'axes': '(x,y,-z)', 'textures': False,
+            'preview': {'scale': PREVIEW_SCALE, 'axes': '(x,y,-z)',
+                        'render_bounds': bounds([transformed(m.positions[i]) for m in level.meshes for face in m.indices for i in face]),
+                        'textures': False,
                         'collision': False, 'native_spawn': False, 'gameplay_connected': False}}
 
 
