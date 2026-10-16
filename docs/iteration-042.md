@@ -28,7 +28,7 @@ Actions generates private GLBs beside the original installation at `wiz_data/Neo
 
 ## Validation
 
-42 Python tests include six new geometry checks: conditional layouts and tail boundary; index/non-finite rejection; truncation/count/sentinel rejection; GLB structure, triangle counts and UV seams; both-level preflight; private export and original-source preservation. The client compiles with zero warnings/errors. Original-resource and Godot runtime results are recorded after the Actions run; synthetic fixtures alone do not validate original geometry.
+42 Python tests include six new geometry checks: conditional layouts and tail boundary; index/non-finite rejection; truncation/count/sentinel rejection; GLB structure, triangle counts and UV seams; both-level preflight; private export and original-source preservation. The client compiles with zero warnings/errors. The successful original-resource run is recorded below; synthetic fixtures alone do not validate original geometry.
 
 ## Original-resource evidence
 
@@ -40,3 +40,11 @@ The first [original import run](https://github.com/Aetton/neowizardry/actions/ru
 | Monastery2 | 127 | 12964 | 19728 | 192 | 1747998 | 2330545 |
 
 Both original levels use material type 4. Header field values 221 and 113 remain unresolved. Many bytes remain after the static prefix; this importer makes no claim to decode those sections.
+
+## Accepted run and Windows build
+
+[Run 38967924761](https://github.com/Aetton/neowizardry/actions/runs/38967924761) completed successfully after the process-wrapper correction. Godot loaded Monastery1 as 35804 triangles / 1373 surfaces, and Monastery2 as 19728 triangles / 731 surfaces. Both triangle counts and transformed bounds matched their PVL reports. Each runtime process exited successfully with its explicit PASS marker and no engine-error lines in stderr.
+
+Linux CI [38967924646](https://github.com/Aetton/neowizardry/actions/runs/38967924646) and Windows build [38967924868](https://github.com/Aetton/neowizardry/actions/runs/38967924868) passed at commit `b2aaf8864d9e4f6af49e7c804cfaf4d411769426`. The verified downloadable client is [Windows preview 51](https://github.com/Aetton/neowizardry/releases/tag/windows-build-51). The separate headless editor-import process emits an EditorSettings shutdown diagnostic and exits zero; this is distinct from the clean world-viewer runtime processes and is retained in the run log.
+
+This validates structural import and scene loading, not a visual comparison against the original game. Native textures, OCT collision, spawn points, dynamic content and exploration/combat persistence remain the next world gates.
