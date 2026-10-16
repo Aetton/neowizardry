@@ -1,0 +1,47 @@
+name: Original monastery resource audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/world-audit.yml'
+      - 'tools/world_audit.py'
+      - 'tools/windows/FindOriginal.ps1'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: original-world-audit
+  cancel-in-progress: false
+jobs:
+  monastery:
+    if: github.ref == 'refs/heads/main' && github.repository == 'Aetton/neowizardry'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+      - name: Bootstrap retained tools
+        run: ./tools/windows/BootstrapHost.ps1
+      - name: Locate installed original
+        env:
+          WIZ8_INSTALLATION: ${{ vars.WIZ8_ROOT }}
+        run: ./tools/windows/FindOriginal.ps1
+      - name: Verify exporter with synthetic archives
+        run: |
+          python -m unittest discover -s tests -p test_world_audit.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Inspect original archive without publishing resources
+        run: |
+          python -m tools.world_audit "$env:NEO_LEVELS_ARCHIVE" --out "$env:RUNNER_TEMP/monastery-report.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: monastery-resource-report
+          path: ${{ runner.temp }}/monastery-report.json
+          if-no-files-found: ignore
+          retention-days: 7

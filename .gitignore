@@ -17,3 +17,6 @@ client/demo-items.json
 
 client/demo-items.spells.json
 client/demo-items.recipes.json
+
+# Original installation retained on the self-hosted runner.
+wiz_data/

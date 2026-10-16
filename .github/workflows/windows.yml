@@ -25,6 +25,8 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
+        with:
+          clean: false
       - name: Bootstrap persistent self-hosted tools
         if: runner.environment == 'self-hosted'
         shell: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"

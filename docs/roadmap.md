@@ -1,16 +1,16 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Status checked against code and iteration reports through **034**, with an archive/code audit on 2026-10-15. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+Status checked against code and iteration reports through **040**. Iteration **041** prepares original monastery intake on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
 | Workstream | Recovered / implemented | Still required for original gameplay |
 |---|---|---|
-| Combat | Original integer attack/swing budgets, ordinary free-hand base attack rating, common melee/projectile swing allocation, nine mode-modifier pairs, ordinary character hit/penetration score builders, primary-hand bonuses, prepared weapon/ammo damage inputs, physical damage scaling, a connected neutral melee calculation, explicit projectile completion/resource lifecycle, native ammo compatibility, scoped reserve/refill continuation and connected neutral projectile post-delivery resolution, distance/spread aim perturbation pending aimed launch, character defense from active armor/effective stats and stamina-derived fatigue, monster target defense and seven-zone selection, monster hit/penetration scores, physical candidate tuples and separate group/swing budgets | Effective actor/hand policy, effective stat generation and state/action predicates, full mixed-action monster AI/eligibility and damage-state producers, conditions/context, hit/fumble special paths, actor aim-profile/collision/actual-target policy, final-attack refill scheduling and resource flow, target-dependent damage context/effects, initiative/range/formation, live integration |
+| Combat | Recovered physical rules, live multi-opponent grid battles, persisted positions/initiative, authored tactical AI, mixed original monster rosters, multi-slot/mode attacks, fumbles and connected condition 16; 79/595 original records admit supported profiles | Other conditions, magic/special/projectile delivery, native world AI/formation/time, effective party stat producers and original rewards; 516 monster records remain blocked |
 | Characters | Prototype roster and party-size support; typed effective combat-attribute inputs; weighted original class-history arithmetic | Real character creation, effective stat/skill derivation, XP/leveling/multiclass progression and saves |
 | Magic | 150-record metadata/reference, original ordinary casting-risk/backfire, Power Cast, base strength and resistance helpers | Learning/book/class policy, source/context modifiers, one complete original damage/healing path, resource/condition/training flow and live integration |
 | Inventory | One authoritative typed instance model in gameplay, equipment, fixture crafting and schema-2 saves; old-save migration, split/merge/transfer/resources | Original use/recharge/curse policy and remaining equipment coverage |
 | Crafting | 36-record original recipe reference, recovered native combination arithmetic and clean transaction simulation | Actor skill/time/progression policy, original combinations in gameplay and result previews; proper crafting menu remains a separate rework |
-| World | SLF reader and ordinary patch/loose overlay; accessible data imported privately | Local LEVELS.SLF inventory, geometry/collision and original monastery content |
+| World | SLF reader, patch/loose overlay and runner-based monastery inventory workflow for `wiz_data/Wizardry8` | Original archive validation on the runner, PVL geometry/collision, dependencies and connected monastery content |
 
 Recovered ordinary character formulas now execute in the default new training duel (032), with real owned weapons, explicit authored effective facts, contact/penetration/HP, RNG continuation and scenario rewards. Iteration 033 adds recovered ordinary character initiative / repeated-attack scheduling and safe original Frost / Energy Blast through that executor. Actors, room, immediate delivery, ties and target selection remain authored; real stat derivation and complete original combat/magic remain integration gates. MONSTERS.DBS import now covers 595 record/text/hash definitions with a browser; Iteration 034 maps verified defense fields into the original defense rules; HP/attacks/AI and executable monster actors remain open. It also connects ordinary fizzle/backfire and Heal Wounds, with native reactions/progression still excluded.
 
@@ -93,7 +93,7 @@ Review early/mid/late-game contribution, gadget/component availability and usefu
 - Canonical formulas require documented evidence or original-game fixtures.
 
 ## Current blocker
-LEVELS.SLF is 497064244 bytes and exceeds the Drive connector's 268435456-byte limit. A local LEVELS.SLF inventory is still needed. This does not block accessible rules, magic, inventory or crafting research.
+LEVELS.SLF exceeds the Drive connector limit. The user will supply `wiz_data/Wizardry8` in the self-hosted runner work directory; [iteration 041](iteration-041.md) adds an Actions audit of `Levels/LEVELS.SLF` there. Original archive validation and PVL decoding remain gates. The immediate priority is a small connected monastery section with exploration → encounter → exploration and saved world state; complete monster/spell coverage is not a prerequisite to start.
 
 ## Original-data research progress
 Iteration 011 decodes 150 native spell metadata records and 160 indexed description entries, preserving provenance and unknown raw bytes. A separate read-only reference is available in the client. This does not establish original effect execution, learning, success/resistance, timing or recipe rules; see [spell format evidence](spell-format.md).
@@ -159,3 +159,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 040 — first connected native condition
 
 [Iteration 040](iteration-040.md) connects condition 16 to post-damage application, maximum-duration merge, action cancellation, incapacitation defense, per-actor saved timers and the tactical grid. Native target level/base resistances are compiled for monsters; party targets remain explicit training fixtures. Timers use an authored one-unit-per-round clock, not native world-time parity. Schema 9/profile 3 preserves earlier profile contracts. RFS-81, Soldier Ant and Wasp raise supported coverage to 79/595 records; 516 remain blocked. Other statuses, spells, special/projectile delivery, world/native AI and rewards remain open.
+
+
+## Iteration 041 — runner-based monastery intake
+
+[Iteration 041](iteration-041.md) adds a scoped original-resource audit on the Windows runner, explicit `wiz_data/Wizardry8` discovery and metadata-only artifacts. Both self-hosted workflows preserve the supplied folder at checkout. Synthetic tests cover inventory, hashes and extraction rejection. Actual original PVL decoding and playable world integration remain open.
