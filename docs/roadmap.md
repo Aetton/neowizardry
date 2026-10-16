@@ -1,7 +1,7 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Status checked against code and iteration reports through **042**. The original monastery static geometry is imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+Status checked against code and iteration reports through **043**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
 | Workstream | Recovered / implemented | Still required for original gameplay |
 |---|---|---|
@@ -10,7 +10,7 @@ Status checked against code and iteration reports through **042**. The original 
 | Magic | 150-record metadata/reference, original ordinary casting-risk/backfire, Power Cast, base strength and resistance helpers | Learning/book/class policy, source/context modifiers, one complete original damage/healing path, resource/condition/training flow and live integration |
 | Inventory | One authoritative typed instance model in gameplay, equipment, fixture crafting and schema-2 saves; old-save migration, split/merge/transfer/resources | Original use/recharge/curse policy and remaining equipment coverage |
 | Crafting | 36-record original recipe reference, recovered native combination arithmetic and clean transaction simulation | Actor skill/time/progression policy, original combinations in gameplay and result previews; proper crafting menu remains a separate rework |
-| World | SLF reader, patch/loose overlay, verified original archive and both monastery static PVL mesh prefixes; private GLB export and desktop fly viewer; 55532 triangles validated in Godot | Native textures/lighting, OCT collision, dynamic content, doors/transitions, encounters and connected exploration/combat saves |
+| World | SLF reader, patch/loose overlay, verified original archive and both monastery static PVL mesh prefixes; private GLB export and desktop fly viewer; 55532 triangles, 2104 textured surfaces and 12 animation materials validated in Godot | Native lighting/material parity, OCT collision, dynamic content, doors/transitions, encounters and connected exploration/combat saves |
 
 Recovered ordinary character formulas now execute in the default new training duel (032), with real owned weapons, explicit authored effective facts, contact/penetration/HP, RNG continuation and scenario rewards. Iteration 033 adds recovered ordinary character initiative / repeated-attack scheduling and safe original Frost / Energy Blast through that executor. Actors, room, immediate delivery, ties and target selection remain authored; real stat derivation and complete original combat/magic remain integration gates. MONSTERS.DBS import now covers 595 record/text/hash definitions with a browser; Iteration 034 maps verified defense fields into the original defense rules; HP/attacks/AI and executable monster actors remain open. It also connects ordinary fizzle/backfire and Heal Wounds, with native reactions/progression still excluded.
 
@@ -93,7 +93,7 @@ Review early/mid/late-game contribution, gadget/component availability and usefu
 - Canonical formulas require documented evidence or original-game fixtures.
 
 ## Current blocker
-LEVELS.SLF exceeds the Drive connector limit. The supplied `wiz_data/Wizardry8` in the self-hosted runner work directory is now verified: [iteration 041](iteration-041.md) successfully audited 4956 active resources, including 426 monastery resources and both required PVLs. Resource access and the static PVL mesh prefix are verified. Native material rendering, OCT collision and dynamic PVL sections remain the next gates. The immediate priority is a small connected monastery section with exploration → encounter → exploration and saved world state; complete monster/spell coverage is not a prerequisite to start.
+LEVELS.SLF exceeds the Drive connector limit. The supplied `wiz_data/Wizardry8` in the self-hosted runner work directory is now verified: [iteration 041](iteration-041.md) successfully audited 4956 active resources, including 426 monastery resources and both required PVLs. Resource access and the static PVL mesh prefix are verified. Base texture rendering and IFL animation are connected. Native lighting/material parity, OCT collision and dynamic PVL sections remain the next gates. The immediate priority is a small connected monastery section with exploration → encounter → exploration and saved world state; complete monster/spell coverage is not a prerequisite to start.
 
 ## Original-data research progress
 Iteration 011 decodes 150 native spell metadata records and 160 indexed description entries, preserving provenance and unknown raw bytes. A separate read-only reference is available in the client. This does not establish original effect execution, learning, success/resistance, timing or recipe rules; see [spell format evidence](spell-format.md).
@@ -111,7 +111,7 @@ Use original formulas with a clean implementation. Current research priority: ph
 
 ## Current execution order (iteration 042)
 
-1. Resolve original material/texture dependencies and inspect both imported monastery levels visually. Preserve source hashes and keep original-derived assets private.
+1. Inspect both textured monastery levels visually against the original. Base texture dependencies and IFL animation are connected; original lighting, special blend/water behavior and exact material parity remain open. Preserve source hashes and keep original-derived assets private.
 2. Decode OCT collision and the required dynamic PVL sections; validate a small connected section with correct floors, walls, doors and transitions. Static triangle meshes alone do not establish native passability.
 3. Connect exploration → encounter → exploration with persistent positions, resolved encounters and world interactions. Exercise solo and multi-character parties against representative supported original monsters.
 4. Expand representative magic, rewards, NPC/events and progression needed by that section. Full monster/spell coverage continues independently; it is not a prerequisite for beginning world import.
@@ -176,3 +176,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 042 — static monastery geometry
 
 [Iteration 042](iteration-042.md) adds a strict static PVL reader, private GLB export with UV seams preserved, and an independent desktop fly viewer. Actions validates original-derived meshes in Godot against parser triangle counts. OCT collision, native materials/lighting, doors, triggers, encounters and exploration/battle persistence remain open; static viewing does not close the playable-slice milestone.
+
+
+## Iteration 043 — textured monastery viewer
+
+[Iteration 043](iteration-043.md) connects original TGA textures, pixel alpha, source UVs and IFL material animation through self-contained private GLBs. Both levels pass Godot checks for all embedded pixel hashes, 2104 textured surfaces, 12 animation-material cycles and unchanged geometry bounds/counts. Windows preview 53 contains the verified viewer. Original lighting, special material/water parity, OCT collision and playable-world integration remain open.
