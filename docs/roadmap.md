@@ -1,7 +1,7 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Status checked against code and iteration reports through **049**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+Status checked against code and iteration reports through **050**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
 | Workstream | Recovered / implemented | Still required for original gameplay |
 |---|---|---|
@@ -206,3 +206,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 049 — first original creature representation
 
 [Iteration 049](iteration-049.md) imports Dusk Bat through its native +0x189 cycle-name key, MLS cycle selection and compressed MON vertex frames, with original textures and strict asset/catalog binding. Five clips play through an authored cosmetic queue and focus camera; cosmetic animation does not mutate gameplay/RNG or overwrite the exploration return point. Particle/death, damage skins, native timing/shading and wider creature coverage remain open. Next: representative original rewards/progression/events for the connected section, while expanding supported visual mechanisms.
+
+
+## Iteration 050 — native XP and persisted reward receipt
+
+[Iteration 050](iteration-050.md) connects the original Dusk Bat reward to the expedition: 794 XP divided equally among eligible surviving heroes, with integer truncation and no remainder distribution. A schema-2 receipt validates the initial XP and exact once-only award across battle/world saves; schema-1 expeditions preserve their old zero-reward contract. This record has no item or gold drops. NPC rewards, enabled treasure slots and gold dice explicitly block new expeditions until their execution exists. The HUD shows earned XP and the original first-level goal; character advancement, stat growth, higher-level/class-history progression and nonempty loot remain open. Next: a representative original item/gold reward with persistent world ownership/pickup, followed by proper character advancement.

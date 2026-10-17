@@ -79,8 +79,11 @@ public partial class WorldPreview
         if(_expedition is null)return;
         var s=_expedition.Game;
         _expeditionStatus.Text=$"EXPEDITION · {_expedition.Phase} · B near encounter to fight · V focus creature · authored encounter/grid\n"+
-            string.Join(" · ",s.Party.Select((h,i)=>$"P{i+1} {h.Hp}/{h.MaxHp} HP"))+"\n"+
-            $"{s.Items!.Items.Length} owned instances · original rewards/progression pending";
+            string.Join(" · ",s.Party.Select((h,i)=>$"P{i+1} {h.Hp}/{h.MaxHp} HP · {h.Xp} XP"))+"\n"+
+            ( _expedition.Schema==1?"Legacy expedition · no native rewards":
+                string.Join(" · ",s.Party.Select((h,i)=>$"P{i+1}: first level goal {ExpeditionRewards.FirstLevelGoal(h.Profession)} XP")))+"\n"+
+            $"{s.Items!.Items.Length} owned instances · "+
+            (_expedition.Rewards?.Granted==true?"Reward saved · native record has no items/gold":"Character advancement pending");
         _encounterMarker.Visible=_creature is null && _expedition.Phase==WorldEncounterPhase.Ready;
         if(_creature is not null)_creature.Visible=_expedition.Phase!=WorldEncounterPhase.Victory;
         _battlePanel.Visible=BattleOpen;
@@ -211,11 +214,23 @@ public partial class WorldPreview
             for(int round=0;round<160 && _expedition.Phase==WorldEncounterPhase.Active;round++)ResolveExpedition([]);
             if(_expedition.Phase is not (WorldEncounterPhase.Victory or WorldEncounterPhase.Defeat))throw new InvalidDataException("World encounter did not terminate");
             var outcome=_expedition.Phase;SaveExpedition();
+            string terminal=WorldExpedition.Save(_expedition,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters);
+            if(outcome==WorldEncounterPhase.Victory)
+            {
+                var record=_expedition.Game.Melee!.Field!.Monsters![_expedition.Game.Enemy.Id].Record;
+                int count=_expedition.Game.Party.Count(ExpeditionRewards.Eligible),share=ExpeditionRewards.Experience(record)/count;
+                if(_expedition.Rewards is not {Granted:true} receipt || _expedition.Game.Party.Any(h=>
+                    h.Xp!=receipt.InitialExperience[h.Id]+(ExpeditionRewards.Eligible(h)?share:0)))
+                    throw new InvalidDataException("Native expedition reward missing or incorrectly divided");
+                GD.Print($"PASS: native reward {ExpeditionRewards.Experience(record)} XP, {share} each, {count} eligible; no items/gold in record");
+            }
             if(outcome==WorldEncounterPhase.Victory && _view.GlobalPosition!=entryPosition)
                 throw new InvalidDataException("Victory did not restore exploration camera");
             _expedition=original;LoadExpedition();TryBeginExpeditionEncounter();
             if(_expedition.Phase!=outcome || _encounterMarker.Visible || _battlePanel.Visible!=(outcome==WorldEncounterPhase.Defeat))
                 throw new InvalidDataException("Completed world encounter respawned on reload");
+            if(WorldExpedition.Save(_expedition,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters)!=terminal)
+                throw new InvalidDataException("Terminal reload changed reward receipt or expedition state");
             GD.Print($"PASS: expedition {_expedition.Game.Party.Length} heroes; world/battle save continuation, failed-load preservation, {outcome}, no respawn");
         }
         finally {File.Delete(_expeditionPath);_expeditionPath=path;}

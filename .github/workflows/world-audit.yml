@@ -19,6 +19,7 @@ on:
       - 'tools/creatures.py'
       - 'tests/test_creatures.py'
       - 'core/WorldExpedition.cs'
+      - 'core/ExpeditionRewards.cs'
       - 'tools/windows/TestWorld.ps1'
       - 'tools/windows/FindOriginal.ps1'
   workflow_dispatch:

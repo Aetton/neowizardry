@@ -8,9 +8,9 @@ namespace NeoWizardry.Core;
 public enum WorldEncounterPhase { Ready, Active, Victory, Defeat }
 public sealed record WorldExpeditionState(int Schema, string EncounterId, string ItemDatabaseHash,
     string MonsterDatabaseHash, int MonsterDefinitionId, GameState Game, ExplorationCheckpoint World,
-    WorldEncounterPhase Phase = WorldEncounterPhase.Ready);
+    WorldEncounterPhase Phase = WorldEncounterPhase.Ready, ExpeditionRewardReceipt? Rewards=null);
 
-// One authored encounter; native spawn tables, rewards and continuous-world combat are not implied.
+// One authored encounter; native spawn tables and continuous-world combat are not implied.
 public static class WorldExpedition
 {
     public const int MaximumBytes = 16 * 1024 * 1024;
@@ -18,13 +18,18 @@ public static class WorldExpedition
     private static readonly JsonSerializerOptions Options = new() { UnmappedMemberHandling=JsonUnmappedMemberHandling.Disallow };
 
     public static WorldExpeditionState Create(int size, ItemCatalog items, MonsterCatalog monsters,
-        int definitionId, ExplorationCheckpoint world) => new(1, EncounterId, items.Provenance.Sha256,
-            monsters.DatabaseSha256, definitionId, MonsterCombat.Create(size,1,items,monsters,definitionId), world);
+        int definitionId, ExplorationCheckpoint world)
+    {
+        var game=MonsterCombat.Create(size,1,items,monsters,definitionId);
+        ExpeditionRewards.RequireSupported(game.Melee!.Field!.Monsters![game.Enemy.Id].Record);
+        return new(2,EncounterId,items.Provenance.Sha256,monsters.DatabaseSha256,definitionId,game,world,
+            Rewards:new(game.Party.ToImmutableDictionary(h=>h.Id,h=>h.Xp)));
+    }
 
     public static void Validate(WorldExpeditionState state, string worldHash, ImmutableArray<ExplorationDoorLimit> limits,
         ItemCatalog items, MonsterCatalog monsters)
     {
-        if(state is null || state.Schema!=1 || state.EncounterId!=EncounterId || state.Game is null || state.World is null ||
+        if(state is null || state.Schema is not (1 or 2) || state.EncounterId!=EncounterId || state.Game is null || state.World is null ||
            !string.Equals(state.ItemDatabaseHash,items.Provenance.Sha256,StringComparison.OrdinalIgnoreCase) ||
            !string.Equals(state.MonsterDatabaseHash,monsters.DatabaseSha256,StringComparison.OrdinalIgnoreCase) || !Enum.IsDefined(state.Phase))
             throw new InvalidDataException("Expedition schema or content binding mismatch");
@@ -41,6 +46,7 @@ public static class WorldExpedition
            !string.Equals(actor.Record.RawRecordHex,definition.RawRecordHex,StringComparison.OrdinalIgnoreCase) ||
            !string.Equals(actor.Record.RecordSha256,definition.RecordSha256,StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Expedition monster record differs from current catalog");
+        ExpeditionRewards.Validate(state,actor.Record);
         bool alive=state.Game.Party.Any(h=>h.Hp>0 && !h.Captive), enemy=state.Game.Enemy.Hp>0;
         if(state.Phase==WorldEncounterPhase.Ready && (state.Game.Round!=0 || !alive || !enemy || state.Game.RewardGranted) ||
            state.Phase==WorldEncounterPhase.Active && (!alive || !enemy || state.Game.RewardGranted) ||
@@ -59,10 +65,22 @@ public static class WorldExpedition
         ItemCatalog items, IReadOnlyList<TacticalOrder>? orders=null)
     {
         if(state.Phase!=WorldEncounterPhase.Active)throw new InvalidOperationException("No active world encounter");
+        ExpeditionRewards.Validate(state,state.Game.Melee!.Field!.Monsters![state.Game.Enemy.Id].Record);
         var result=TacticalCombat.Advance(state.Game,items,orders);
         var phase=result.State.Enemy.Hp==0?WorldEncounterPhase.Victory:
             result.State.Party.Any(h=>h.Hp>0 && !h.Captive)?WorldEncounterPhase.Active:WorldEncounterPhase.Defeat;
-        return (state with {Game=result.State,Phase=phase},result.Events);
+        var next=state with {Game=result.State,Phase=phase};var events=result.Events;
+        if(phase==WorldEncounterPhase.Victory && state.Schema==2)
+        {
+            if(state.Rewards is not {Granted:false})throw new InvalidOperationException("Expedition reward already granted or missing");
+            var record=result.State.Melee!.Field!.Monsters![result.State.Enemy.Id].Record;
+            var rewarded=ExpeditionRewards.Grant(result.State,record);
+            next=next with {Game=rewarded,Rewards=state.Rewards with {Granted=true}};
+            int count=rewarded.Party.Count(ExpeditionRewards.Eligible),total=ExpeditionRewards.Experience(record);
+            events=events.Where(e=>!e.StartsWith("Victory:",StringComparison.Ordinal)).ToImmutableArray()
+                .Add($"Native reward: {total} XP / {count} eligible heroes = {total/count} each; no item or gold drops in this record. Saved once.");
+        }
+        return (next,events);
     }
 
     public static string Save(WorldExpeditionState state, string hash, ImmutableArray<ExplorationDoorLimit> limits,
