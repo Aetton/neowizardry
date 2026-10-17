@@ -26,4 +26,7 @@ Bat death uses native particle attachments; that cycle is unsupported and is not
 - 3,930 portable core/input checks pass; client builds without warnings/errors.
 - Godot checks authored clip visibility, IDLE looping, attack/hurt sequencing and return to IDLE, plus save/load and no gameplay mutation during playback.
 - A local original-data run loads all five clips/156 frames, verifies embedded texture pixels/bounds, wins the encounter and preserves mid-battle continuation/no respawn.
-- Linux CI additionally rejects a corrupted creature GLB; original-world/Windows gates are recorded after publication completes. Headless checks do not establish visual comparison with the original renderer.
+- Linux CI passed, including refusal of a corrupted creature GLB: https://github.com/Aetton/neowizardry/actions/runs/39074204446 .
+- Both original monastery levels loaded and bounds-checked creature 282 (5 clips / 156 frames / 7 textures), exercised loop/cue playback and completed the solo expedition with save continuation/no respawn: https://github.com/Aetton/neowizardry/actions/runs/39074204437 .
+- Complete Windows build/export/EXE/updater publication gates passed: https://github.com/Aetton/neowizardry/actions/runs/39074204451 . Published preview: https://github.com/Aetton/neowizardry/releases/tag/windows-build-66 . All gates use runtime source d884888bfe93a3ff6a028dfb6c3bcee4629a012f.
+- Headless checks do not establish visual comparison with the original renderer.
