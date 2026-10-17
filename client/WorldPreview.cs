@@ -14,6 +14,9 @@ public partial class WorldPreview : Node3D
     private WorldCollision? _collision;
     private WorldWalker? _walker;
     private WorldObjects? _objects;
+    private WorldDoors? _doors;
+    private bool _useDoor,_inspectDoor;
+    private Label _doorStatus=null!;
     private int _arrivalIndex=-1;
     private bool _walking, _enterWalk;
     private Label _movementStatus = null!;
@@ -55,10 +58,12 @@ public partial class WorldPreview : Node3D
             var scene = document.GenerateScene(state) ?? throw new InvalidDataException("GLB has no scene");
             AddChild(scene);
             ConfigureTextures(state, args.Contains("--world-smoke"));
+            var staticAnimationCount=_textureCycles.Count;
             var collisionPath = Path.ChangeExtension(path,".nwcol");
             var objectsPath=Path.ChangeExtension(path,".nwobjects.json");
+            var doorsPath=Path.ChangeExtension(path,".nwdoors.json");
             string? pvlHash=null;
-            if(System.IO.File.Exists(collisionPath) || System.IO.File.Exists(objectsPath))
+            if(System.IO.File.Exists(collisionPath) || System.IO.File.Exists(objectsPath) || System.IO.File.Exists(doorsPath))
             {
                 using var metadata = System.Text.Json.JsonDocument.Parse(Godot.Json.Stringify(state.Json));
                 var root = metadata.RootElement;
@@ -72,6 +77,11 @@ public partial class WorldPreview : Node3D
             if(System.IO.File.Exists(objectsPath))
             {
                 _objects=WorldObjects.Load(objectsPath,pvlHash ?? "");AddChild(_objects);
+            }
+            if(System.IO.File.Exists(doorsPath))
+            {
+                _doors=WorldDoors.Load(doorsPath,Path.ChangeExtension(path,".nwdoors.glb"),pvlHash??"",s=>ConfigureTextures(s,args.Contains("--world-smoke")));
+                AddChild(_doors);
             }
             Aabb? bounds = null;
             int surfaces = 0, texturedSurfaces = 0;
@@ -117,6 +127,9 @@ public partial class WorldPreview : Node3D
             var crosshair=new Label { Text="+",MouseFilter=Control.MouseFilterEnum.Ignore };
             crosshair.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);
             crosshair.Position-=new Vector2(4,10);layer.AddChild(crosshair);
+            _doorStatus=new Label { Position=new Vector2(16,168),Text=_doors is null?"Door geometry not loaded":
+                 $"P inspect door animation · R use aimed door · {_doors.Doors.Count} native models · {_doors.InteractiveCount} eligible · session state only" };
+            layer.AddChild(_doorStatus);
             _smoke = args.Contains("--world-smoke");
             if(_smoke)
             {
@@ -135,7 +148,7 @@ public partial class WorldPreview : Node3D
                     if(world.Position.DistanceTo(minimum) > tolerance || world.End.DistanceTo(maximum) > tolerance)
                         throw new InvalidDataException("Imported world bounds differ from PVL report");
                 }
-                foreach(var (option, actual) in new[] {("--world-textured", texturedSurfaces), ("--world-animations", _textureCycles.Count)})
+                foreach(var (option, actual) in new[] {("--world-textured", texturedSurfaces), ("--world-animations", staticAnimationCount)})
                 {
                     var at = Array.IndexOf(args, option);
                     if(at >= 0 && (at + 1 >= args.Length || int.Parse(args[at + 1]) != actual))
@@ -160,6 +173,12 @@ public partial class WorldPreview : Node3D
                     GD.Print($"PASS: objects {_objects.PropCount} props, {_objects.DoorCount} door payloads, {_objects.Arrivals.Length} native arrivals navigated");
                 }
                 else if(args.Contains("--world-objects"))throw new InvalidDataException("Native object sidecar missing");
+                if(args.Contains("--world-door-models"))
+                {
+                    if(_doors is null)throw new InvalidDataException("Native door geometry missing");
+                    int Expected(string option) { var at=Array.IndexOf(args,option);if(at<0 || at+1>=args.Length)throw new InvalidDataException("Missing door smoke count");return int.Parse(args[at+1]); }
+                    _doors.Check(Expected("--world-door-models"),Expected("--world-door-frames"),Expected("--world-door-triangles"),Expected("--world-door-interactive"),_walker);
+                }
                 if(args.Contains("--world-collision-smoke"))Callable.From(CollisionSmoke).CallDeferred();
                 else Callable.From(()=>GetTree().Quit()).CallDeferred();
             }
@@ -170,8 +189,18 @@ public partial class WorldPreview : Node3D
     public override void _PhysicsProcess(double delta)
     {
         if(_view is null || _smoke)return;
+        if(_inspectDoor)
+        {
+            _inspectDoor=false;_walking=false;_enterWalk=false;
+            _doorStatus.Text=_doors?.PreviewNext(_view)??"No native door geometry loaded";
+        }
+        if(_useDoor) { _useDoor=false;_doorStatus.Text=_doors?.Use(_view)??"No native door geometry loaded"; }
+        bool wasInspecting=_doors?.IsInspecting==true;
+        var doorMessage=_doors?.Step(delta,_walking?_walker:null);
+        if(doorMessage is not null)_doorStatus.Text=doorMessage;
         if(_enterWalk)
         {
+            if(wasInspecting || _doors is { IsInspecting:true }) { _doors?.CancelInspection();return; }
             _enterWalk=false;
             if(_collision is null || _walker is null) { _movementStatus.Text="No original collision data loaded";return; }
             var hit = _collision.Ray(_view.GlobalPosition,_view.GlobalPosition-_view.GlobalBasis.Z*_span*2);
@@ -203,6 +232,7 @@ public partial class WorldPreview : Node3D
                 throw new InvalidDataException("Collision surface count mismatch");
             await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);
             await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);
+            _doors?.CheckPhysics(_walker);
             WorldCollision.Face? floor=null;
             foreach(var face in _collision.Faces.Where(f=>f.Walkable && f.Normal.Y>0.99f && f.AreaSquared>0.1f).OrderByDescending(f=>f.AreaSquared).Take(256))
             {
@@ -302,6 +332,7 @@ public partial class WorldPreview : Node3D
     private void JumpToArrival(int index)
     {
         if(_objects is null || index<0 || index>=_objects.Arrivals.Length)return;
+        _doors?.CancelInspection();
         _arrivalIndex=index;_walking=false;_enterWalk=false;
         var point=_objects.Arrivals[index];
         _view.GlobalPosition=point.Position+Vector3.Up*1.25f;
@@ -310,7 +341,8 @@ public partial class WorldPreview : Node3D
 
     private void Home()
     {
-        _walking=false;
+        _doors?.CancelInspection();
+        _walking=false;_enterWalk=false;
         _view.Position = _center + new Vector3(0.55f, 0.65f, 0.8f) * _span;
         _view.LookAt(_center);
     }
@@ -332,6 +364,8 @@ public partial class WorldPreview : Node3D
         }
         if(input is InputEventKey key && key.Pressed && !key.Echo)
         {
+            if(key.Keycode == Key.P)_inspectDoor=true;
+            if(key.Keycode == Key.R)_useDoor=true;
             if(key.Keycode == Key.O && _objects is not null)_objects.Visible=!_objects.Visible;
             if(key.Keycode == Key.N)
             {

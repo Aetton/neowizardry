@@ -7,13 +7,16 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_oct import fixture as oct_fixture
 from test_world_objects import fixture as pvl_fixture
-from tools import oct, pvl, world_objects
+from tools import oct, pvl, world_objects, world_doors
 
 root = Path(sys.argv[1])
 root.mkdir(parents=True, exist_ok=True)
-source = pvl_fixture()
+source = pvl_fixture(locked=False)
 source_hash = hashlib.sha256(source).hexdigest()
 (root / 'fixture.glb').write_bytes(pvl.glb(pvl.parse(source), source_hash=source_hash))
 (root / 'fixture.nwcol').write_bytes(oct.encode(oct.parse(oct_fixture()), source_hash))
 objects=world_objects.parse(source)
 (root / 'fixture.nwobjects.json').write_text(json.dumps(objects), encoding='utf-8')
+door_glb,door_manifest,door_report=world_doors.build(source)
+(root / 'fixture.nwdoors.glb').write_bytes(door_glb)
+(root / 'fixture.nwdoors.json').write_text(json.dumps(door_manifest),encoding='utf-8')

@@ -13,6 +13,7 @@ on:
       - 'client/WorldPreview.cs'
       - 'client/WorldCollision.cs'
       - 'client/WorldObjects.cs'
+      - 'client/WorldDoors.cs'
       - 'tools/windows/TestWorld.ps1'
       - 'tools/windows/FindOriginal.ps1'
   workflow_dispatch:
@@ -86,7 +87,7 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & $env:GODOT --headless --editor --path client --import
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          ./tools/windows/TestWorld.ps1 -WorldRoot "$env:NEO_WORLD_CACHE" -Report "$env:RUNNER_TEMP/monastery-geometry.json" -CollisionReport "$env:RUNNER_TEMP/monastery-collision.json" -ObjectsReport "$env:RUNNER_TEMP/monastery-objects.json"
+          ./tools/windows/TestWorld.ps1 -WorldRoot "$env:NEO_WORLD_CACHE" -Report "$env:RUNNER_TEMP/monastery-geometry.json" -CollisionReport "$env:RUNNER_TEMP/monastery-collision.json" -ObjectsReport "$env:RUNNER_TEMP/monastery-objects.json" -DoorsReport "$env:RUNNER_TEMP/monastery-doors.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -90,7 +90,7 @@ def restriction(trigger):
     if trigger['recipients'] or door['linked_trigger']: return 'linked trigger integration pending'
     if door['one_way'] or door['auto_locking']: return 'direction/timer integration pending'
     if trigger['action'] not in (1,2): return 'unsupported trigger action'
-    if any(trigger.get('data',[0,0,0])): return 'action parameters pending'
+    if trigger['action']==1 and trigger.get('data',[0,0,0])[0]!=0: return 'automatic closing timer pending'
     return ''
 
 
@@ -117,7 +117,8 @@ def build(data, textures=None):
             frames.append(len(meshes))
             meshes.append(frame_geometry(prop,frame,materials,material_ids))
         doors.append({'id':prop['start'], 'trigger_id':trigger['start'], 'name':prop['name'],
-                      'frames':frames, 'fps':fps, 'open':trigger['door']['open'],
+                      'frames':frames, 'bounds':[pvl.bounds([pvl.transformed(v) for v in meshes[i].positions]) for i in frames],
+                      'fps':fps, 'open':trigger['door']['open'],
                       'blocked_reason':restriction(trigger) or ('no moving frames' if count<2 else ''), 'flags':prop['flags']})
     if not doors:
         raise FormatError('No native door geometry')
@@ -128,6 +129,7 @@ def build(data, textures=None):
     metadata = {'schema':1, 'pvl_sha256':objects['pvl_sha256'], 'doors':len(doors),
                 'frames':len(meshes), 'triangles':sum(len(m.indices) for m in meshes),
                 'interactive':sum(not d['blocked_reason'] for d in doors),
+                'collidable':sum(bool(d['flags']&1) for d in doors),
                 'restrictions':dict(Counter(d['blocked_reason'] for d in doors if d['blocked_reason'])),
                 'frame_bounds':[pvl.bounds([pvl.transformed(v) for v in m.positions]) for m in meshes]}
     return payload,manifest,metadata

@@ -15,7 +15,7 @@ def string(value, size):
     return value.encode().ljust(size, b'\0')
 
 
-def trigger(*, name='ENTRY', action=0x34, positioned=True, door=False):
+def trigger(*, name='ENTRY', action=0x34, positioned=True, door=False, locked=True):
     result = pack('3B', 1, 4, 3)+string(name,128)
     result += pack('7B3i', not positioned,1,0,0,0,0,0,action,0,0)
     result += bytes(256)+pack('B',0)+bytes(256)+pack('BiB',0,0,0)+bytes(128)
@@ -26,7 +26,7 @@ def trigger(*, name='ENTRY', action=0x34, positioned=True, door=False):
         result += pack('B7fB',1,1,2,3,0,0,1,0,0)
     result += pack('B',door)
     if door:
-        result += pack('BB9BH B3f',1,1,0,1,1,0,0,0,1,0,0,65535,1,4,5,6)+string('LINK',128)
+        result += pack('BB9BH B3f',1,1,0,1,int(locked),0,0,0,1,0,0,65535,1,4,5,6)+string('LINK' if locked else '',128)
     return result
 
 
@@ -37,31 +37,31 @@ def mesh(*, compressed=False):
         result += pack('Bhf',2,2,1000)+pack('18h',*range(18))
         result += pack('3H6fHB',0,1,2,0,0,1,0,0,1,0,0)
     else:
-        result += pack('9f',0,0,0,1,0,0,0,0,1)
+        result += pack('9f',0,0,0,0,6,0,0,0,6)
         result += pack('3I6fIB',0,1,2,0,0,1,0,0,1,0,0)
     return result+pack('hB',1,0)+bytes(281)
 
 
-def prop():
-    result = pack('3B3fI',9,2,0,1,2,3,4)+string('DOOR',64)
+def prop(*, locked=True):
+    result = pack('3B3fI',9,2,0,1,2,3,1)+string('DOOR',64)
     result += pack('b4H',2,0,0,1,1)
     result += pack('2b5Bf3Bf',11,1,1,0,0,0,1,15,0,1,0,1)
     result += bytes(50)+pack('5B',2,0,0,0,1)+pack('B',2)
     result += pack('2B',1,0)+mesh()
     result += pack('2B3i20f',0,2,0,0,2,0,0,0,0,0,1,0,1,1,1,2,0,0,0,0,1,0,1,1,1)
-    result += pack('B',1)+trigger(name='DOOR_TRIGGER',action=1,positioned=False,door=True)
+    result += pack('B',1)+trigger(name='DOOR_TRIGGER',action=1,positioned=False,door=True,locked=locked)
     result += pack('3B',1,2,3)
     return result
 
 
-def fixture():
+def fixture(*, locked=True):
     prefix = static_fixture()
     prefix = prefix[:parse_static(prefix).geometry_end]
     marker = pack('i',-1)
     result = prefix+pack('h',0)+marker+pack('i',0)+marker
     # A real serialized item includes four int fields after its 3-float position.
     result += pack('i',1)+string('ITEM',20)+pack('3f4iB',1,2,3,0,0,0,0,0)+bytes(19)+marker
-    result += pack('i',0)+marker+pack('i',1)+prop()+marker
+    result += pack('i',0)+marker+pack('i',1)+prop(locked=locked)+marker
     result += pack('i',0)+marker+pack('i',0)+marker+pack('i',0)+marker
     result += pack('i',1)+trigger()+marker
     return result

@@ -1,7 +1,7 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Status checked against code and iteration reports through **045**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+Status checked against code and iteration reports through **046**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
 | Workstream | Recovered / implemented | Still required for original gameplay |
 |---|---|---|
@@ -191,3 +191,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 045 — native object records and arrival navigation
 
 [Iteration 045](iteration-045.md) reads the PVL object/trigger prefix with exact bank boundaries and bounded dynamic mesh/animation layouts. Original intake finds 62 / 52 props, 32 / 26 bitmaps and 7 / 4 serialized door payloads. Windows preview 59 adds N to navigate the 2 / 2 explicit positioned arrival triggers and O to show inspection markers and stored door flags. Full records stay private and bind to the same PVL hash as the GLB. The remaining PVL tail, rendered native prop meshes, runtime door states/animation, locks/items/recipient dispatch, transitions and world persistence remain open. This is preparation for interactions, not playable doors or recovered native spawning.
+
+
+## Iteration 046 — native door frames
+
+[Iteration 046](iteration-046.md) exports and renders the 7 / 4 native door models with their 166 / 109 frame poses, source materials and per-face UVs. Physics follows the current frame for source-collidable props. P provides an animation round-trip inspection in flight, restored before walking; R offers a constrained manual preview with unsupported requirements blocked. Door callbacks, quest/recipient dispatch, original lock/key handling, automatic timers, level transitions, other native prop models and world persistence remain open. This is a door geometry/preview milestone, not the complete native interaction controller.

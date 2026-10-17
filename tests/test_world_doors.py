@@ -18,7 +18,7 @@ class DoorTest(unittest.TestCase):
         self.assertEqual((report['doors'],report['frames'],report['triangles']),(1,2,2))
         self.assertEqual(report['interactive'],0)
         self.assertIn('locked',manifest['doors'][0]['blocked_reason'])
-        self.assertEqual(report['frame_bounds'][0],[[0.0,0.0,-0.65],[0.65,0.0,-0.0]])
+        self.assertEqual(report['frame_bounds'][0],[[0.0,0.0,-3.9],[0.0,3.9,-0.0]])
         self.assertAlmostEqual(report['frame_bounds'][1][0][0],1.3)
         length=struct.unpack_from('<I',payload,12)[0]
         doc=json.loads(payload[20:20+length])
@@ -45,6 +45,12 @@ class DoorTest(unittest.TestCase):
             trigger['door'][key]=True
             self.assertTrue(world_doors.restriction(trigger),key)
             trigger['door'][key]=False
+        trigger['data']=[0,-1,-1]
+        self.assertEqual(world_doors.restriction(trigger),'')
+        trigger['data'][0]=1
+        self.assertIn('timer',world_doors.restriction(trigger))
+        trigger['action']=2
+        self.assertEqual(world_doors.restriction(trigger),'')
         trigger['door']['secret']=True;trigger['door']['found']=False
         self.assertTrue(world_doors.restriction(trigger))
 

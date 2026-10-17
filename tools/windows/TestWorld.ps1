@@ -1,11 +1,13 @@
 param([Parameter(Mandatory=$true)][string]$WorldRoot,
       [Parameter(Mandatory=$true)][string]$Report,
       [string]$CollisionReport,
-      [string]$ObjectsReport)
+      [string]$ObjectsReport,
+      [string]$DoorsReport)
 $ErrorActionPreference='Stop'
 $reportData=Get-Content -LiteralPath $Report -Raw | ConvertFrom-Json
 $collisionData=if ($CollisionReport) { Get-Content -LiteralPath $CollisionReport -Raw | ConvertFrom-Json } else { $null }
 $objectsData=if ($ObjectsReport) { Get-Content -LiteralPath $ObjectsReport -Raw | ConvertFrom-Json } else { $null }
+$doorsData=if ($DoorsReport) { Get-Content -LiteralPath $DoorsReport -Raw | ConvertFrom-Json } else { $null }
 foreach ($level in $reportData.levels) {
     $name=[IO.Path]::GetFileNameWithoutExtension($level.resource).ToLowerInvariant()
     $path=Join-Path $WorldRoot "$name.glb"
@@ -23,6 +25,11 @@ foreach ($level in $reportData.levels) {
         $objects=@($objectsData.levels | Where-Object { [IO.Path]::GetFileNameWithoutExtension($_.resource).ToLowerInvariant() -eq $name })
         if ($objects.Count -ne 1) { throw "Missing object metadata: $name" }
         $start.Arguments+=" --world-objects $($objects[0].props) --world-arrivals $($objects[0].arrivals) --world-doors $($objects[0].doors)"
+    }
+    if ($doorsData) {
+        $doors=@($doorsData.levels | Where-Object { [IO.Path]::GetFileNameWithoutExtension($_.resource).ToLowerInvariant() -eq $name })
+        if ($doors.Count -ne 1) { throw "Missing door metadata: $name" }
+        $start.Arguments+=" --world-door-models $($doors[0].doors) --world-door-frames $($doors[0].frames) --world-door-triangles $($doors[0].triangles) --world-door-interactive $($doors[0].interactive)"
     }
     $start.UseShellExecute=$false
     $start.CreateNoWindow=$true
@@ -48,6 +55,7 @@ foreach ($level in $reportData.levels) {
         if ($output -notmatch 'PASS: world preview') { throw "Missing world preview success marker: $name" }
         if ($collisionData -and $output -notmatch 'PASS: collision') { throw "Missing collision success marker: $name" }
         if ($objectsData -and $output -notmatch 'PASS: objects') { throw "Missing native object success marker: $name" }
+        if ($doorsData -and $output -notmatch 'PASS: doors') { throw "Missing native door success marker: $name" }
         if ($errors -match '(?m)^ERROR:') { throw "World preview reported an engine error: $name" }
     } finally { $process.Dispose() }
 }
