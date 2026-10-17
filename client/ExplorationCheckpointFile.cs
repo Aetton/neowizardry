@@ -23,19 +23,19 @@ public static class ExplorationCheckpointFile
         return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
     }
 
-    public static string Read(string path)
+    public static string Read(string path, int maximumBytes = ExplorationCheckpoint.MaximumBytes)
     {
         using var stream = File.OpenRead(path);
-        if(stream.Length > ExplorationCheckpoint.MaximumBytes)
+        if(stream.Length > maximumBytes)
             throw new InvalidDataException("Exploration checkpoint exceeds size limit");
         using var reader = new StreamReader(stream, new UTF8Encoding(false, true));
         return reader.ReadToEnd();
     }
 
-    public static void Write(string path, string json)
+    public static void Write(string path, string json, int maximumBytes = ExplorationCheckpoint.MaximumBytes)
     {
         var bytes = new UTF8Encoding(false, true).GetBytes(json);
-        if(bytes.Length > ExplorationCheckpoint.MaximumBytes)
+        if(bytes.Length > maximumBytes)
             throw new InvalidDataException("Exploration checkpoint exceeds size limit");
         var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
         Directory.CreateDirectory(directory);

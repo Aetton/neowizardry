@@ -38,7 +38,7 @@ jobs:
           timeout 60s "$executable" --headless --path client -- --smoke --catalog "$RUNNER_TEMP/neo-test-items.json" --spells "$RUNNER_TEMP/neo-test-items.spells.json" --recipes "$RUNNER_TEMP/neo-test-items.recipes.json"
           timeout 60s "$executable" --headless --path client -- --touch --mobile-smoke --catalog "$RUNNER_TEMP/neo-test-items.json" --spells "$RUNNER_TEMP/neo-test-items.spells.json" --recipes "$RUNNER_TEMP/neo-test-items.recipes.json"
           python tests/world_fixture.py "$RUNNER_TEMP/world-fixture"
-          timeout 60s "$executable" --headless --path client -- --world "$RUNNER_TEMP/world-fixture/fixture.glb" --world-smoke --world-collision-smoke --world-triangles 2 --world-colliders 2 --world-objects 1 --world-arrivals 1 --world-doors 1 --world-door-models 1 --world-door-frames 2 --world-door-triangles 2 --world-door-interactive 1
+          timeout 60s "$executable" --headless --path client -- --world "$RUNNER_TEMP/world-fixture/fixture.glb" --world-smoke --world-collision-smoke --world-triangles 2 --world-colliders 2 --world-objects 1 --world-arrivals 1 --world-doors 1 --world-door-models 1 --world-door-frames 2 --world-door-triangles 2 --world-door-interactive 1 --world-expedition-smoke
           python -c 'import os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"world-fixture/fixture.nwdoors.glb"; p.write_bytes(p.read_bytes()+b"tampered")'
           if timeout 60s "$executable" --headless --path client -- --world "$RUNNER_TEMP/world-fixture/fixture.glb" --world-smoke > "$RUNNER_TEMP/door-invalid.log" 2>&1; then
             echo 'Invalid door geometry was accepted'; exit 1

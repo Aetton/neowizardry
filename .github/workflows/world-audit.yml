@@ -14,6 +14,8 @@ on:
       - 'client/WorldCollision.cs'
       - 'client/WorldObjects.cs'
       - 'client/WorldDoors.cs'
+      - 'client/WorldExpeditionView.cs'
+      - 'core/WorldExpedition.cs'
       - 'tools/windows/TestWorld.ps1'
       - 'tools/windows/FindOriginal.ps1'
   workflow_dispatch:
@@ -81,6 +83,16 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Prepare retained Godot tools
         run: ./tools/windows/PrepareGodot.ps1 -ToolsRoot "$env:LOCALAPPDATA/NeoWizardryBuildTools/godot-4.5.1-v1"
+      - name: Compile private expedition catalogs
+        run: |
+          $installation = Split-Path (Split-Path $env:NEO_LEVELS_ARCHIVE -Parent) -Parent
+          $data = Join-Path $installation 'Data/DATA.SLF'
+          $overlay = @('--loose-dir', (Join-Path $installation 'Data'))
+          Get-ChildItem (Join-Path $installation 'Patches') -Filter 'PATCH.*' -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^PATCH\.\d+$' } | ForEach-Object { $overlay += @('--patch', $_.FullName) }
+          python -m tools.slf items "$data" @overlay --out "$env:NEO_WORLD_CACHE/items.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m tools.slf monsters "$data" @overlay --out "$env:NEO_WORLD_CACHE/monsters.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Build and verify original geometry in Godot
         run: |
           dotnet build client/NeoWizardry.csproj

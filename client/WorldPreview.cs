@@ -139,6 +139,7 @@ public partial class WorldPreview : Node3D
             layer.AddChild(_doorStatus);
             _checkpointStatus=new Label { Position=new Vector2(16,196),Text="F5 save checkpoint · F9 load · resumes in flight · separate from expedition saves" };
             layer.AddChild(_checkpointStatus);
+            InitializeExpedition(args,layer);
             _smoke = args.Contains("--world-smoke");
             if(_smoke)
             {
@@ -206,14 +207,22 @@ public partial class WorldPreview : Node3D
             {
                 if(save)
                 {
-                    var checkpoint=CaptureCheckpoint();
-                    ExplorationCheckpointFile.Write(_checkpointPath,checkpoint.Serialize(_contentHash,CheckpointLimits));
+                    if(_expedition is not null)SaveExpedition();
+                    else
+                    {
+                        var checkpoint=CaptureCheckpoint();
+                        ExplorationCheckpointFile.Write(_checkpointPath,checkpoint.Serialize(_contentHash,CheckpointLimits));
+                    }
                     _checkpointStatus.Text="Checkpoint saved · F9 restores in flight";
                 }
                 else
                 {
-                    var checkpoint=ExplorationCheckpoint.Parse(ExplorationCheckpointFile.Read(_checkpointPath),_contentHash,CheckpointLimits);
-                    RestoreCheckpoint(checkpoint);
+                    if(_expedition is not null)LoadExpedition();
+                    else
+                    {
+                        var checkpoint=ExplorationCheckpoint.Parse(ExplorationCheckpointFile.Read(_checkpointPath),_contentHash,CheckpointLimits);
+                        RestoreCheckpoint(checkpoint);
+                    }
                     _checkpointStatus.Text="Checkpoint loaded in flight · F enters walking at aimed floor";
                 }
             }
@@ -221,6 +230,8 @@ public partial class WorldPreview : Node3D
             { _checkpointStatus.Text=$"Checkpoint {(save?"save":"load")} failed: {error.Message}"; }
             return;
         }
+        if(_beginEncounter)TryBeginExpeditionEncounter();
+        if(BattleOpen)return;
         if(_inspectDoor)
         {
             _inspectDoor=false;_walking=false;_enterWalk=false;
@@ -348,6 +359,7 @@ public partial class WorldPreview : Node3D
             }
             if(!blocked)throw new InvalidDataException("Capsule wall sweep did not find a blocking original wall");
             GD.Print($"PASS: collision {_collision.Faces.Length} static surfaces; native walkable floor, settled capsule and blocking wall sweep");
+            if(args.Contains("--world-expedition-smoke"))CheckWorldExpedition();
             GetTree().Quit();
         }
         catch(Exception error) { GD.PushError(error.ToString());GetTree().Quit(1); }
@@ -436,6 +448,7 @@ public partial class WorldPreview : Node3D
     public override void _UnhandledInput(InputEvent input)
     {
         if(_view is null)return;
+        if(BattleOpen && input is not InputEventKey)return;
         if(input is InputEventMouseButton button)
         {
             if(button.ButtonIndex == MouseButton.Right)
@@ -452,6 +465,8 @@ public partial class WorldPreview : Node3D
         {
             if(key.Keycode == Key.F5)_saveCheckpoint=true;
             if(key.Keycode == Key.F9)_loadCheckpoint=true;
+            if(key.Keycode == Key.B)_beginEncounter=true;
+            if(BattleOpen)return;
             if(key.Keycode == Key.P)_inspectDoor=true;
             if(key.Keycode == Key.R)_useDoor=true;
             if(key.Keycode == Key.O && _objects is not null)_objects.Visible=!_objects.Visible;
@@ -475,7 +490,7 @@ public partial class WorldPreview : Node3D
         if(_view is null || _smoke)return;
         _textureTime += delta;
         foreach(var animation in _textureCycles)animation.Apply(_textureTime);
-        if(_walking || !DisplayServer.WindowIsFocused())return;
+        if(BattleOpen || _walking || !DisplayServer.WindowIsFocused())return;
         var direction = new Vector3((Input.IsPhysicalKeyPressed(Key.D)?1:0)-(Input.IsPhysicalKeyPressed(Key.A)?1:0),
             (Input.IsPhysicalKeyPressed(Key.E)?1:0)-(Input.IsPhysicalKeyPressed(Key.Q)?1:0),
             (Input.IsPhysicalKeyPressed(Key.S)?1:0)-(Input.IsPhysicalKeyPressed(Key.W)?1:0));

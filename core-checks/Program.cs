@@ -355,6 +355,7 @@ checks+=SnapshotChecks.Run(referenceCatalog,recipeReferenceCatalog);
 checks+=ProjectileExecutionChecks.Run(restricted);
 checks+=MeleeEncounterChecks.Run();
 checks+=ExplorationCheckpointChecks.Run();
+checks+=WorldExpeditionChecks.Run();
 checks+=TacticalCombatChecks.Run();
 checks+=EnemyAiChecks.Run();
 checks+=MonsterCombatChecks.Run();checks+=GeneralMonsterChecks.Run();checks+=AttackEffectChecks.Run();checks+=NativeConditionChecks.Run();
