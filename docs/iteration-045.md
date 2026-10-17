@@ -1,0 +1,9 @@
+# Iteration 045 — native object and trigger intake
+
+This milestone reads the PVL object/trigger prefix after static meshes and preserves object ownership, animation frame/segment records, trigger actions, recipient strings, requirements, door payload flags and positioned arrival records in a private `.nwobjects.json` file. It does not execute native actions, open doors, bypass locks or claim level-transition parity.
+
+Independent format implementation uses retail loader layout evidence from [wizardry-8-decomp](https://github.com/agluszak/wizardry-8-decomp/tree/075cbd0b853c4670e94f6ae4fe48d53b52b5e819): ReadLevel.cpp, Prop.cpp, AnimObj.cpp, AniMesh.cpp, ReadMesh.cpp, PathAI.cpp and Trigger.cpp. No reconstructed code is copied. The existing [Wizardry8Editor](https://github.com/anonidiot/Wizardry8Editor) navigation reader is a second layout reference. Retail executable checks and original-file results follow below; inferred presentation policy remains separate from native behavior.
+
+The bounded reader consumes lights, monster paths, items, empty missiles, props, bitmaps, cameras, environment and level triggers. Every bank boundary is checked at its exact position. Dynamic mesh vertex/material indices, animation frame identities, LOD counts, segment bounds, finite float arrays, signed counts and supported discriminator/version ranges are validated. Unsupported layouts fail; the bytes after the trigger bank remain explicitly unparsed (camera sway, clip planes, particles, named positions and automap). Thus this is not a full PVL decoder.
+
+Four authored tests cover a path-driven prop and attached locked door, positioned arrival, compressed dynamic mesh, truncation at every byte of the object prefix, and malformed markers/counts/versions/coordinates. Original assets and full object/trigger records remain private on the runner; public reports contain hashes, offsets and aggregate counts only.
