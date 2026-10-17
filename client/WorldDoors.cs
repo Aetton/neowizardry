@@ -1,6 +1,8 @@
 using Godot;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Collections.Immutable;
+using NeoWizardry.Core;
 
 // Native frame geometry, with an explicitly authored interaction/closing policy.
 public partial class WorldDoors : Node3D
@@ -13,6 +15,22 @@ public partial class WorldDoors : Node3D
     public bool IsInspecting => _inspection is not null;
     public int TriangleCount { get; private set; }
     public int InteractiveCount => Doors.Count(d=>d.BlockedReason.Length==0);
+    public ImmutableArray<ExplorationDoorLimit> CheckpointLimits => Doors.Select(d=>
+        new ExplorationDoorLimit(d.SourceId,d.Frames.Length,d.BlockedReason.Length>0,d.InitialFrame)).ToImmutableArray();
+
+    public ImmutableArray<ExplorationDoor> CaptureCheckpoint()
+    {
+        if(IsInspecting)throw new InvalidOperationException("Finish animation inspection before saving a checkpoint");
+        return Doors.Select(d=>d.CaptureCheckpoint()).ToImmutableArray();
+    }
+
+    // Caller validates the complete checkpoint before any visible or physical state changes.
+    public void RestoreCheckpoint(ImmutableArray<ExplorationDoor> poses)
+    {
+        CancelInspection();
+        var byId=Doors.ToDictionary(d=>d.SourceId);
+        foreach(var pose in poses)byId[pose.Id].RestoreCheckpoint(pose);
+    }
 
     private static IEnumerable<MeshInstance3D> Meshes(Node node)
     {
@@ -217,7 +235,15 @@ public partial class WorldDoor : Node3D
     public StaticBody3D Body { get; private set; }=null!;
     public int CurrentFrame { get; private set; }
     public int TargetFrame { get; private set; }
+    public int InitialFrame { get; private set; }
     private double _phase;
+
+    public ExplorationDoor CaptureCheckpoint() => new(SourceId,CurrentFrame,TargetFrame,CurrentFrame==TargetFrame?0:_phase);
+
+    public void RestoreCheckpoint(ExplorationDoor pose)
+    {
+        SetFrame(pose.Frame);TargetFrame=pose.Target;_phase=pose.Phase;
+    }
 
     public static Aabb RenderBounds(MeshInstance3D frame)
     {
@@ -245,7 +271,8 @@ public partial class WorldDoor : Node3D
         }
         Body=new StaticBody3D { CollisionLayer=(uint)(collidable?5:4),CollisionMask=2 };
         Shape=new CollisionShape3D();Body.AddChild(Shape);AddChild(Body);
-        SetFrame(open?frames.Length-1:0);
+        InitialFrame=open?frames.Length-1:0;
+        SetFrame(InitialFrame);
     }
 
     public void SetFrame(int index)
@@ -278,7 +305,7 @@ public partial class WorldDoor : Node3D
                 var capsuleBounds=new Aabb(player.GlobalPosition-size/2,size);
                 if(bounds.Intersects(capsuleBounds)) { TargetFrame=CurrentFrame;_phase=0;return false; }
             }
-            Frames[CurrentFrame].Visible=false;CurrentFrame=next;Frames[next].Visible=true;Shape.Shape=Shapes[next];_phase-=1;
+            Frames[CurrentFrame].Visible=false;CurrentFrame=next;Frames[next].Visible=true;Shape.Shape=Shapes[next];_phase=Math.Max(0,_phase-1);
         }
         return true;
     }

@@ -1,6 +1,8 @@
 using Godot;
+using System.Collections.Immutable;
+using NeoWizardry.Core;
 
-// Research world: original static collision plus authored capsule walking; no encounters or world saves.
+// Research world: original static collision, authored capsule walking and isolated checkpoints; no campaign integration.
 public partial class WorldPreview : Node3D
 {
     private Camera3D _view = null!;
@@ -16,6 +18,9 @@ public partial class WorldPreview : Node3D
     private WorldObjects? _objects;
     private WorldDoors? _doors;
     private bool _useDoor,_inspectDoor;
+    private bool _saveCheckpoint,_loadCheckpoint;
+    private string _contentHash="",_checkpointPath="";
+    private Label _checkpointStatus=null!;
     private Label _doorStatus=null!;
     private int _arrivalIndex=-1;
     private bool _walking, _enterWalk;
@@ -51,6 +56,8 @@ public partial class WorldPreview : Node3D
                 throw new InvalidDataException("Use --world /absolute/path/monastery1.glb");
             var path = Path.GetFullPath(args[index + 1]);
             if(!System.IO.File.Exists(path))throw new FileNotFoundException("World preview GLB is missing");
+            _contentHash=ExplorationCheckpointFile.ContentHash(path);
+            _checkpointPath=ProjectSettings.GlobalizePath($"user://exploration/{_contentHash}.json");
             using var document = new GltfDocument();
             using var state = new GltfState();
             var error = document.AppendFromFile(path, state);
@@ -128,8 +135,10 @@ public partial class WorldPreview : Node3D
             crosshair.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);
             crosshair.Position-=new Vector2(4,10);layer.AddChild(crosshair);
             _doorStatus=new Label { Position=new Vector2(16,168),Text=_doors is null?"Door geometry not loaded":
-                 $"P inspect door animation · R use aimed door · {_doors.Doors.Count} native models · {_doors.InteractiveCount} eligible · session state only" };
+                 $"P inspect door animation · R use aimed door · {_doors.Doors.Count} native models · {_doors.InteractiveCount} eligible · F5 checkpoints" };
             layer.AddChild(_doorStatus);
+            _checkpointStatus=new Label { Position=new Vector2(16,196),Text="F5 save checkpoint · F9 load · resumes in flight · separate from expedition saves" };
+            layer.AddChild(_checkpointStatus);
             _smoke = args.Contains("--world-smoke");
             if(_smoke)
             {
@@ -179,6 +188,7 @@ public partial class WorldPreview : Node3D
                     int Expected(string option) { var at=Array.IndexOf(args,option);if(at<0 || at+1>=args.Length)throw new InvalidDataException("Missing door smoke count");return int.Parse(args[at+1]); }
                     _doors.Check(Expected("--world-door-models"),Expected("--world-door-frames"),Expected("--world-door-triangles"),Expected("--world-door-interactive"),_walker);
                 }
+                CheckpointSmoke();
                 if(args.Contains("--world-collision-smoke"))Callable.From(CollisionSmoke).CallDeferred();
                 else Callable.From(()=>GetTree().Quit()).CallDeferred();
             }
@@ -189,6 +199,28 @@ public partial class WorldPreview : Node3D
     public override void _PhysicsProcess(double delta)
     {
         if(_view is null || _smoke)return;
+        if(_saveCheckpoint || _loadCheckpoint)
+        {
+            bool save=_saveCheckpoint;_saveCheckpoint=_loadCheckpoint=false;
+            try
+            {
+                if(save)
+                {
+                    var checkpoint=CaptureCheckpoint();
+                    ExplorationCheckpointFile.Write(_checkpointPath,checkpoint.Serialize(_contentHash,CheckpointLimits));
+                    _checkpointStatus.Text="Checkpoint saved · F9 restores in flight";
+                }
+                else
+                {
+                    var checkpoint=ExplorationCheckpoint.Parse(ExplorationCheckpointFile.Read(_checkpointPath),_contentHash,CheckpointLimits);
+                    RestoreCheckpoint(checkpoint);
+                    _checkpointStatus.Text="Checkpoint loaded in flight · F enters walking at aimed floor";
+                }
+            }
+            catch(Exception error) when(error is InvalidDataException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException or System.Text.DecoderFallbackException)
+            { _checkpointStatus.Text=$"Checkpoint {(save?"save":"load")} failed: {error.Message}"; }
+            return;
+        }
         if(_inspectDoor)
         {
             _inspectDoor=false;_walking=false;_enterWalk=false;
@@ -220,6 +252,60 @@ public partial class WorldPreview : Node3D
         _walker.Step(delta,direction);
         _view.GlobalPosition=_walker.GlobalPosition+Vector3.Up*WorldWalker.EyeOffset;
         _movementStatus.Text=_walker.IsOnFloor()?"WALKING · F returns to flight":"AIRBORNE · F returns to flight";
+    }
+
+    private ImmutableArray<ExplorationDoorLimit> CheckpointLimits => _doors?.CheckpointLimits ?? [];
+    private static ExplorationPoint Point(Vector3 value)=>new(value.X,value.Y,value.Z);
+    private static Vector3 Vector(ExplorationPoint value)=>new(value.X,value.Y,value.Z);
+
+    private ExplorationCheckpoint CaptureCheckpoint() => new(1,_contentHash,Point(_view.GlobalPosition),
+        Point(_view.Rotation),_speed,_doors?.CaptureCheckpoint() ?? []);
+
+    private void RestoreCheckpoint(ExplorationCheckpoint checkpoint)
+    {
+        checkpoint.Validate(_contentHash,CheckpointLimits);
+        if(checkpoint.Speed>_span*2)throw new InvalidDataException("Checkpoint flight speed exceeds this world's limit");
+        _doors?.RestoreCheckpoint(checkpoint.Doors);
+        _walking=_enterWalk=_useDoor=_inspectDoor=false;
+        if(_walker is not null)_walker.Velocity=Vector3.Zero;
+        _view.GlobalPosition=Vector(checkpoint.Position);_view.Rotation=Vector(checkpoint.Rotation);_speed=checkpoint.Speed;
+        _looking=false;Input.MouseMode=Input.MouseModeEnum.Visible;
+        _movementStatus.Text="FLIGHT · checkpoint restored";
+    }
+
+    private void CheckpointSmoke()
+    {
+        var initial=CaptureCheckpoint();
+        string Encode()=>CaptureCheckpoint().Serialize(_contentHash,CheckpointLimits);
+        var encoded=Encode();
+        _view.GlobalPosition+=Vector3.One;_speed*=0.5f;
+        var loaded=ExplorationCheckpoint.Parse(encoded,_contentHash,CheckpointLimits);
+        RestoreCheckpoint(loaded);
+        if(Encode()!=encoded || _walking || _enterWalk)throw new InvalidDataException("Exploration checkpoint roundtrip failed");
+        if(_doors is { Doors.Count:>0 })
+        {
+            foreach(var door in _doors.Doors.Where(d=>d.BlockedReason.Length==0))
+            {
+                door.RequestUse();door.Advance(0.5/door.Fps,null);
+                var moving=Encode();
+                door.Advance(256.0/door.Fps,null);
+                RestoreCheckpoint(ExplorationCheckpoint.Parse(moving,_contentHash,CheckpointLimits));
+                if(Encode()!=moving || door.CurrentFrame==door.TargetFrame)throw new InvalidDataException("Moving door checkpoint lost its phase/target");
+                door.Advance(256.0/door.Fps,null);
+                if(door.CurrentFrame!=door.TargetFrame)throw new InvalidDataException("Restored door did not finish movement");
+                RestoreCheckpoint(initial);
+            }
+            _doors.PreviewNext(_view);
+            bool rejected=false;
+            try { CaptureCheckpoint(); } catch(InvalidOperationException) { rejected=true; }
+            if(!rejected)throw new InvalidDataException("Animation inspection leaked into exploration checkpoint");
+        }
+        RestoreCheckpoint(initial);
+        var invalid=loaded with { ContentHash=new string('0',64) };
+        bool refused=false;
+        try { RestoreCheckpoint(invalid); } catch(InvalidDataException) { refused=true; }
+        if(!refused || Encode()!=encoded)throw new InvalidDataException("Checkpoint rejection changed live state");
+        GD.Print("PASS: exploration checkpoints restore camera and door motion, reject inspection and foreign content without mutation");
     }
 
     private async void CollisionSmoke()
@@ -364,6 +450,8 @@ public partial class WorldPreview : Node3D
         }
         if(input is InputEventKey key && key.Pressed && !key.Echo)
         {
+            if(key.Keycode == Key.F5)_saveCheckpoint=true;
+            if(key.Keycode == Key.F9)_loadCheckpoint=true;
             if(key.Keycode == Key.P)_inspectDoor=true;
             if(key.Keycode == Key.R)_useDoor=true;
             if(key.Keycode == Key.O && _objects is not null)_objects.Visible=!_objects.Visible;
