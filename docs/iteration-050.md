@@ -16,10 +16,12 @@ The HUD shows each hero's earned XP and the original profession's first-level go
 
 ## Validation
 
-- Portable checks cover native base/override rewards for solo through eight heroes, truncation, exact save continuation, receipt corruption, no repeat awards, preserved inventory, previously accumulated XP and old-save compatibility.
+- 4,196 portable core/input checks pass (434 connected expedition checks). Tests cover native base/override rewards for solo through eight heroes, truncation, exact save continuation, receipt corruption, no repeat awards, preserved inventory, previously accumulated XP and old-save compatibility.
 - A living hero with condition 16 shares XP; dead and captive heroes do not. Unsupported NPC/direct/table/gold branches fail closed.
 - 63 Python tests pass; the client builds with zero warnings/errors.
 - Local Godot loads the original Dusk Bat's five clips/156 frames, wins the authored fixture encounter, verifies 794 XP and exact terminal reload, and preserves the world return point.
-- Original monastery runner and Windows publication checks are pending at implementation commit time.
+- Linux CI passed: https://github.com/Aetton/neowizardry/actions/runs/39075034456 .
+- Both original monastery levels passed creature playback, 794 XP awarded once, exact terminal reload and no respawn: https://github.com/Aetton/neowizardry/actions/runs/39075034471 .
+- Windows build/export/EXE/updater gates passed: https://github.com/Aetton/neowizardry/actions/runs/39075034479 . Published preview: https://github.com/Aetton/neowizardry/releases/tag/windows-build-67 . All gates use runtime source 2ad13bf91c36b1d505fc12b3befe7a8f4ec62937.
 
 No original assets or derived catalogs are committed or bundled in public releases.
