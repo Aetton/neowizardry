@@ -48,7 +48,7 @@ def prop():
     result += pack('2b5Bf3Bf',11,1,1,0,0,0,1,15,0,1,0,1)
     result += bytes(50)+pack('5B',2,0,0,0,1)+pack('B',2)
     result += pack('2B',1,0)+mesh()
-    result += pack('2B3i20f',0,2,0,0,2,*range(20))
+    result += pack('2B3i20f',0,2,0,0,2,0,0,0,0,0,1,0,1,1,1,2,0,0,0,0,1,0,1,1,1)
     result += pack('B',1)+trigger(name='DOOR_TRIGGER',action=1,positioned=False,door=True)
     result += pack('3B',1,2,3)
     return result

@@ -9,6 +9,7 @@ on:
       - 'tools/textures.py'
       - 'tools/oct.py'
       - 'tools/world_objects.py'
+      - 'tools/world_doors.py'
       - 'client/WorldPreview.cs'
       - 'client/WorldCollision.cs'
       - 'client/WorldObjects.cs'
@@ -71,6 +72,12 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m tools.world_objects "$env:NEO_LEVELS_ARCHIVE" --out "$env:NEO_WORLD_CACHE" --report "$env:RUNNER_TEMP/monastery-objects.json"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Export private native door frames
+        run: |
+          python -m unittest discover -s tests -p test_world_doors.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m tools.world_doors "$env:NEO_LEVELS_ARCHIVE" --out "$env:NEO_WORLD_CACHE" --report "$env:RUNNER_TEMP/monastery-doors.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Prepare retained Godot tools
         run: ./tools/windows/PrepareGodot.ps1 -ToolsRoot "$env:LOCALAPPDATA/NeoWizardryBuildTools/godot-4.5.1-v1"
       - name: Build and verify original geometry in Godot
@@ -89,5 +96,6 @@ jobs:
             ${{ runner.temp }}/monastery-geometry.json
             ${{ runner.temp }}/monastery-collision.json
             ${{ runner.temp }}/monastery-objects.json
+            ${{ runner.temp }}/monastery-doors.json
           if-no-files-found: ignore
           retention-days: 7

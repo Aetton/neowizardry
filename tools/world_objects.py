@@ -9,6 +9,7 @@ import argparse
 from collections import Counter
 import hashlib
 import json
+import struct
 from pathlib import Path
 import sys
 
@@ -17,6 +18,10 @@ from tools.slf import Archive, FormatError
 
 
 class ObjectsReader(Reader):
+    def __init__(self, data, geometry=False):
+        super().__init__(data)
+        self.geometry = geometry
+
     def value(self, fmt):
         return self.unpack(fmt)[0]
 
@@ -60,7 +65,11 @@ class ObjectsReader(Reader):
             kind = self.version(0, 4)
             raw = self.take(297 if kind == 4 else 281)
             result.append({'kind': kind, 'name': text(raw[:40]),
-                           'textures': [text(raw[i:i+40]) for i in (40,80,120,160)]})
+                           'textures': [text(raw[i:i+40]) for i in (40,80,120,160)],
+                           'type':kind, 'diffuse':struct.unpack_from('<3f',raw,0xd4),
+                           'transmit':struct.unpack_from('<3f',raw,0xe0),
+                           'opacity':struct.unpack_from('<f',raw,0xfc)[0],
+                           'fps':struct.unpack_from('<f',raw,0x111)[0]})
         return result
 
     def mesh(self):
@@ -76,22 +85,33 @@ class ObjectsReader(Reader):
         if version > 3:
             self.take(self.count('b', 127) * 4)
         lods = 1
+        positions = []
         if flags & 1:
             compression = self.version(1, 2)
             lods = self.count('h', 32767)
             if not lods or not flags & 2:
                 raise FormatError('Unsupported dynamic vertex compression')
-            if compression == 2 and self.floats(1)[0] <= 0:
+            scale = self.floats(1)[0] if compression == 2 else 1000.0
+            if scale <= 0:
                 raise FormatError('Invalid dynamic compression scale')
-            self.take(vertices * lods * 6)
+            if self.geometry:
+                for _ in range(lods):
+                    positions.append([[v*500/scale for v in row] for row in self.array('hhh',vertices)])
+            else:
+                self.take(vertices * lods * 6)
         else:
-            self.array('fff', vertices)
+            values = self.array('fff', vertices)
+            if self.geometry:
+                positions = [[[v*500 for v in row] for row in values]]
         rows = self.array('3H6fHB' if flags & 4 else '3I6fIB', faces)
         materials = self.materials()
         if any(any(i >= vertices for i in row[:3]) or row[-2] >= len(materials) for row in rows):
             raise FormatError('Dynamic mesh vertex/material index outside bounds')
-        return {'start':start, 'end':self.offset, 'version':version, 'vertices':vertices,
-                'faces':faces, 'lod_frames':lods, 'transform':transform, 'materials':materials}
+        result = {'start':start, 'end':self.offset, 'version':version, 'vertices':vertices,
+                  'faces':faces, 'lod_frames':lods, 'transform':transform, 'materials':materials}
+        if self.geometry:
+            result.update(positions=positions, polygons=rows)
+        return result
 
     def animation_mesh(self):
         count = self.count('B', 255)
@@ -283,9 +303,9 @@ class ObjectsReader(Reader):
         return result
 
 
-def parse(data):
+def parse(data, *, geometry=False):
     level = static_level(data)
-    r = ObjectsReader(data)
+    r = ObjectsReader(data, geometry)
     r.offset = level.geometry_end
     sections = {'geometry_end':r.offset}
     lights = r.count('h', 32767)

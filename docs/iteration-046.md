@@ -1,0 +1,9 @@
+# Iteration 046 — native door geometry and constrained interaction
+
+Private door frame export reads native prop meshes (including compressed vertex frames, per-face UV/material indices and channel-2 parts), reconstructs path poses, and binds both GLB and manifest to source hashes. It uses the independently reconstructed loader layouts from [the fixed decomp research revision](https://github.com/agluszak/wizardry-8-decomp/tree/075cbd0b853c4670e94f6ae4fe48d53b52b5e819), especially Prop::AttachAnimationInstances, PathAI, ReadMesh and Trigger::Run. No source implementation is copied.
+
+Serialized float vertices are multiplied by 500; compressed shorts use 500/compression_scale. Path position, rotation and optional scale replace the model-instance placement; without a path, the prop representation location is used. The final viewing transform remains `(x,y,-z)*0.0013`. Each frame is baked separately; smooth quaternion interpolation and native solver parity are not claimed. Mesh-transform fields consumed by ReadMesh are replaced by the prop/path placement as in the prop attachment path. Only the active channel-2 geometry is included, not all prop animation channels.
+
+Interaction scope is an authored, reversible preview of unconditionally eligible door endpoints. Locked, jammed, undiscovered, item/state-dependent, linked, one-way, timed and unsupported action records fail closed with a reason. Original inventory, quest flags, callbacks, recipient dispatch and transition integration are not provided by the isolated world viewer. Source flag 0x01 controls physical collision; all rendered doors can be picked for inspection. Original-derived door frames and embedded textures remain private beside the source cache; public reports contain aggregate counts and frame bounds.
+
+Validation and original findings follow after Actions runs.
