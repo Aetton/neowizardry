@@ -466,6 +466,8 @@ public partial class WorldPreview : Node3D
             if(key.Keycode == Key.F5)_saveCheckpoint=true;
             if(key.Keycode == Key.F9)_loadCheckpoint=true;
             if(key.Keycode == Key.B)_beginEncounter=true;
+            if(key.Keycode == Key.V && _creature is {Visible:true})
+            { _walking=_enterWalk=false;_doors?.CancelInspection();_creature.Focus(_view); }
             if(BattleOpen)return;
             if(key.Keycode == Key.P)_inspectDoor=true;
             if(key.Keycode == Key.R)_useDoor=true;

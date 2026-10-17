@@ -20,3 +20,16 @@ objects=world_objects.parse(source)
 door_glb,door_manifest,door_report=world_doors.build(source)
 (root / 'fixture.nwdoors.glb').write_bytes(door_glb)
 (root / 'fixture.nwdoors.json').write_text(json.dumps(door_manifest),encoding='utf-8')
+
+# Optional authored creature: the source of the binding is the C# fixture catalog.
+if len(sys.argv)>2:
+    from test_creatures import FixtureResources
+    from tools import creatures
+    catalog=json.loads(Path(sys.argv[2]).read_text())
+    record=catalog['monsters'][0]
+    payload,manifest,_=creatures.build(FixtureResources(),0)
+    manifest.update(database_sha256=catalog['database_sha256'],record_sha256=record['record_sha256'],
+                    cycle_name=bytes.fromhex(record['raw_record_hex'])[0x189:0x1b9].split(b'\0')[0].decode('ascii'))
+    (root/'monsters.json').write_text(json.dumps(catalog),encoding='utf-8')
+    (root/'creature-0.nwcreature.glb').write_bytes(payload)
+    (root/'creature-0.nwcreature.json').write_text(json.dumps(manifest),encoding='utf-8')

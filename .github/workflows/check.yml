@@ -37,14 +37,20 @@ jobs:
           chmod +x "$executable"
           timeout 60s "$executable" --headless --path client -- --smoke --catalog "$RUNNER_TEMP/neo-test-items.json" --spells "$RUNNER_TEMP/neo-test-items.spells.json" --recipes "$RUNNER_TEMP/neo-test-items.recipes.json"
           timeout 60s "$executable" --headless --path client -- --touch --mobile-smoke --catalog "$RUNNER_TEMP/neo-test-items.json" --spells "$RUNNER_TEMP/neo-test-items.spells.json" --recipes "$RUNNER_TEMP/neo-test-items.recipes.json"
-          python tests/world_fixture.py "$RUNNER_TEMP/world-fixture"
-          timeout 60s "$executable" --headless --path client -- --world "$RUNNER_TEMP/world-fixture/fixture.glb" --world-smoke --world-collision-smoke --world-triangles 2 --world-colliders 2 --world-objects 1 --world-arrivals 1 --world-doors 1 --world-door-models 1 --world-door-frames 2 --world-door-triangles 2 --world-door-interactive 1 --world-expedition-smoke
+          python tests/world_fixture.py "$RUNNER_TEMP/world-fixture" "$RUNNER_TEMP/neo-test-items.monsters.json"
+          timeout 60s "$executable" --headless --path client -- --world "$RUNNER_TEMP/world-fixture/fixture.glb" --world-smoke --world-collision-smoke --world-triangles 2 --world-colliders 2 --world-objects 1 --world-arrivals 1 --world-doors 1 --world-door-models 1 --world-door-frames 2 --world-door-triangles 2 --world-door-interactive 1 --world-expedition-smoke --world-creature-required
+          python -c 'import os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"world-fixture/creature-0.nwcreature.glb"; p.write_bytes(p.read_bytes()+b"tampered")'
+          if timeout 60s "$executable" --headless --path client -- --world "$RUNNER_TEMP/world-fixture/fixture.glb" --world-smoke --expedition > "$RUNNER_TEMP/creature-invalid.log" 2>&1; then
+            echo 'Invalid creature geometry was accepted'; exit 1
+          fi
+          python -c 'import os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"creature-invalid.log"; assert "Creature GLB hash mismatch" in p.read_text(), p.read_text()'
+          python tests/world_fixture.py "$RUNNER_TEMP/world-fixture" "$RUNNER_TEMP/neo-test-items.monsters.json"
           python -c 'import os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"world-fixture/fixture.nwdoors.glb"; p.write_bytes(p.read_bytes()+b"tampered")'
           if timeout 60s "$executable" --headless --path client -- --world "$RUNNER_TEMP/world-fixture/fixture.glb" --world-smoke > "$RUNNER_TEMP/door-invalid.log" 2>&1; then
             echo 'Invalid door geometry was accepted'; exit 1
           fi
           python -c 'import os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"door-invalid.log"; assert "Door frame GLB hash mismatch" in p.read_text(), p.read_text()'
-          python tests/world_fixture.py "$RUNNER_TEMP/world-fixture"
+          python tests/world_fixture.py "$RUNNER_TEMP/world-fixture" "$RUNNER_TEMP/neo-test-items.monsters.json"
           python -c 'import json,os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"world-fixture/fixture.nwobjects.json"; v=json.loads(p.read_text()); v["pvl_sha256"]="0"*64; p.write_text(json.dumps(v))'
           if timeout 60s "$executable" --headless --path client -- --world "$RUNNER_TEMP/world-fixture/fixture.glb" --world-smoke > "$RUNNER_TEMP/world-invalid.log" 2>&1; then
             echo 'Invalid object provenance was accepted'; exit 1

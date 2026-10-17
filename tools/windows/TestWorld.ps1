@@ -19,7 +19,7 @@ foreach ($level in $reportData.levels) {
     if ($collisionData) {
         $collision=@($collisionData.levels | Where-Object { [IO.Path]::GetFileNameWithoutExtension($_.resource).ToLowerInvariant() -eq $name })
         if ($collision.Count -ne 1) { throw "Missing collision metadata: $name" }
-        $start.Arguments+=" --world-collision-smoke --world-expedition-smoke --world-colliders $($collision[0].selected)"
+        $start.Arguments+=" --world-collision-smoke --world-expedition-smoke --world-creature-required --world-colliders $($collision[0].selected)"
     }
     if ($objectsData) {
         $objects=@($objectsData.levels | Where-Object { [IO.Path]::GetFileNameWithoutExtension($_.resource).ToLowerInvariant() -eq $name })

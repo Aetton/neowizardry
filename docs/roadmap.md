@@ -1,7 +1,7 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Status checked against code and iteration reports through **048**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+Status checked against code and iteration reports through **049**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
 | Workstream | Recovered / implemented | Still required for original gameplay |
 |---|---|---|
@@ -201,3 +201,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 048 — connected expedition
 
 [Iteration 048](iteration-048.md) connects an opt-in monastery exploration → authored physical encounter → exploration loop, with one shared party/inventory/GameState and atomic world/battle saves. Ready/active/victory/defeat, positions, HP, RNG and AI survive restart; cleared encounters cannot replay. Reach/occlusion gates and party sizes 1–8 are exercised. Monster records can come from the private original catalog, but placement, party facts and grid remain authored. The visible creature marker is a placeholder. Next: original creature models/animations; native spawn/reward/progression/events and continuous-world combat remain open.
+
+
+## Iteration 049 — first original creature representation
+
+[Iteration 049](iteration-049.md) imports Dusk Bat through its native +0x189 cycle-name key, MLS cycle selection and compressed MON vertex frames, with original textures and strict asset/catalog binding. Five clips play through an authored cosmetic queue and focus camera; cosmetic animation does not mutate gameplay/RNG or overwrite the exploration return point. Particle/death, damage skins, native timing/shading and wider creature coverage remain open. Next: representative original rewards/progression/events for the connected section, while expanding supported visual mechanisms.

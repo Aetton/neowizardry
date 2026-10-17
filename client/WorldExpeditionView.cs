@@ -5,6 +5,7 @@ using NeoWizardry.Core;
 public partial class WorldPreview
 {
     private WorldExpeditionState? _expedition;
+    private WorldCreature? _creature;
     private ItemCatalog _expeditionItems=null!;
     private MonsterCatalog _expeditionMonsters=null!;
     private Label _expeditionStatus=null!,_battleFeedback=null!;
@@ -53,6 +54,14 @@ public partial class WorldPreview
         AddChild(_encounterMarker);
         _encounterMarker.AddChild(new Label3D {Text=$"{definition.Label}\nB: encounter · model pending",Position=Vector3.Up*0.6f,
             Billboard=BaseMaterial3D.BillboardModeEnum.Enabled,FontSize=24,PixelSize=0.003f});
+        int worldAt=Array.IndexOf(args,"--world");
+        string creaturePath=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(args[worldAt+1]))!,$"creature-{definition.Id}.nwcreature.json");
+        if(File.Exists(creaturePath))
+        {
+            _creature=WorldCreature.Load(creaturePath,definition,_expeditionMonsters.DatabaseSha256,state=>ConfigureTextures(state,args.Contains("--world-smoke")));
+            _creature.Position=_encounterAnchor-Vector3.Up*1.25f;AddChild(_creature);
+        }
+        else if(args.Contains("--world-creature-required"))throw new InvalidDataException("Required original creature asset missing");
         _expeditionStatus=new Label {Position=new(16,224)};layer.AddChild(_expeditionStatus);
         _checkpointStatus.Text="EXPEDITION · F5 save party/world/battle · F9 load · resumes in flight";
         _battlePanel=new PanelContainer {Visible=false};
@@ -69,10 +78,11 @@ public partial class WorldPreview
     {
         if(_expedition is null)return;
         var s=_expedition.Game;
-        _expeditionStatus.Text=$"EXPEDITION · {_expedition.Phase} · B at orange marker to fight · authored encounter/grid\n"+
+        _expeditionStatus.Text=$"EXPEDITION · {_expedition.Phase} · B near encounter to fight · V focus creature · authored encounter/grid\n"+
             string.Join(" · ",s.Party.Select((h,i)=>$"P{i+1} {h.Hp}/{h.MaxHp} HP"))+"\n"+
             $"{s.Items!.Items.Length} owned instances · original rewards/progression pending";
-        _encounterMarker.Visible=_expedition.Phase==WorldEncounterPhase.Ready;
+        _encounterMarker.Visible=_creature is null && _expedition.Phase==WorldEncounterPhase.Ready;
+        if(_creature is not null)_creature.Visible=_expedition.Phase!=WorldEncounterPhase.Victory;
         _battlePanel.Visible=BattleOpen;
         foreach(var child in _battleBody.GetChildren()){_battleBody.RemoveChild(child);child.QueueFree();}
         if(!BattleOpen)return;
@@ -114,9 +124,19 @@ public partial class WorldPreview
 
     private void ResolveExpedition(IReadOnlyList<TacticalOrder> orders)
     {
-        var result=WorldExpedition.Advance(_expedition!,_expeditionItems,orders);_expedition=result.State;
+        var before=_expedition!;
+        var result=WorldExpedition.Advance(before,_expeditionItems,orders);_expedition=result.State;
+        if(_creature is not null)
+        {
+            string enemy=before.Game.Enemy.Id;
+            var cues=result.Events.Where(e=>e.StartsWith(enemy+" → ")).Select(_=>6).ToList();
+            if(before.Game.Melee!.Field!.Positions[enemy]!=_expedition.Game.Melee!.Field!.Positions[enemy])cues.Insert(0,4);
+            if(_expedition.Game.Enemy.Hp<before.Game.Enemy.Hp)cues.Add(20);
+            _creature.Cues(cues);
+        }
         if(_expedition.Phase==WorldEncounterPhase.Victory)
         {
+            RestoreCheckpoint(_expedition.World);
             _walking=_enterWalk=false;
             _checkpointStatus.Text="Encounter cleared · exploration resumed in flight · F5 saves victory";
         }
@@ -134,11 +154,12 @@ public partial class WorldPreview
         if(GetWorld3D().DirectSpaceState.IntersectRay(ray).Count>0){_checkpointStatus.Text="Encounter marker is occluded";return;}
         _expedition=WorldExpedition.Begin(_expedition with {World=CaptureCheckpoint()});
         _walking=_enterWalk=_useDoor=_inspectDoor=false;RefreshExpedition();
+        _creature?.Focus(_view);
     }
 
     private void SaveExpedition()
     {
-        var candidate=_expedition! with {World=CaptureCheckpoint()};
+        var candidate=_expedition! with {World=BattleOpen?_expedition!.World:CaptureCheckpoint()};
         var json=WorldExpedition.Save(candidate,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters);
         ExplorationCheckpointFile.Write(_expeditionPath,json,WorldExpedition.MaximumBytes);
         _expedition=candidate;
@@ -148,8 +169,11 @@ public partial class WorldPreview
     {
         var candidate=WorldExpedition.Load(ExplorationCheckpointFile.Read(_expeditionPath,WorldExpedition.MaximumBytes),
             _contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters);
+        if(_creature is not null && candidate.MonsterDefinitionId!=_creature.DefinitionId)
+            throw new InvalidDataException("Saved encounter does not match the loaded creature renderer");
         // World validation (including speed) completes before the shared game state is replaced.
         RestoreCheckpoint(candidate.World);_expedition=candidate;_battleHero=0;_beginEncounter=false;RefreshExpedition();
+        _creature?.ResetIdle();if(BattleOpen)_creature?.Focus(_view);
     }
 
     private void CheckWorldExpedition()
@@ -160,14 +184,21 @@ public partial class WorldPreview
         try
         {
             var original=_expedition;
+            if(_creature is not null)
+            {
+                string game=Game.Save(_expedition.Game);_creature.Check();
+                if(Game.Save(_expedition.Game)!=game)throw new InvalidDataException("Cosmetic animation changed gameplay state");
+            }
             _view.GlobalPosition=_encounterAnchor+Vector3.One*_span*5;
             TryBeginExpeditionEncounter();
             if(_expedition.Phase!=WorldEncounterPhase.Ready)throw new InvalidDataException("Distant encounter started");
             _view.GlobalPosition=_encounterAnchor+Vector3.Up*0.1f;
+            var entryPosition=_view.GlobalPosition;
             TryBeginExpeditionEncounter();
             if(_expedition.Phase!=WorldEncounterPhase.Active || !_battlePanel.Visible)
                 throw new InvalidDataException("Arrival encounter did not open battle UI");
             ResolveExpedition([]);SaveExpedition();
+            if(Vector(_expedition.World.Position)!=entryPosition)throw new InvalidDataException("Cosmetic battle camera overwrote exploration position");
             var expected=Game.Save(WorldExpedition.Advance(_expedition,_expeditionItems).State.Game);
             ResolveExpedition([]);LoadExpedition();
             if(Game.Save(WorldExpedition.Advance(_expedition,_expeditionItems).State.Game)!=expected || !_battlePanel.Visible || _walking)
@@ -180,6 +211,8 @@ public partial class WorldPreview
             for(int round=0;round<160 && _expedition.Phase==WorldEncounterPhase.Active;round++)ResolveExpedition([]);
             if(_expedition.Phase is not (WorldEncounterPhase.Victory or WorldEncounterPhase.Defeat))throw new InvalidDataException("World encounter did not terminate");
             var outcome=_expedition.Phase;SaveExpedition();
+            if(outcome==WorldEncounterPhase.Victory && _view.GlobalPosition!=entryPosition)
+                throw new InvalidDataException("Victory did not restore exploration camera");
             _expedition=original;LoadExpedition();TryBeginExpeditionEncounter();
             if(_expedition.Phase!=outcome || _encounterMarker.Visible || _battlePanel.Visible!=(outcome==WorldEncounterPhase.Defeat))
                 throw new InvalidDataException("Completed world encounter respawned on reload");

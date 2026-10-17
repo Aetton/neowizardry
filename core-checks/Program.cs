@@ -371,6 +371,7 @@ if(args.Length==2 && args[0]=="--fixture")
         new System.Text.Json.JsonSerializerOptions{PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
     File.WriteAllText(Path.ChangeExtension(args[1],".spells.json"),referenceJson);
     File.WriteAllText(Path.ChangeExtension(args[1],".recipes.json"),recipeReferenceJson);
+    File.WriteAllText(Path.ChangeExtension(args[1],".monsters.json"),System.Text.Json.JsonSerializer.Serialize(MonsterCombat.FixtureCatalog(),new System.Text.Json.JsonSerializerOptions {PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.SnakeCaseLower}));
 }
 else if(args.Length==2 && args[0]=="--monsters")
 {
