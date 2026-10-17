@@ -117,7 +117,7 @@ def build(data, textures=None):
             frames.append(len(meshes))
             meshes.append(frame_geometry(prop,frame,materials,material_ids))
         doors.append({'id':prop['start'], 'trigger_id':trigger['start'], 'name':prop['name'],
-                      'frames':frames, 'bounds':[pvl.bounds([pvl.transformed(v) for v in meshes[i].positions]) for i in frames],
+                      'frames':frames, 'bounds':[pvl.bounds([pvl.transformed(meshes[i].positions[v]) for face in meshes[i].indices for v in face]) for i in frames],
                       'fps':fps, 'open':trigger['door']['open'],
                       'blocked_reason':restriction(trigger) or ('no moving frames' if count<2 else ''), 'flags':prop['flags']})
     if not doors:
@@ -131,7 +131,7 @@ def build(data, textures=None):
                 'interactive':sum(not d['blocked_reason'] for d in doors),
                 'collidable':sum(bool(d['flags']&1) for d in doors),
                 'restrictions':dict(Counter(d['blocked_reason'] for d in doors if d['blocked_reason'])),
-                'frame_bounds':[pvl.bounds([pvl.transformed(v) for v in m.positions]) for m in meshes]}
+                'frame_bounds':[pvl.bounds([pvl.transformed(m.positions[v]) for face in m.indices for v in face]) for m in meshes]}
     return payload,manifest,metadata
 
 

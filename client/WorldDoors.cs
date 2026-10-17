@@ -55,9 +55,9 @@ public partial class WorldDoors : Node3D
                     throw new InvalidDataException("Missing/duplicate door frame mesh");
                 var expected=record.GetProperty("bounds")[i];
                 Vector3 Point(JsonElement row)=>new(row[0].GetSingle(),row[1].GetSingle(),row[2].GetSingle());
-                var low=Point(expected[0]);var high=Point(expected[1]);var box=frame.GetAabb();
-                if(!low.IsFinite() || !high.IsFinite() || !box.Position.IsEqualApprox(low) || !box.End.IsEqualApprox(high))
-                    throw new InvalidDataException("Native door frame bounds mismatch");
+                var low=Point(expected[0]);var high=Point(expected[1]);var box=WorldDoor.RenderBounds(frame);
+                if(!low.IsFinite() || !high.IsFinite() || (box.Position-low).Length()>0.002f || (box.End-high).Length()>0.002f)
+                    throw new InvalidDataException($"Native door frame bounds mismatch: expected {low}..{high}, got {box.Position}..{box.End}");
                 frames[i]=frame;
                 result.TriangleCount+=frame.Mesh.GetFaces().Length/3;
             }
@@ -93,7 +93,7 @@ public partial class WorldDoors : Node3D
         if(Doors.Any(d=>d.CurrentFrame!=d.TargetFrame))return "Wait for the active door animation";
         _inspectionIndex=(_inspectionIndex+1)%Doors.Count;
         var door=Doors[_inspectionIndex];BeginInspection(door);
-        var bounds=door.Frames[door.CurrentFrame].GetAabb();var center=bounds.GetCenter();
+        var bounds=WorldDoor.RenderBounds(door.Frames[door.CurrentFrame]);var center=bounds.GetCenter();
         float span=Math.Max(bounds.Size.Length(),1);
         view.GlobalPosition=center+new Vector3(0.8f,0.45f,0.8f)*span;view.LookAt(center);
         return $"ANIMATION INSPECTION {_inspectionIndex+1}/{Doors.Count}: {door.DisplayName} · source pose restores before walking";
@@ -178,7 +178,7 @@ public partial class WorldDoors : Node3D
                 {
                     var previous=player.GlobalPosition;
                     int next=initial==0?1:initial-1;
-                    player.GlobalPosition=door.Frames[next].GetAabb().GetCenter();
+                    player.GlobalPosition=WorldDoor.RenderBounds(door.Frames[next]).GetCenter();
                     door.RequestUse();
                     bool accepted=door.Advance(1.0/door.Fps,player);
                     player.GlobalPosition=previous;
@@ -218,6 +218,15 @@ public partial class WorldDoor : Node3D
     public int CurrentFrame { get; private set; }
     public int TargetFrame { get; private set; }
     private double _phase;
+
+    public static Aabb RenderBounds(MeshInstance3D frame)
+    {
+        var vertices=frame.Mesh.GetFaces();
+        if(vertices.Length==0)throw new InvalidDataException("Empty door frame geometry");
+        var box=new Aabb(vertices[0],Vector3.Zero);
+        foreach(var vertex in vertices)box=box.Expand(vertex);
+        return box;
+    }
 
     public void Initialize(MeshInstance3D[] frames,bool collidable,bool open)
     {
@@ -264,7 +273,7 @@ public partial class WorldDoor : Node3D
             int next=CurrentFrame+Math.Sign(TargetFrame-CurrentFrame);
             if(player is not null && (Body.CollisionLayer&1)!=0)
             {
-                var bounds=Frames[next].GetAabb().Grow(0.05f);
+                var bounds=RenderBounds(Frames[next]).Grow(0.05f);
                 var size=new Vector3(WorldWalker.Radius*2,WorldWalker.Height,WorldWalker.Radius*2);
                 var capsuleBounds=new Aabb(player.GlobalPosition-size/2,size);
                 if(bounds.Intersects(capsuleBounds)) { TargetFrame=CurrentFrame;_phase=0;return false; }
