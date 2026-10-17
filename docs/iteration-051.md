@@ -33,4 +33,10 @@ Outputs remain private beside the imported world. Shared GLBs prevent hundreds o
 
 ## Validation
 
-67 Python tests cover variants, geometry reuse, default/damage/IFL skins, bounded particle prefixes, missing optional clips, full index accounting, record-specific shared bindings and cache-corruption rebuilding. Portable gameplay/input checks remain 4,196. The client builds without warnings/errors. Synthetic Godot checks exercise texture stages/IFL, all clip variants, death holding and the expedition save/reward loop. Full original-data gallery and CI publication validation are recorded after completion.
+67 Python tests cover variants, geometry reuse, default/damage/IFL skins, bounded particle prefixes, missing optional clips, full index accounting, record-specific shared bindings and cache-corruption rebuilding. Portable gameplay/input checks remain 4,196. The client builds without warnings/errors. Synthetic Godot checks exercise texture stages/IFL, all clip variants, death holding and the expedition save/reward loop. Full validation of runtime source 96f319a4fc1e6e530ad49a051b3045536eade900:
+
+- Linux CI passed: https://github.com/Aetton/neowizardry/actions/runs/39079640147 .
+- The private Windows export confirms the same 582/595 definitions and 13 source blockers. An unchanged second export reuses verified caches. Godot checks all **178 distinct model/clip configurations**, including decoded textures, every exported frame, damage/IFL stages and camera framing. Both original monastery levels also pass creature playback, 794 XP and world/battle save continuation/no respawn: https://github.com/Aetton/neowizardry/actions/runs/39079640237 .
+- Windows build/export/EXE/updater and first-download gates passed: https://github.com/Aetton/neowizardry/actions/runs/39079640196 . Final preview: https://github.com/Aetton/neowizardry/releases/tag/windows-build-69 . Preview 68 was the initial bulk-import build; preview 69 includes the current-pose camera correction.
+- Locally, seven native models with especially large death/spell bounds pass the camera check. Older schema-1 Dusk Bat assets (5 clips / 156 frames) still load and preserve the expedition reward/save loop.
+- Headless checks establish data/playback integrity; they do not establish a pixel-for-pixel comparison with the original renderer.
