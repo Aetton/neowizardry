@@ -10,7 +10,7 @@ public static class ExplorationCheckpointChecks
         void Reject(Action action,string name)
         {
             bool rejected=false;
-            try { action(); } catch(Exception error) when(error is InvalidDataException or IOException or System.Text.Json.JsonException)
+            try { action(); } catch(Exception error) when(error is InvalidDataException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
             { rejected=true; }
             Check(rejected,name);
         }
