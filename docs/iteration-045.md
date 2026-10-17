@@ -17,3 +17,14 @@ O toggles nonphysical object markers; attached door payloads show their stored o
 Runtime checks compare prop/door/arrival counts with the original report, visit every explicit arrival, and retain texture/geometry/collision checks. Linux CI also rejects a sidecar whose PVL hash is changed while its GLB remains intact.
 
 Retail executable cross-checks: the item reader at 0x004BC413–0x004BC490 consumes a 12-byte position followed by four 4-byte fields before its trigger gate. This differs from the older editor navigation skip (24 bytes total after the name); the implementation follows the executable (28 bytes). The door payload reader at 0x004418AE–0x00441915 reads the 2-byte item ID, position gate, all 12 position bytes and 128-byte linked name; position bytes are always present even when the gate is zero. Type-4 version > 1 extras occupy 36 bytes (three data ints, a float, four bytes and four additional ints). Source semantics are recorded as layout evidence, not proof of native action execution.
+
+## Original intake
+
+Both native PVLs passed the object-prefix reader on the original-data host: https://github.com/Aetton/neowizardry/actions/runs/38984748878.
+
+| Level | Props | Bitmaps | Trigger records | Door payloads | Explicit arrivals | Trigger-bank end | Unparsed tail |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Monastery1 | 62 | 32 | 90 | 7 | 2 | 6,050,398 | 20,144 |
+| Monastery2 | 52 | 26 | 166 | 4 | 2 | 4,073,665 | 4,878 |
+
+All 172 prop/bitmap records use version 9. Trigger records consist of super triggers (60 / 62) and ambient-sound records (30 / 104). Door-payload counts are identified by serialized payload kind, not object names. Action-0x34 records total 3 / 6, of which only 2 / 2 have explicit positions and empty recipients; the viewer only navigates that supported subset. Remaining teleport/transition ownership and dispatch are unresolved. PVL monster and item banks are empty in both files; that does not imply the levels have no monsters or items, since other spawn/state resources are not decoded here.
