@@ -19,6 +19,7 @@ Private catalogs are selected from explicit `--catalog` / `--monsters` paths, fi
 - 168 new core checks cover all party sizes, immutable encounter entry, exact mid-round continuation, authoritative inventory, victory/defeat persistence, invalid phases/catalog/world bindings and no respawn/reward replay.
 - 3,930 total portable core/input checks and 59 Python importer tests pass locally.
 - Client build is warning-free. Authored world smoke exercises reach rejection, actual battle-panel opening, save/load while active, failed-load preservation and terminal-state reload.
-- Native-level and complete Windows publication validation are tracked after CI completes; no original model/animation or recovered native encounter-position claim is made.
+- Linux CI passed: https://github.com/Aetton/neowizardry/actions/runs/39062315530 . Complete Windows build/export/EXE/updater publication gates passed: https://github.com/Aetton/neowizardry/actions/runs/39062315451 . Preview: https://github.com/Aetton/neowizardry/releases/tag/windows-build-65 .
+- Original intake exported private item/monster catalogs beside the worlds, and both native monastery levels passed a solo expedition through actual victory, mid-battle continuation, failed-load preservation and no respawn: https://github.com/Aetton/neowizardry/actions/runs/39062315452 . All validation uses runtime source 5dc23a7bcfd0d42096976d283474d8369ea2a050. No original creature model/animation or recovered native encounter-position claim is made.
 
 Next: native creature model/animation import, followed by representative rewards, progression and events. This iteration connects a scoped physical game loop; it does not establish a complete monastery or native continuous-world battle solver.
