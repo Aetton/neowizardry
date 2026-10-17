@@ -28,3 +28,9 @@ Both native PVLs passed the object-prefix reader on the original-data host: http
 | Monastery2 | 52 | 26 | 166 | 4 | 2 | 4,073,665 | 4,878 |
 
 All 172 prop/bitmap records use version 9. Trigger records consist of super triggers (60 / 62) and ambient-sound records (30 / 104). Door-payload counts are identified by serialized payload kind, not object names. Action-0x34 records total 3 / 6, of which only 2 / 2 have explicit positions and empty recipients; the viewer only navigates that supported subset. Remaining teleport/transition ownership and dispatch are unresolved. PVL monster and item banks are empty in both files; that does not imply the levels have no monsters or items, since other spawn/state resources are not decoded here.
+
+## Validation
+
+The unchanged client source from `116e0d564932dc2cdf426fd80717e7f7d8910d9e` passes both original Godot levels: https://github.com/Aetton/neowizardry/actions/runs/38985030568. Godot navigates every explicit arrival (2 / 2), verifies prop/door counts (62/7 and 52/4), and retains all texture, animation and capsule collision checks. Linux checks, including 56 Python tests, authored navigation/collision and rejection of a mismatched object-sidecar hash, pass after removing an optional `rg` dependency from the runner assertion: https://github.com/Aetton/neowizardry/actions/runs/38985155154.
+
+Windows run 58 compiled, exported and uploaded its artifact, but release creation received HTTP 403 after main's workflow files changed during the build. This matches the [documented release permission rule](https://docs.github.com/en/rest/releases/releases#create-a-release). The Windows workflow now diagnoses that race explicitly and retains the recorded source commit; it never retags a built artifact as a different source. A fresh current-main build follows; no extra token permissions are requested.

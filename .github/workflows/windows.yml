@@ -147,6 +147,15 @@ jobs:
             if ($release.target_commitish -ne $env:GITHUB_SHA -or $release.draft) { throw 'Existing preview does not match this completed source commit' }
             Write-Host 'Re-run: keeping the previously published immutable preview.'
           } else {
+            # GitHub's release endpoint requires workflow-write permission when the
+            # target differs from main in workflow files; GITHUB_TOKEN cannot get it.
+            # Keep the artifact's recorded source instead of silently tagging main.
+            $comparison = gh api "repos/$env:GITHUB_REPOSITORY/compare/${env:GITHUB_SHA}...main" | ConvertFrom-Json
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            $changedWorkflows = @($comparison.files | Where-Object { $_.filename -like '.github/workflows/*' })
+            if ($changedWorkflows.Count -gt 0) {
+              throw 'Workflow files changed on main during this build. Build current main before publishing; the artifact remains available at this run.'
+            }
             gh release create $env:PREVIEW_TAG --target $env:GITHUB_SHA --prerelease --draft --title "Windows preview $env:GITHUB_RUN_NUMBER" --notes "Portable Windows x64 test build. Download the launcher once; it checks published previews and preserves app-local saves. Original game data is excluded."
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
             gh release upload $env:PREVIEW_TAG build/neowizardry-windows-x64.zip build/neowizardry-windows-launcher.zip build/build.json --clobber

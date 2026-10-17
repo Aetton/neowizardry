@@ -1,7 +1,7 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Status checked against code and iteration reports through **044**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+Status checked against code and iteration reports through **045**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
 | Workstream | Recovered / implemented | Still required for original gameplay |
 |---|---|---|
@@ -10,7 +10,7 @@ Status checked against code and iteration reports through **044**. Original mona
 | Magic | 150-record metadata/reference, original ordinary casting-risk/backfire, Power Cast, base strength and resistance helpers | Learning/book/class policy, source/context modifiers, one complete original damage/healing path, resource/condition/training flow and live integration |
 | Inventory | One authoritative typed instance model in gameplay, equipment, fixture crafting and schema-2 saves; old-save migration, split/merge/transfer/resources | Original use/recharge/curse policy and remaining equipment coverage |
 | Crafting | 36-record original recipe reference, recovered native combination arithmetic and clean transaction simulation | Actor skill/time/progression policy, original combinations in gameplay and result previews; proper crafting menu remains a separate rework |
-| World | SLF reader, patch/loose overlay, verified original archive and both monastery static PVL mesh prefixes; private GLB export and desktop fly viewer; 55532 triangles, 2104 textured surfaces and 12 animation materials; original OCT static collision and authored capsule walking | Native lighting/material parity, native movement parity, dynamic content, doors/transitions, encounters and connected exploration/combat saves |
+| World | SLF reader, patch/loose overlay, verified original archive and both monastery static PVL mesh prefixes; private GLB export and desktop fly viewer; 55532 triangles, 2104 textured surfaces and 12 animation materials; original OCT static collision and authored capsule walking; native object/trigger-prefix intake, arrival navigation and inspection markers | Native lighting/material parity, native movement parity, dynamic content, doors/transitions, encounters and connected exploration/combat saves |
 
 Recovered ordinary character formulas now execute in the default new training duel (032), with real owned weapons, explicit authored effective facts, contact/penetration/HP, RNG continuation and scenario rewards. Iteration 033 adds recovered ordinary character initiative / repeated-attack scheduling and safe original Frost / Energy Blast through that executor. Actors, room, immediate delivery, ties and target selection remain authored; real stat derivation and complete original combat/magic remain integration gates. MONSTERS.DBS import now covers 595 record/text/hash definitions with a browser; Iteration 034 maps verified defense fields into the original defense rules; HP/attacks/AI and executable monster actors remain open. It also connects ordinary fizzle/backfire and Heal Wounds, with native reactions/progression still excluded.
 
@@ -186,3 +186,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 044 — original static collision and walking
 
 [Iteration 044](iteration-044.md) reads the original OCT/GameData physical banks and exports private collision sidecars bound to their PVL source hash. Both original levels pass Godot checks for walkable floor rays, capsule settling and blocking-wall sweeps (24,702 / 13,241 selected surfaces). Windows preview 56 adds F to enter/leave authored capsule walking while preserving flight and texture animation. Dynamic doors, transitions, original solver parity, encounters and world persistence remain open; this does not close the playable-slice milestone.
+
+
+## Iteration 045 — native object records and arrival navigation
+
+[Iteration 045](iteration-045.md) reads the PVL object/trigger prefix with exact bank boundaries and bounded dynamic mesh/animation layouts. Original intake finds 62 / 52 props, 32 / 26 bitmaps and 7 / 4 serialized door payloads. N navigates the 2 / 2 explicit positioned arrival triggers; O shows inspection markers and stored door flags. Full records stay private and bind to the same PVL hash as the GLB. The remaining PVL tail, rendered native prop meshes, runtime door states/animation, locks/items/recipient dispatch, transitions and world persistence remain open. This is preparation for interactions, not playable doors or recovered native spawning.
