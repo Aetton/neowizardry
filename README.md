@@ -80,6 +80,17 @@ Repeat `--patch` for every enabled `PATCH.NNN`; do not pass disabled `.BAK` file
 
 `audit` reads SLF files and `PATCH.NNN` locally and produces a small inventory. The Drive connector cannot download `LEVELS.SLF` because its 497,064,244 bytes exceed the connector's 256 MiB limit. Local indexing avoids that restriction. Parallel Worlds and localization overlays remain unsupported.
 
+## Original creature models and animations
+
+Export your entire private creature catalog and open its searchable animation/skin browser:
+
+```sh
+python -m tools.creatures "/path/to/Wizardry8/Data/DATA.SLF" "/path/to/Wizardry8/Data/Monsters/MONSTERS.SLF" --all --out local/creatures --report local/creatures-report.json
+godot --path client -- --creatures "/absolute/path/to/neowizardry/local/creatures/creatures-index.json"
+```
+
+Packaged Windows builds accept `NeoWizardry.exe --creatures "C:/NeoWizardryWorld/creatures-index.json"`. Include enabled `--patch` and `--loose-dir` overrides as for the catalogs above. The supplied archives provide models for 582/595 definitions. Every exported animation variant and default/damage texture stage can be inspected; omitted particle emitters and unavailable definitions are labeled. Models stay outside public packages. This is visual coverage, separate from supported combat profiles. See [iteration 051](docs/iteration-051.md) for exact coverage and remaining mechanisms.
+
 ## Original spell reference
 
 Export a private metadata catalog from your installation (include all enabled patches and loose overrides as for items):

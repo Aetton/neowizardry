@@ -16,6 +16,7 @@ on:
       - 'client/WorldDoors.cs'
       - 'client/WorldExpeditionView.cs'
       - 'client/WorldCreature.cs'
+      - 'client/CreatureGallery.cs'
       - 'tools/creatures.py'
       - 'tests/test_creatures.py'
       - 'core/WorldExpedition.cs'
@@ -32,7 +33,7 @@ jobs:
   monastery:
     if: github.ref == 'refs/heads/main' && github.repository == 'Aetton/neowizardry'
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 10
+    timeout-minutes: 30
     defaults:
       run:
         shell: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
@@ -97,14 +98,14 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m tools.slf monsters "$data" @overlay --out "$env:NEO_WORLD_CACHE/monsters.json"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Export private encounter creature
+      - name: Export all private creature models
         run: |
           $installation = Split-Path (Split-Path $env:NEO_LEVELS_ARCHIVE -Parent) -Parent
           $data = Join-Path $installation 'Data/DATA.SLF'
           $monsters = Join-Path $installation 'Data/Monsters/MONSTERS.SLF'
           $overlay = @('--loose-dir', (Join-Path $installation 'Data'))
           Get-ChildItem (Join-Path $installation 'Patches') -Filter 'PATCH.*' -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^PATCH\.\d+$' } | ForEach-Object { $overlay += @('--patch', $_.FullName) }
-          python -m tools.creatures "$data" "$monsters" @overlay --definition 282 --out "$env:NEO_WORLD_CACHE" --report "$env:RUNNER_TEMP/monastery-creature.json"
+          python -m tools.creatures "$data" "$monsters" @overlay --all --out "$env:NEO_WORLD_CACHE" --report "$env:RUNNER_TEMP/monastery-creatures-all.json"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Build and verify original geometry in Godot
         run: |
@@ -113,6 +114,11 @@ jobs:
           & $env:GODOT --headless --editor --path client --import
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           ./tools/windows/TestWorld.ps1 -WorldRoot "$env:NEO_WORLD_CACHE" -Report "$env:RUNNER_TEMP/monastery-geometry.json" -CollisionReport "$env:RUNNER_TEMP/monastery-collision.json" -ObjectsReport "$env:RUNNER_TEMP/monastery-objects.json" -DoorsReport "$env:RUNNER_TEMP/monastery-doors.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Verify every exported creature in Godot
+        run: |
+          & $env:GODOT --headless --path client -- --creatures "$env:NEO_WORLD_CACHE/creatures-index.json" --creatures-smoke
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -123,6 +129,6 @@ jobs:
             ${{ runner.temp }}/monastery-collision.json
             ${{ runner.temp }}/monastery-objects.json
             ${{ runner.temp }}/monastery-doors.json
-            ${{ runner.temp }}/monastery-creature.json
+            ${{ runner.temp }}/monastery-creatures-all.json
           if-no-files-found: ignore
           retention-days: 7

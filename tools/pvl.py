@@ -221,6 +221,22 @@ def glb(level: Level, textures: Textures | None = None, source_hash: str | None 
                 output['pbrMetallicRoughness']['baseColorFactor'] = [*[max(0, min(1, x)) for x in color], alpha]
                 if opacity < 1:
                     output['alphaMode'] = 'BLEND'
+        # Creature imports opt into native default/damage texture tables; world
+        # materials are unaffected. Image indices are checked by the runtime.
+        if textures is not None and 'creature_skins' in material:
+            skins=[textures.frames(name) for name in material['creature_skins']]
+            output.setdefault('extras',{}).pop('neoAnimation',None)
+            output['extras']['neoCreatureSkins']=[{'images':[embed(frame) for frame in frames],
+                'fps':material['fps'] if len(frames)>1 else 1} for frames in skins]
+        opacity=material.get('creature_opacity')
+        if opacity is not None:
+            output['pbrMetallicRoughness'].setdefault('baseColorFactor',[1,1,1,1])[3]*=opacity
+            if opacity<1:output['alphaMode']='BLEND'
+        glow=material.get('creature_glow',0)
+        if glow>0:
+            output['emissiveFactor']=[glow]*3
+            if 'baseColorTexture' in output['pbrMetallicRoughness']:
+                output['emissiveTexture']=output['pbrMetallicRoughness']['baseColorTexture']
         doc['materials'].append(output)
 
     def accessor(rows, width, kind, include_bounds=False):

@@ -55,6 +55,11 @@ public partial class Main : Node3D
     }
     private void Initialize()
     {
+        if(OS.GetCmdlineUserArgs().Contains("--creatures"))
+        {
+            SetProcessInput(false);SetProcessUnhandledInput(false);SetPhysicsProcess(false);
+            AddChild(new CreatureGallery());return;
+        }
         if(WorldPreview.Requested)
         {
             SetProcessInput(false);SetProcessUnhandledInput(false);SetPhysicsProcess(false);

@@ -85,7 +85,11 @@ public partial class WorldPreview
             $"{s.Items!.Items.Length} owned instances · "+
             (_expedition.Rewards?.Granted==true?"Reward saved · native record has no items/gold":"Character advancement pending");
         _encounterMarker.Visible=_creature is null && _expedition.Phase==WorldEncounterPhase.Ready;
-        if(_creature is not null)_creature.Visible=_expedition.Phase!=WorldEncounterPhase.Victory;
+        if(_creature is not null)
+        {
+            _creature.Visible=_expedition.Phase!=WorldEncounterPhase.Victory || _creature.HasCycle(21);
+            _creature.SetHealth(s.Enemy.Hp,s.Melee!.Field!.Monsters![s.Enemy.Id].MaxHp);
+        }
         _battlePanel.Visible=BattleOpen;
         foreach(var child in _battleBody.GetChildren()){_battleBody.RemoveChild(child);child.QueueFree();}
         if(!BattleOpen)return;
@@ -139,6 +143,7 @@ public partial class WorldPreview
         }
         if(_expedition.Phase==WorldEncounterPhase.Victory)
         {
+            _creature?.PlayDeath();
             RestoreCheckpoint(_expedition.World);
             _walking=_enterWalk=false;
             _checkpointStatus.Text="Encounter cleared · exploration resumed in flight · F5 saves victory";
@@ -176,7 +181,9 @@ public partial class WorldPreview
             throw new InvalidDataException("Saved encounter does not match the loaded creature renderer");
         // World validation (including speed) completes before the shared game state is replaced.
         RestoreCheckpoint(candidate.World);_expedition=candidate;_battleHero=0;_beginEncounter=false;RefreshExpedition();
-        _creature?.ResetIdle();if(BattleOpen)_creature?.Focus(_view);
+        if(candidate.Phase==WorldEncounterPhase.Victory)_creature?.PlayDeath(completed:true);
+        else _creature?.ResetIdle();
+        if(BattleOpen)_creature?.Focus(_view);
     }
 
     private void CheckWorldExpedition()
