@@ -1,7 +1,7 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Status checked against code and iteration reports through **046**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+Status checked against code and iteration reports through **047**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
 | Workstream | Recovered / implemented | Still required for original gameplay |
 |---|---|---|
@@ -93,7 +93,7 @@ Review early/mid/late-game contribution, gadget/component availability and usefu
 - Canonical formulas require documented evidence or original-game fixtures.
 
 ## Current blocker
-LEVELS.SLF exceeds the Drive connector limit. The supplied `wiz_data/Wizardry8` in the self-hosted runner work directory is now verified: [iteration 041](iteration-041.md) successfully audited 4956 active resources, including 426 monastery resources and both required PVLs. Resource access and the static PVL mesh prefix are verified. Base texture rendering and IFL animation are connected. Static OCT/GameData collision is decoded and connected to an authored Godot capsule. Native movement parity, lighting/material parity and dynamic PVL sections remain open. The immediate priority is a small connected monastery section with exploration → encounter → exploration and saved world state; complete monster/spell coverage is not a prerequisite to start.
+LEVELS.SLF exceeds the Drive connector limit. The supplied `wiz_data/Wizardry8` in the self-hosted runner work directory is now verified: [iteration 041](iteration-041.md) successfully audited 4956 active resources, including 426 monastery resources and both required PVLs. Resource access and the static PVL mesh prefix are verified. Base texture rendering and IFL animation are connected. Static OCT/GameData collision is decoded and connected to an authored Godot capsule. Native movement parity, lighting/material parity and dynamic PVL sections remain open. Iteration 047 adds independent manual exploration checkpoints for camera/door motion with content binding and flight-mode restoration; campaign/encounter integration is still open. The immediate priority is a small connected monastery section with exploration → encounter → exploration and saved world state; complete monster/spell coverage is not a prerequisite to start.
 
 ## Original-data research progress
 Iteration 011 decodes 150 native spell metadata records and 160 indexed description entries, preserving provenance and unknown raw bytes. A separate read-only reference is available in the client. This does not establish original effect execution, learning, success/resistance, timing or recipe rules; see [spell format evidence](spell-format.md).
