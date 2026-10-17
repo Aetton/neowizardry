@@ -61,7 +61,7 @@ public partial class CreatureGallery : Node3D
                     key=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
                         key+asset.GetProperty("clips").GetRawText()+(asset.TryGetProperty("skin_stages",out var stages)?stages.GetRawText():"1"))));
                     if(!models.Add(key))continue;
-                    LoadEntry(entry);_actor!.Check();
+                    LoadEntry(entry);_actor!.CheckFraming(_camera);_actor.Check();
                     await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
                     ReleaseActor();
                     if(models.Count%8==0)GC.Collect();
@@ -87,7 +87,8 @@ public partial class CreatureGallery : Node3D
         var search=new LineEdit {PlaceholderText="Search name / definition ID"};search.TextChanged+=Filter;body.AddChild(search);
         _list=new ItemList {CustomMinimumSize=new(380,220),SizeFlagsVertical=Control.SizeFlags.ExpandFill};
         _list.ItemSelected+=i=>{try{LoadEntry(_shown[(int)i]);}catch(Exception e){_status.Text=$"Load failed: {e.Message}";}};body.AddChild(_list);
-        _clips=new OptionButton();_clips.ItemSelected+=i=>_actor?.PlayClip((int)i,_loop.ButtonPressed);body.AddChild(_clips);
+        _clips=new OptionButton();_clips.ItemSelected+=i=>
+        {if(_actor is not null){_actor.PlayClip((int)i,_loop.ButtonPressed);_actor.Focus(_camera);}};body.AddChild(_clips);
         _loop=new CheckButton {Text="Loop selected animation"};body.AddChild(_loop);
         _loop.Toggled+=on=>{if(_actor is not null && _clips.Selected>=0)_actor.PlayClip(_clips.Selected,on);};
         _skins=new OptionButton();_skins.ItemSelected+=i=>_actor?.SetSkinStage((int)i);body.AddChild(_skins);

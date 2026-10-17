@@ -213,9 +213,17 @@ public partial class WorldCreature : Node3D
     public override void _Process(double delta){if(IsVisibleInTree())Step(delta);}
     public void Focus(Camera3D view)
     {
-        var bounds=GlobalTransform*_bounds;var center=bounds.GetCenter();
+        // Death debris can span far beyond the standing body. Frame the pose
+        // being inspected, rather than the union of every attack/death frame.
+        var bounds=GlobalTransform*(_visibleFrame is {} frame?WorldDoor.RenderBounds(frame):_bounds);var center=bounds.GetCenter();
         view.GlobalPosition=center+new Vector3(0,0.2f,1)*Math.Max(bounds.Size.Length()*1.25f,1);
         LookAt(new Vector3(view.GlobalPosition.X,GlobalPosition.Y,view.GlobalPosition.Z));view.LookAt(center);
+    }
+    public void CheckFraming(Camera3D view)
+    {
+        var pose=GlobalTransform*WorldDoor.RenderBounds(_visibleFrame!);
+        if(!view.GlobalPosition.IsFinite() || view.GlobalPosition.DistanceTo(pose.GetCenter())>Math.Max(pose.Size.Length()*2+1,2))
+            throw new InvalidDataException("Creature camera is framed for distant animation debris instead of the displayed pose");
     }
     public void Check()
     {
