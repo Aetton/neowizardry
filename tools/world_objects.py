@@ -9,12 +9,10 @@ import argparse
 from collections import Counter
 import hashlib
 import json
-import math
 from pathlib import Path
-import struct
 import sys
 
-from tools.pvl import Reader, parse as static_level, text, transformed
+from tools.pvl import Reader, parse as static_level, text
 from tools.slf import Archive, FormatError
 
 
@@ -173,7 +171,7 @@ class ObjectsReader(Reader):
 
     def trigger(self, owner):
         start = self.offset
-        envelope = self.byte()
+        self.byte()  # Envelope byte is read but unused by the native loader.
         kind = self.version(1, 4)
         version = self.version(1, {1:4, 2:5, 3:5, 4:3}[kind])
         result = {'start':start, 'owner':owner, 'kind':kind, 'version':version,

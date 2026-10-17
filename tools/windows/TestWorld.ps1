@@ -1,9 +1,11 @@
 param([Parameter(Mandatory=$true)][string]$WorldRoot,
       [Parameter(Mandatory=$true)][string]$Report,
-      [string]$CollisionReport)
+      [string]$CollisionReport,
+      [string]$ObjectsReport)
 $ErrorActionPreference='Stop'
 $reportData=Get-Content -LiteralPath $Report -Raw | ConvertFrom-Json
 $collisionData=if ($CollisionReport) { Get-Content -LiteralPath $CollisionReport -Raw | ConvertFrom-Json } else { $null }
+$objectsData=if ($ObjectsReport) { Get-Content -LiteralPath $ObjectsReport -Raw | ConvertFrom-Json } else { $null }
 foreach ($level in $reportData.levels) {
     $name=[IO.Path]::GetFileNameWithoutExtension($level.resource).ToLowerInvariant()
     $path=Join-Path $WorldRoot "$name.glb"
@@ -16,6 +18,11 @@ foreach ($level in $reportData.levels) {
         $collision=@($collisionData.levels | Where-Object { [IO.Path]::GetFileNameWithoutExtension($_.resource).ToLowerInvariant() -eq $name })
         if ($collision.Count -ne 1) { throw "Missing collision metadata: $name" }
         $start.Arguments+=" --world-collision-smoke --world-colliders $($collision[0].selected)"
+    }
+    if ($objectsData) {
+        $objects=@($objectsData.levels | Where-Object { [IO.Path]::GetFileNameWithoutExtension($_.resource).ToLowerInvariant() -eq $name })
+        if ($objects.Count -ne 1) { throw "Missing object metadata: $name" }
+        $start.Arguments+=" --world-objects $($objects[0].props) --world-arrivals $($objects[0].arrivals) --world-doors $($objects[0].doors)"
     }
     $start.UseShellExecute=$false
     $start.CreateNoWindow=$true
@@ -40,6 +47,7 @@ foreach ($level in $reportData.levels) {
         if ($exitCode -ne 0) { throw "World preview failed: $name (exit $exitCode)" }
         if ($output -notmatch 'PASS: world preview') { throw "Missing world preview success marker: $name" }
         if ($collisionData -and $output -notmatch 'PASS: collision') { throw "Missing collision success marker: $name" }
+        if ($objectsData -and $output -notmatch 'PASS: objects') { throw "Missing native object success marker: $name" }
         if ($errors -match '(?m)^ERROR:') { throw "World preview reported an engine error: $name" }
     } finally { $process.Dispose() }
 }

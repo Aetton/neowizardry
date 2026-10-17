@@ -13,6 +13,8 @@ public partial class WorldPreview : Node3D
     private double _textureTime;
     private WorldCollision? _collision;
     private WorldWalker? _walker;
+    private WorldObjects? _objects;
+    private int _arrivalIndex=-1;
     private bool _walking, _enterWalk;
     private Label _movementStatus = null!;
     private readonly List<TextureCycle> _textureCycles = [];
@@ -54,13 +56,22 @@ public partial class WorldPreview : Node3D
             AddChild(scene);
             ConfigureTextures(state, args.Contains("--world-smoke"));
             var collisionPath = Path.ChangeExtension(path,".nwcol");
-            if(System.IO.File.Exists(collisionPath))
+            var objectsPath=Path.ChangeExtension(path,".nwobjects.json");
+            string? pvlHash=null;
+            if(System.IO.File.Exists(collisionPath) || System.IO.File.Exists(objectsPath))
             {
                 using var metadata = System.Text.Json.JsonDocument.Parse(Godot.Json.Stringify(state.Json));
                 var root = metadata.RootElement;
-                var hash = root.TryGetProperty("extras",out var extras) && extras.TryGetProperty("neoSourcePVL",out var sourceHash)?sourceHash.GetString():null;
-                _collision = WorldCollision.Load(collisionPath,hash ?? "");AddChild(_collision);
+                pvlHash = root.TryGetProperty("extras",out var extras) && extras.TryGetProperty("neoSourcePVL",out var sourceHash)?sourceHash.GetString():null;
+            }
+            if(System.IO.File.Exists(collisionPath))
+            {
+                _collision = WorldCollision.Load(collisionPath,pvlHash ?? "");AddChild(_collision);
                 _walker = new WorldWalker();AddChild(_walker);
+            }
+            if(System.IO.File.Exists(objectsPath))
+            {
+                _objects=WorldObjects.Load(objectsPath,pvlHash ?? "");AddChild(_objects);
             }
             Aabb? bounds = null;
             int surfaces = 0, texturedSurfaces = 0;
@@ -101,6 +112,8 @@ public partial class WorldPreview : Node3D
             layer.AddChild(label);
             _movementStatus = new Label { Position=new Vector2(16,112),Text="FLIGHT · aim at a floor and press F to walk" };
             layer.AddChild(_movementStatus);
+            layer.AddChild(new Label { Position=new Vector2(16,140),Text=_objects is null?"Native object data not loaded":
+                $"N next native arrival ({_objects.Arrivals.Length}) · O object markers · {_objects.PropCount} props · {_objects.DoorCount} stored door states · actions pending" });
             var crosshair=new Label { Text="+",MouseFilter=Control.MouseFilterEnum.Ignore };
             crosshair.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);
             crosshair.Position-=new Vector2(4,10);layer.AddChild(crosshair);
@@ -131,6 +144,22 @@ public partial class WorldPreview : Node3D
                 foreach(var animation in _textureCycles)animation.Check();
                 GD.Print($"PASS: textures {texturedSurfaces} surfaces, {_textureCycles.Count} animations; decoded pixel hashes verified");
                 GD.Print($"PASS: world preview {_triangles} triangles, {surfaces} surfaces, finite bounds");
+                if(_objects is not null)
+                {
+                    foreach(var (option,actual) in new[] {("--world-objects",_objects.PropCount),("--world-arrivals",_objects.Arrivals.Length),("--world-doors",_objects.DoorCount)})
+                    {
+                        var at=Array.IndexOf(args,option);
+                        if(at>=0 && (at+1>=args.Length || int.Parse(args[at+1])!=actual))throw new InvalidDataException($"Native object count mismatch: {option}");
+                    }
+                    for(int i=0;i<_objects.Arrivals.Length;i++)
+                    {
+                        JumpToArrival(i);
+                        if(!_view.GlobalPosition.IsEqualApprox(_objects.Arrivals[i].Position+Vector3.Up*1.25f))throw new InvalidDataException("Arrival navigation failed");
+                    }
+                    Home();
+                    GD.Print($"PASS: objects {_objects.PropCount} props, {_objects.DoorCount} door payloads, {_objects.Arrivals.Length} native arrivals navigated");
+                }
+                else if(args.Contains("--world-objects"))throw new InvalidDataException("Native object sidecar missing");
                 if(args.Contains("--world-collision-smoke"))Callable.From(CollisionSmoke).CallDeferred();
                 else Callable.From(()=>GetTree().Quit()).CallDeferred();
             }
@@ -270,6 +299,15 @@ public partial class WorldPreview : Node3D
         foreach(var child in node.GetChildren())foreach(var item in Meshes(child))yield return item;
     }
 
+    private void JumpToArrival(int index)
+    {
+        if(_objects is null || index<0 || index>=_objects.Arrivals.Length)return;
+        _arrivalIndex=index;_walking=false;_enterWalk=false;
+        var point=_objects.Arrivals[index];
+        _view.GlobalPosition=point.Position+Vector3.Up*1.25f;
+        _movementStatus.Text=$"ARRIVAL {index+1}/{_objects.Arrivals.Length} · {point.Name} · aim at floor and press F to walk";
+    }
+
     private void Home()
     {
         _walking=false;
@@ -294,6 +332,12 @@ public partial class WorldPreview : Node3D
         }
         if(input is InputEventKey key && key.Pressed && !key.Echo)
         {
+            if(key.Keycode == Key.O && _objects is not null)_objects.Visible=!_objects.Visible;
+            if(key.Keycode == Key.N)
+            {
+                if(_objects is not null && _objects.Arrivals.Length>0)JumpToArrival((_arrivalIndex+1)%_objects.Arrivals.Length);
+                else _movementStatus.Text="No native arrival points loaded";
+            }
             if(key.Keycode == Key.Home) { Home();_movementStatus.Text="FLIGHT · overview"; }
             if(key.Keycode == Key.F)
             {
