@@ -117,6 +117,42 @@ jobs:
             if ($process.ExitCode -ne 0) { throw "Windows $mode failed ($($process.ExitCode))" }
             if (!(Select-String -Path "$env:RUNNER_TEMP/$mode.log" -Pattern 'PASS:')) { throw "Missing $mode success marker" }
           }
+      - name: Include local original-data importer and portable Python
+        run: |
+          New-Item -ItemType Directory -Force build/windows/importer | Out-Null
+          Copy-Item tools build/windows/importer/tools -Recurse
+          Get-ChildItem build/windows/importer/tools -Directory -Filter __pycache__ -Recurse | Remove-Item -Recurse -Force
+          Copy-Item "$env:LOCALAPPDATA/NeoWizardryBuildTools/python-3.12.10" build/windows/importer/python -Recurse
+          if (!(Test-Path build/windows/importer/python/python.exe)) { throw 'Bundled importer runtime missing' }
+          & build/windows/importer/python/python.exe -c "import sys; sys.path.insert(0, 'build/windows/importer'); import tools.prepare_game"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Verify ordinary exported startup without developer flags
+        run: |
+          $env:NEO_STARTUP_SMOKE='1'
+          $env:NEO_WORLD_CACHE=''
+          $start = Start-Process -FilePath "$PWD/build/windows/NeoWizardry.exe" -ArgumentList '--headless' -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP/default-start.log" -RedirectStandardError "$env:RUNNER_TEMP/default-start-error.log"
+          if (!$start.WaitForExit(60000)) { $start.Kill(); throw 'Ordinary startup timed out' }
+          Get-Content "$env:RUNNER_TEMP/default-start.log"
+          if ($start.ExitCode -ne 0 -or !(Select-String -Path "$env:RUNNER_TEMP/default-start.log" -Pattern 'PASS: ordinary startup')) { throw 'Ordinary startup did not open setup' }
+          Remove-Item Env:NEO_STARTUP_SMOKE
+      - name: Verify ordinary player startup in the packaged Windows EXE
+        env:
+          WIZ8_INSTALLATION: ${{ vars.WIZ8_ROOT }}
+        run: |
+          ./tools/windows/FindOriginal.ps1
+          $installation=Split-Path (Split-Path ((Get-Content $env:GITHUB_ENV | Where-Object { $_ -like 'NEO_LEVELS_ARCHIVE=*' } | Select-Object -Last 1) -replace '^NEO_LEVELS_ARCHIVE=','') -Parent) -Parent
+          $world=Join-Path (Split-Path $installation -Parent) 'NeoWizardryWorld'
+          $levels=Join-Path $installation 'Levels/LEVELS.SLF'
+          python -m tools.world_props "$levels" --out "$world" --report "$env:RUNNER_TEMP/player-props.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:NEO_WORLD_CACHE=$world
+          $env:NEO_STARTUP_SMOKE='1'
+          $start=Start-Process -FilePath "$PWD/build/windows/NeoWizardry.exe" -ArgumentList '--headless' -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP/player-start.log" -RedirectStandardError "$env:RUNNER_TEMP/player-start-error.log"
+          if (!$start.WaitForExit(120000)) { $start.Kill(); throw 'Packaged monastery startup timed out' }
+          Get-Content "$env:RUNNER_TEMP/player-start.log"
+          Get-Content "$env:RUNNER_TEMP/player-start-error.log"
+          if ($start.ExitCode -ne 0 -or !(Select-String -Path "$env:RUNNER_TEMP/player-start.log" -Pattern 'PASS: ordinary startup enters walking monastery')) { throw 'Packaged game did not enter monastery by default' }
+          Remove-Item Env:NEO_WORLD_CACHE,Env:NEO_STARTUP_SMOKE
       - name: Package game and launcher
         run: |
           $tag = "windows-build-$env:GITHUB_RUN_NUMBER"

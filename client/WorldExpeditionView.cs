@@ -43,11 +43,11 @@ public partial class WorldPreview
         var definition=_expeditionMonsters.Monsters.FirstOrDefault(m=>m.Id==282 && MonsterCombat.Supported(m))
             ??_expeditionMonsters.Monsters.FirstOrDefault(MonsterCombat.Supported)
             ??throw new InvalidDataException("No supported physical monster in the selected catalog");
-        int size=1,partyAt=Array.IndexOf(args,"--party-size");
+        int size=GameMode?6:1,partyAt=Array.IndexOf(args,"--party-size");
         if(partyAt>=0 && (partyAt+1>=args.Length || !int.TryParse(args[partyAt+1],out size)))throw new InvalidDataException("Invalid --party-size");
         _expedition=WorldExpedition.Create(size,_expeditionItems,_expeditionMonsters,definition.Id,CaptureCheckpoint());
         WorldExpedition.Validate(_expedition,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters);
-        _expeditionPath=ProjectSettings.GlobalizePath($"user://expeditions/{_contentHash}.json");
+        _expeditionPath=ProjectSettings.GlobalizePath($"user://{(GameMode?"campaign":"expeditions")}/{_contentHash}.json");
         _encounterAnchor=(_objects?.Arrivals.FirstOrDefault()?.Position??_center)+Vector3.Up*1.25f;
         _encounterMarker=new MeshInstance3D {Position=_encounterAnchor,Mesh=new SphereMesh {Radius=0.3f,Height=0.6f},
             MaterialOverride=new StandardMaterial3D {AlbedoColor=Colors.OrangeRed,ShadingMode=BaseMaterial3D.ShadingModeEnum.Unshaded}};
@@ -91,6 +91,7 @@ public partial class WorldPreview
             _creature.SetHealth(s.Enemy.Hp,s.Melee!.Field!.Monsters![s.Enemy.Id].MaxHp);
         }
         _battlePanel.Visible=BattleOpen;
+        if(GameMode){_expeditionStatus.Visible=false;RefreshPlayerHud();}
         foreach(var child in _battleBody.GetChildren()){_battleBody.RemoveChild(child);child.QueueFree();}
         if(!BattleOpen)return;
         _looking=false;Input.MouseMode=Input.MouseModeEnum.Visible;
@@ -146,9 +147,11 @@ public partial class WorldPreview
             _creature?.PlayDeath();
             RestoreCheckpoint(_expedition.World);
             _walking=_enterWalk=false;
+            if(GameMode)ResumePlayerWalking();
             _checkpointStatus.Text="Encounter cleared · exploration resumed in flight · F5 saves victory";
         }
         RefreshExpedition(string.Join("\n",result.Events.TakeLast(6)));
+        if(GameMode)SavePlayerGame();
     }
 
     private void TryBeginExpeditionEncounter()

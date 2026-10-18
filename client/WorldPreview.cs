@@ -5,6 +5,10 @@ using NeoWizardry.Core;
 // Research world: original static collision, authored capsule walking and isolated checkpoints; no campaign integration.
 public partial class WorldPreview : Node3D
 {
+    public bool GameMode {get;init;}
+    public string[]? Arguments {get;init;}
+    public Action<string>? LoadFailed {get;set;}
+    private string[] Args=>Arguments??OS.GetCmdlineUserArgs();
     private Camera3D _view = null!;
     private Vector3 _center;
     private float _span;
@@ -50,7 +54,7 @@ public partial class WorldPreview : Node3D
     {
         try
         {
-            var args = OS.GetCmdlineUserArgs();
+            var args = Args;
             var index = Array.IndexOf(args, "--world");
             if(index < 0 || index + 1 >= args.Length || args[index + 1].StartsWith("--"))
                 throw new InvalidDataException("Use --world /absolute/path/monastery1.glb");
@@ -90,6 +94,8 @@ public partial class WorldPreview : Node3D
                 _doors=WorldDoors.Load(doorsPath,Path.ChangeExtension(path,".nwdoors.glb"),pvlHash??"",s=>ConfigureTextures(s,args.Contains("--world-smoke")));
                 AddChild(_doors);
             }
+            if(pvlHash is not null && File.Exists(Path.ChangeExtension(path,".nwprops.json")))
+                AddChild(WorldProps.Load(Path.ChangeExtension(path,".nwprops.json"),pvlHash,s=>ConfigureTextures(s,args.Contains("--world-smoke"))));
             Aabb? bounds = null;
             int surfaces = 0, texturedSurfaces = 0;
             foreach(var mesh in Meshes(scene))
@@ -140,6 +146,11 @@ public partial class WorldPreview : Node3D
             _checkpointStatus=new Label { Position=new Vector2(16,196),Text="F5 save checkpoint · F9 load · resumes in flight · separate from expedition saves" };
             layer.AddChild(_checkpointStatus);
             InitializeExpedition(args,layer);
+            if(GameMode)
+            {
+                foreach(var child in layer.GetChildren())if(child is Label)child.Set("visible",false);
+                _objects?.Hide();InitializePlayerGame(layer);Callable.From(StartPlayerGame).CallDeferred();
+            }
             _smoke = args.Contains("--world-smoke");
             if(_smoke)
             {
@@ -194,12 +205,17 @@ public partial class WorldPreview : Node3D
                 else Callable.From(()=>GetTree().Quit()).CallDeferred();
             }
         }
-        catch(Exception error) { GD.PushError(error.ToString());GetTree().Quit(1); }
+        catch(Exception error)
+        {
+            if(GameMode && LoadFailed is not null){LoadFailed(error.Message);QueueFree();}
+            else {GD.PushError(error.ToString());GetTree().Quit(1);}
+        }
     }
 
     public override void _PhysicsProcess(double delta)
     {
         if(_view is null || _smoke)return;
+        if(GameMode && (!_gameReady || _gamePaused))return;
         if(_saveCheckpoint || _loadCheckpoint)
         {
             bool save=_saveCheckpoint;_saveCheckpoint=_loadCheckpoint=false;
@@ -229,6 +245,12 @@ public partial class WorldPreview : Node3D
             catch(Exception error) when(error is InvalidDataException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException or System.Text.DecoderFallbackException)
             { _checkpointStatus.Text=$"Checkpoint {(save?"save":"load")} failed: {error.Message}"; }
             return;
+        }
+        if(GameMode && !_walking && !BattleOpen)ResumePlayerWalking();
+        if(GameMode)
+        {
+            _autoSaveTime+=delta;
+            if(_autoSaveTime>=15){_autoSaveTime=0;SavePlayerGame();}
         }
         if(_beginEncounter)TryBeginExpeditionEncounter();
         if(BattleOpen)return;
@@ -324,7 +346,7 @@ public partial class WorldPreview : Node3D
         try
         {
             if(_collision is null || _walker is null)throw new InvalidDataException("Original collision data missing");
-            var args=OS.GetCmdlineUserArgs();var at=Array.IndexOf(args,"--world-colliders");
+            var args=Args;var at=Array.IndexOf(args,"--world-colliders");
             if(at<0 || at+1>=args.Length || int.Parse(args[at+1])!=_collision.Faces.Length)
                 throw new InvalidDataException("Collision surface count mismatch");
             await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);
@@ -448,6 +470,7 @@ public partial class WorldPreview : Node3D
     public override void _UnhandledInput(InputEvent input)
     {
         if(_view is null)return;
+        if(GameMode){PlayerInput(input);return;}
         if(BattleOpen && input is not InputEventKey)return;
         if(input is InputEventMouseButton button)
         {
@@ -490,9 +513,10 @@ public partial class WorldPreview : Node3D
     public override void _Process(double delta)
     {
         if(_view is null || _smoke)return;
+        if(GameMode){RefreshPlayerHud();if(!_gameReady || _gamePaused)return;}
         _textureTime += delta;
         foreach(var animation in _textureCycles)animation.Apply(_textureTime);
-        if(BattleOpen || _walking || !DisplayServer.WindowIsFocused())return;
+        if(GameMode || BattleOpen || _walking || !DisplayServer.WindowIsFocused())return;
         var direction = new Vector3((Input.IsPhysicalKeyPressed(Key.D)?1:0)-(Input.IsPhysicalKeyPressed(Key.A)?1:0),
             (Input.IsPhysicalKeyPressed(Key.E)?1:0)-(Input.IsPhysicalKeyPressed(Key.Q)?1:0),
             (Input.IsPhysicalKeyPressed(Key.S)?1:0)-(Input.IsPhysicalKeyPressed(Key.W)?1:0));

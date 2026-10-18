@@ -11,6 +11,12 @@ on:
       - 'tools/world_objects.py'
       - 'tools/world_doors.py'
       - 'client/WorldPreview.cs'
+      - 'client/Main.cs'
+      - 'client/MonasteryStart.cs'
+      - 'client/WorldGame.cs'
+      - 'tools/prepare_game.py'
+      - 'tools/world_props.py'
+      - 'client/WorldProps.cs'
       - 'client/WorldCollision.cs'
       - 'client/WorldObjects.cs'
       - 'client/WorldDoors.cs'
@@ -88,6 +94,10 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m tools.world_doors "$env:NEO_LEVELS_ARCHIVE" --out "$env:NEO_WORLD_CACHE" --report "$env:RUNNER_TEMP/monastery-doors.json"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Export private original furniture and props
+        run: |
+          python -m tools.world_props "$env:NEO_LEVELS_ARCHIVE" --out "$env:NEO_WORLD_CACHE" --report "$env:RUNNER_TEMP/monastery-props.json"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Prepare retained Godot tools
         run: ./tools/windows/PrepareGodot.ps1 -ToolsRoot "$env:LOCALAPPDATA/NeoWizardryBuildTools/godot-4.5.1-v1"
       - name: Compile private expedition catalogs
@@ -117,6 +127,23 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           ./tools/windows/TestWorld.ps1 -WorldRoot "$env:NEO_WORLD_CACHE" -Report "$env:RUNNER_TEMP/monastery-geometry.json" -CollisionReport "$env:RUNNER_TEMP/monastery-collision.json" -ObjectsReport "$env:RUNNER_TEMP/monastery-objects.json" -DoorsReport "$env:RUNNER_TEMP/monastery-doors.json"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Verify player startup on the original first floor without flags
+        run: |
+          $env:NEO_STARTUP_SMOKE='1'
+          & $env:GODOT --headless --path client
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Remove-Item Env:NEO_STARTUP_SMOKE
+      - name: Verify in-app original-data preparation on a fresh player cache
+        run: |
+          $env:NEO_STARTUP_SMOKE='1'
+          $env:NEO_WIZ8_ROOT=Split-Path (Split-Path $env:NEO_LEVELS_ARCHIVE -Parent) -Parent
+          $env:NEO_CONTENT_CACHE=Join-Path (Split-Path $env:NEO_WORLD_CACHE -Parent) 'NeoWizardryPlayerContent'
+          $retained=$env:NEO_WORLD_CACHE
+          $env:NEO_WORLD_CACHE=''
+          & $env:GODOT --headless --path client
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $env:NEO_WORLD_CACHE=$retained
+          Remove-Item Env:NEO_STARTUP_SMOKE,Env:NEO_WIZ8_ROOT,Env:NEO_CONTENT_CACHE
       - name: Verify every exported creature in Godot
         run: |
           & $env:GODOT --headless --path client -- --creatures "$env:NEO_WORLD_CACHE/creatures-index.json" --creatures-smoke
@@ -131,6 +158,7 @@ jobs:
             ${{ runner.temp }}/monastery-collision.json
             ${{ runner.temp }}/monastery-objects.json
             ${{ runner.temp }}/monastery-doors.json
+            ${{ runner.temp }}/monastery-props.json
             ${{ runner.temp }}/monastery-creatures-all.json
           if-no-files-found: ignore
           retention-days: 7

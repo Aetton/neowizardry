@@ -8,7 +8,7 @@ public static class ExplorationCheckpointFile
     public static string ContentHash(string worldPath)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach(var suffix in new[] { ".glb", ".nwcol", ".nwobjects.json", ".nwdoors.json", ".nwdoors.glb" })
+        foreach(var suffix in new[] { ".glb", ".nwcol", ".nwobjects.json", ".nwdoors.json", ".nwdoors.glb", ".nwprops.json", ".nwprops.glb" })
         {
             hash.AppendData(Encoding.UTF8.GetBytes(suffix));
             var path = suffix == ".glb" ? worldPath : Path.ChangeExtension(worldPath, suffix);

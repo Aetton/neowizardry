@@ -65,6 +65,12 @@ public partial class Main : Node3D
             SetProcessInput(false);SetProcessUnhandledInput(false);SetPhysicsProcess(false);
             AddChild(new WorldPreview());return;
         }
+        var development=new[]{"--training","--smoke","--mobile-smoke","--ui-preview","--tactics","--magic","--items","--grimoire","--combinations","--craft","--catalog","--spells","--monsters","--recipes"};
+        if(!OS.GetCmdlineUserArgs().Any(development.Contains))
+        {
+            SetProcessInput(false);SetProcessUnhandledInput(false);SetPhysicsProcess(false);
+            var layer=new CanvasLayer();AddChild(layer);layer.AddChild(new MonasteryStart());return;
+        }
         _touchMode=OS.HasFeature("mobile") || OS.GetCmdlineUserArgs().Contains("--touch");
         BuildRoom();
         BuildUi();

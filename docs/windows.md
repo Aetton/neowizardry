@@ -1,3 +1,7 @@
+## Default monastery startup
+
+The normal launcher/EXE opens the monastery player flow. On the first run, select the installed Wizardry 8 directory if it is not detected automatically. The bundled importer prepares original assets locally; keep the window open while progress is shown. Later launches reuse the prepared set and resume the campaign. No `--world` or `--expedition` flags are needed. WASD moves, the mouse looks, E/click interacts, I opens inventory, Esc opens the menu, F5 saves and F9 loads. The separate training room requires `--training`. The current imported floor and supported interactions are not yet the full native quest/spawn/loot scenario; see [iteration 053](iteration-053.md).
+
 # Windows preview
 
 Windows x64 is the primary manual testing target. Android remains a separate touch/lifecycle/performance gate. Both clients share the same C# rules and Godot scene.

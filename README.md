@@ -1,12 +1,16 @@
 # NeoWizardry
 
-Improved Wizardry 8 remake research project. **This is a technical slice, not a recreated monastery or a complete RPG.**
+Improved Wizardry 8 remake research project. **The ordinary player launch now enters the imported monastery; the complete original campaign is still in development.**
 
 Godot 4.5.1 .NET client + independent .NET 8 core + dependency-free Python 3.10+ asset tools.
 
-![Technical slice: synthetic corridor and party UI](docs/preview.png)
+The screenshot below shows the separate training laboratory (`--training`), not the default player start.
+
+![Training laboratory](docs/preview.png)
 
 ## What works
+
+- Default monastery startup: in-app original-data preparation, walking/collision, native prop poses/doors, creature visuals/effects, shared six-hero party/inventory and campaign save/resume. See [iteration 053](docs/iteration-053.md) for supported interactions and missing original campaign content.
 
 - Read-only SLF index, SHA-256 inventory and selective extraction, verified against an original Steam `DATA.SLF` containing 3314 entries.
 - A catalog of 819 original item records: IDs, names, item type/icon indices and equipment restriction masks. Generated catalogs stay local; original assets are not bundled.
@@ -26,7 +30,7 @@ Starting characters, opponent facts, room, targeting and rewards are **authored 
 
 ## Windows testing
 
-Windows is the primary manual testing target. Download the launcher ZIP from a [Windows preview release](https://github.com/Aetton/neowizardry/releases), extract it once and double-click `RunNeoWizardry.cmd`. It checks for updates, verifies the downloaded package and launches the game. Game builds live under `%LOCALAPPDATA%/NeoWizardry`; saves remain in Godot's separate user-data directory. No Godot editor or .NET SDK installation is required. See [Windows preview guide](docs/windows.md).
+Windows is the primary manual testing target. Download the launcher ZIP from a [Windows preview release](https://github.com/Aetton/neowizardry/releases), extract it once and double-click `RunNeoWizardry.cmd`. It checks for updates, verifies the downloaded package and launches the game. Game builds live under `%LOCALAPPDATA%/NeoWizardry`; saves remain in Godot's separate user-data directory. On first launch, select your installed Wizardry 8 folder if it is not detected. The app prepares its private assets and enters the first monastery floor; later launches resume it directly. The portable package includes its importer and Python runtime. No Godot editor, .NET SDK, installed Python or manual launch flags are required. See [Windows preview guide](docs/windows.md).
 
 ## Run from source
 
@@ -41,7 +45,7 @@ godot --path client
 
 Replace `godot` with the path to your Godot .NET executable if it is not in PATH.
 
-For multiple opponents, choose the party and opponent counts in **Menu → New tactical battle**. Choose an actor, an order and a target cell, then **Resolve round**. Attack/Magic reopen the tactical field; **Save/Load** retains all committed positions and opponent states.
+The following laboratory controls apply to `godot --path client -- --training`. For multiple opponents, choose the party and opponent counts in **Menu → New tactical battle**. Choose an actor, an order and a target cell, then **Resolve round**. Attack/Magic reopen the tactical field; **Save/Load** retains all committed positions and opponent states.
 
 WASD moves; hold the right mouse button to look; Esc releases the cursor. Start **Menu → New party**, approach the Training Duelist and press **Attack**. New expeditions execute the recovered ordinary melee rules; **Combat facts** shows the authored effective stats and **Spell sandbox** keeps the previous synthetic spell tests available. Existing saves retain their legacy combat mode. Open **Menu** for party size, **New party**, **Save/Load** and test-scenario controls. Click a side portrait to select the actor used by Magic, Items and Craft. **Save/Load** preserves the party, battle, captivity and camera. **Test captivity/Escape** demonstrates the solo regression fixture. The keeper's fixed line is sample text, not extracted story content.
 
