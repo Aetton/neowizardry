@@ -58,11 +58,11 @@ def monster_bank(r):
 
 def parse(data):
     r=Reader(data);name,grouped,at_end,root=chunk(r)
-    if name!='RIFF' or not grouped or at_end or r.pos!=len(data):raise FormatError(f'Invalid STS RIFF envelope: {name}, grouped={grouped}, end={at_end}, consumed={r.pos}, size={len(data)}')
+    if name!='RIFF' or at_end or r.pos!=len(data):raise FormatError(f'Invalid STS RIFF envelope: {name}, grouped={grouped}, end={at_end}, consumed={r.pos}, size={len(data)}')
     levels=[]
     for _ in range(root.count()):
         name,grouped,at_end,level=chunk(root)
-        if name!='LVLS' or not grouped:raise FormatError('Unsupported STS root chunk')
+        if name!='LVLS':raise FormatError('Unsupported STS root chunk')
         count=level.count();level_id=level.read('I')[0];parts=[];bank=None
         for _ in range(count):
             name,grouped,at_end,part=chunk(level)
