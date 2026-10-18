@@ -468,6 +468,15 @@ public partial class WorldPreview : Node3D
         _view.LookAt(_center);
     }
 
+    public override void _Input(InputEvent input)
+    {
+        // Gameplay shortcuts precede focused buttons; active dialogs keep their input.
+        if(!GameMode || !_gameReady || _bestiaryOpen || _inventoryOpen || input is not InputEventKey {Pressed:true,Echo:false} key)return;
+        Key code=key.PhysicalKeycode!=Key.None?key.PhysicalKeycode:key.Keycode;
+        if(code is Key.Escape or Key.I or Key.F5 or Key.F9 || !_gamePaused && !BattleOpen && code is Key.E or Key.B)
+        {PlayerInput(input);GetViewport().SetInputAsHandled();}
+    }
+
     public override void _UnhandledInput(InputEvent input)
     {
         if(_view is null)return;

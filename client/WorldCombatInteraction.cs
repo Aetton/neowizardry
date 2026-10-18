@@ -52,18 +52,21 @@ public partial class WorldPreview
         bool paused=_gamePaused,menu=_gameMenu.Visible;_gamePaused=false;_gameMenu.Hide();
         try
         {
+            _playerLayer.GetChildren().OfType<HBoxContainer>().SelectMany(n=>n.GetChildren().OfType<Button>()).First().GrabFocus();
             // Physical B must work even when the logical key is Cyrillic И.
-            _view.GlobalPosition=_encounterAnchor+Vector3.Up*100;_walker!.GlobalPosition=_view.GlobalPosition-Vector3.Up*WorldWalker.EyeOffset;_walker.Velocity=Vector3.Zero;
+            _view.GlobalPosition=_encounterAnchor+new Vector3(100,0,100);_walker!.GlobalPosition=_view.GlobalPosition-Vector3.Up*WorldWalker.EyeOffset;_walker.Velocity=Vector3.Zero;
             Input.ParseInputEvent(new InputEventKey {Pressed=true,PhysicalKeycode=Key.B,Keycode=(Key)0x0418,Unicode=0x0438});
-            Input.ParseInputEvent(new InputEventKey {Pressed=false,PhysicalKeycode=Key.B,Keycode=(Key)0x0418});
+            Input.FlushBufferedEvents();
             await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);
             if(_expedition!.Phase!=WorldEncounterPhase.Ready || !(_gameNotice?.Text.Contains("Подойди ближе")??false))throw new InvalidDataException("Physical B/far attack feedback failed");
-            _view.GlobalPosition=_encounterAnchor+Vector3.Up*100;_walker!.GlobalPosition=_view.GlobalPosition-Vector3.Up*WorldWalker.EyeOffset;_walker.Velocity=Vector3.Zero;Notice("");
+            Input.ParseInputEvent(new InputEventKey {Pressed=false,PhysicalKeycode=Key.B,Keycode=(Key)0x0418});
+            _view.GlobalPosition=_encounterAnchor+new Vector3(100,0,100);_walker!.GlobalPosition=_view.GlobalPosition-Vector3.Up*WorldWalker.EyeOffset;_walker.Velocity=Vector3.Zero;Notice("");
             _view.LookAt(_creature!.InteractionBounds.GetCenter());
             Input.ParseInputEvent(new InputEventKey {Pressed=true,PhysicalKeycode=Key.E,Keycode=(Key)0x0423,Unicode=0x0443});
-            Input.ParseInputEvent(new InputEventKey {Pressed=false,PhysicalKeycode=Key.E,Keycode=(Key)0x0423});
+            Input.FlushBufferedEvents();
             await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);
             if(_expedition.Phase!=WorldEncounterPhase.Ready || !(_gameNotice?.Text.Contains("Подойди ближе")??false))throw new InvalidDataException($"Physical E/range feedback failed: {_gameNotice?.Text}, {_expedition.Phase}, {_view.GlobalPosition}");
+            Input.ParseInputEvent(new InputEventKey {Pressed=false,PhysicalKeycode=Key.E,Keycode=(Key)0x0423});
             // Find a real standable, visible approach several metres from the source group.
             bool found=false;
             for(int ring=0;ring<3 && !found;ring++)for(int i=0;i<24 && !found;i++)
@@ -85,6 +88,7 @@ public partial class WorldPreview
             UpdatePlayerCombatHint();
             if(!(_combatHint?.Text.StartsWith("B — атаковать")??false))throw new InvalidDataException("Attack affordance missing");
             Input.ParseInputEvent(new InputEventKey {Pressed=true,PhysicalKeycode=Key.B,Keycode=(Key)0x0418,Unicode=0x0438});
+            Input.FlushBufferedEvents();
             await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);
             await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);
             if(_expedition.Phase!=WorldEncounterPhase.Active || !_battlePanel.Visible)throw new InvalidDataException($"Real physical attack failed: phase={_expedition.Phase}, requested={_beginEncounter}, paused={_gamePaused}, notice={_gameNotice?.Text}, camera={_view.GlobalPosition}, target={PlayerEncounterTarget()}");

@@ -1,7 +1,7 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Status checked against code and iteration reports through **056**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+Status checked against code and iteration reports through **057**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
 Immediate player milestone: [TOC-44 — a complete playable first monastery floor](https://linear.app/tochka/issue/TOC-44/pervyj-etazh-monastyrya-polnocennyj-prohodimyj-scenarij-iz-obychnogo). Iteration 053 fixes ordinary launch and exposes the imported floor; its original encounter/item/event scenario is still in progress. Finish that connected player path before treating broader catalog coverage as the next milestone.
 
@@ -238,3 +238,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 056 — original loose item pickups
 
 [Iteration 056](iteration-056.md) connects the first floor's STS ITEM placements to ordinary walking, original ITM models, E pickup and the shared instance inventory. Visible items preserve native quantity, resources and identification; collected source IDs survive reload and battle without respawning. Compatible iteration-055 native campaigns migrate with their previous party, battle outcome, XP and position retained. Hidden item search, TRES containers, keys/locks, remaining encounters and events/transitions remain open; this does not complete TOC-44.
+
+
+## Iteration 057 — accessible player combat entry
+
+[Iteration 057](iteration-057.md) prioritizes the reported inability to start the beach crab fight. Physical hotkeys support Russian keyboard layouts; B explicitly attacks a nearby visible encounter, with distance/availability/rejection reasons on the player HUD and an attack button in the Esc menu. Original idle-body bounds replace the arbitrary elevated anchor in player interaction. Headless startup now dispatches keyboard events from a standable approach and verifies battle UI, rather than testing only the direct entry method. This is an interaction fix; containers/keys remain subsequent work.

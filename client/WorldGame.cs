@@ -3,7 +3,7 @@ using NeoWizardry.Core;
 
 public partial class WorldPreview
 {
-    private bool _gameReady,_gamePaused,_gameSaveBlocked,_bestiaryOpen;
+    private bool _gameReady,_gamePaused,_gameSaveBlocked,_bestiaryOpen,_inventoryOpen;
     private CanvasLayer _playerLayer=null!;
     private CreatureGallery? _gameGallery;
     private Label? _gameHud,_gameNotice;
@@ -133,7 +133,7 @@ public partial class WorldPreview
     }
     private void PlayerInput(InputEvent input)
     {
-        if(!_gameReady || _bestiaryOpen)return;
+        if(!_gameReady || _bestiaryOpen || _inventoryOpen)return;
         if(input is InputEventKey key && key.Pressed && !key.Echo)
         {
             Key code=key.PhysicalKeycode!=Key.None?key.PhysicalKeycode:key.Keycode;
@@ -171,8 +171,8 @@ public partial class WorldPreview
     }
     private void ShowPlayerInventory()
     {
-        if(_expedition is null || !_gameReady)return;
-        _gamePaused=true;Input.MouseMode=Input.MouseModeEnum.Visible;
+        if(_expedition is null || !_gameReady || _inventoryOpen)return;
+        _inventoryOpen=true;_gamePaused=true;Input.MouseMode=Input.MouseModeEnum.Visible;
         var dialog=new AcceptDialog {Title="Группа и инвентарь",Size=new(760,520)};AddChild(dialog);
         var body=new VBoxContainer();dialog.AddChild(body);
         var hero=new OptionButton();foreach(var h in _expedition.Game.Party)hero.AddItem($"{h.Name} · {h.Hp}/{h.MaxHp} HP · {h.Xp} XP");body.AddChild(hero);
@@ -183,8 +183,8 @@ public partial class WorldPreview
         equip.Pressed+=()=>{try{if(list.GetSelectedItems().FirstOrDefault(-1) is int at && at>=0)
             {_expedition=_expedition with {Game=Equipment.EquipInstance(_expedition.Game,_expedition.Game.Party[hero.Selected].Id,bag[at].Id,_expeditionItems)};status.Text="Экипировано";RefreshPlayerHud();SavePlayerGame();}}
             catch(Exception e){status.Text=e.Message;}};
-        void CloseInventory(){dialog.QueueFree();_gamePaused=_gameMenu.Visible;Input.MouseMode=_gamePaused || BattleOpen?Input.MouseModeEnum.Visible:Input.MouseModeEnum.Captured;}
-        dialog.CloseRequested+=CloseInventory;dialog.Confirmed+=CloseInventory;dialog.PopupCentered();
+        void CloseInventory(){if(!_inventoryOpen)return;_inventoryOpen=false;dialog.QueueFree();_gamePaused=_gameMenu.Visible;Input.MouseMode=_gamePaused || BattleOpen?Input.MouseModeEnum.Visible:Input.MouseModeEnum.Captured;}
+        dialog.CloseRequested+=CloseInventory;dialog.Confirmed+=CloseInventory;dialog.Canceled+=CloseInventory;dialog.PopupCentered();
     }
     private async System.Threading.Tasks.Task CheckPlayerStartup()
     {
