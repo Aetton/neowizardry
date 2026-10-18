@@ -10,7 +10,7 @@ The screenshot below shows the separate training laboratory (`--training`), not 
 
 ## What works
 
-- Default monastery startup: in-app original-data preparation, walking/collision, native prop poses/doors, creature visuals/effects, shared six-hero party/inventory and campaign save/resume. New games use the native beach entrance and three original crabs; visible source items use original models and E pickup with persistent inventory. See [iteration 056](docs/iteration-056.md) for current interactions and remaining campaign content.
+- Default monastery startup: in-app original-data preparation, walking/collision, native prop poses/doors, creature visuals/effects, shared six-hero party/inventory and campaign save/resume. New games use the native beach entrance and three original crabs; visible source items use original models and E pickup with persistent inventory. B attacks a nearby visible encounter with range/obstruction feedback and keyboard layout support; see [combat interaction fixes](docs/iteration-057.md). See [iteration 056](docs/iteration-056.md) for item pickups and remaining campaign content.
 
 - Read-only SLF index, SHA-256 inventory and selective extraction, verified against an original Steam `DATA.SLF` containing 3314 entries.
 - A catalog of 819 original item records: IDs, names, item type/icon indices and equipment restriction masks. Generated catalogs stay local; original assets are not bundled.

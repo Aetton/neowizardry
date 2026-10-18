@@ -14,3 +14,6 @@ Packaged Windows and original-data CI results are recorded after completion. TOC
 
 
 The first packaged Windows verification exposed a remaining E-dispatch failure after UI focus; that build was not published. The follow-up routes recognized gameplay shortcuts before GUI consumption and explicitly flushes injected regression events. Windows verification is repeated on the corrected source.
+
+
+Corrected runtime: `9812597c17882959497a038bb77a9058818133b0`. Linux run `39160793948` passed. Original-data audit `39160793963` passed: existing-cache player startup and in-app preparation both dispatched B/E with Cyrillic layout, found a standable approach and entered original STS group 102. The group completed with save/reload and once-only rewards; the full gallery also passed. Final packaged Windows run `39160794060` also passed and published [Windows 82](https://github.com/Aetton/neowizardry/releases/tag/windows-build-82), targeting the exact corrected runtime above. The exported EXE dispatched physical B/E with Cyrillic logical keys and focused UI, opened the original three-crab encounter from a standable approach, and completed battle/save/reload with once-only XP and no respawn. Linux, packaged Windows and original-data audit are all green.
