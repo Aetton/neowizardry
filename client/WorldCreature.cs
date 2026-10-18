@@ -245,6 +245,7 @@ public partial class WorldCreature : Node3D
         ShowFrame(Math.Min((int)(_time*_clip.Fps),_clip.Frames.Length-1));
     }
     public override void _Process(double delta){if(IsVisibleInTree())Step(delta);}
+    public Aabb InteractionBounds=>GlobalTransform*(_clips.Values.FirstOrDefault(c=>c.Cycle==1)?.Frames.FirstOrDefault() is {} frame?WorldDoor.RenderBounds(frame):_bounds);
     public void Focus(Camera3D view)
     {
         // Death debris can span far beyond the standing body. Frame the pose

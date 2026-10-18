@@ -120,14 +120,14 @@ public partial class WorldPreview
         foreach(var child in _battleBody.GetChildren()){_battleBody.RemoveChild(child);child.QueueFree();}
         if(!BattleOpen)return;
         _looking=false;Input.MouseMode=Input.MouseModeEnum.Visible;
-        _battleBody.AddChild(new Label {Text=$"{_expedition.Phase} · round {s.Round}\nF5 saves this battle · F9 loads expedition",AutowrapMode=TextServer.AutowrapMode.WordSmart});
+        _battleBody.AddChild(new Label {Text=GameMode?$"БОЙ · Раунд {s.Round}\nF5 — сохранить бой · F9 — загрузить":$"{_expedition.Phase} · round {s.Round}\nF5 saves this battle · F9 loads expedition",AutowrapMode=TextServer.AutowrapMode.WordSmart});
         if(_expedition.Phase==WorldEncounterPhase.Defeat)
         {
-            _battleBody.AddChild(new Label {Text="Party defeated. Load an earlier expedition with F9.\nNo automatic restart or item/HP reset."});return;
+            _battleBody.AddChild(new Label {Text=GameMode?"Группа погибла. F9 — загрузить сохранение.\nEsc → Новая группа — начать заново.":"Party defeated. Load an earlier expedition with F9.\nNo automatic restart or item/HP reset."});return;
         }
         var hero=new OptionButton();foreach(var h in s.Party)hero.AddItem($"{h.Name} · {h.Hp} HP");
         hero.Select(_battleHero);hero.ItemSelected+=i=>{_battleHero=(int)i;RefreshExpedition();};_battleBody.AddChild(hero);
-        _battleBody.AddChild(new Label {Text="Tap adjacent free cell to move, adjacent enemy to attack.\nEach tap resolves one round; other heroes attack nearby or wait."});
+        _battleBody.AddChild(new Label {Text=GameMode?"Выбери героя. Соседняя пустая клетка — шаг, противник рядом — атака.\nКаждый щелчок проводит раунд. Кнопка ниже — автоматические действия группы.":"Tap adjacent free cell to move, adjacent enemy to attack.\nEach tap resolves one round; other heroes attack nearby or wait.",AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(400,0)});
         var grid=new GridContainer {Columns=s.Melee!.Field!.Width};_battleBody.AddChild(grid);
         var f=s.Melee.Field;
         for(int y=0;y<f.Height;y++)for(int x=0;x<f.Width;x++)
@@ -144,12 +144,13 @@ public partial class WorldPreview
                 ResolveExpedition([order]);
             });grid.AddChild(button);
         }
-        var wait=new Button {Text="Resolve round · attack nearby / wait"};wait.Pressed+=()=>ExpeditionAction(()=>ResolveExpedition([]));_battleBody.AddChild(wait);
+        var wait=new Button {Text=GameMode?"Следующий раунд · действия группы":"Resolve round · attack nearby / wait"};wait.Pressed+=()=>ExpeditionAction(()=>ResolveExpedition([]));_battleBody.AddChild(wait);
         _battleFeedback=new Label {Text=message??"",AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(420,0)};_battleBody.AddChild(_battleFeedback);
     }
 
     private void ExpeditionAction(Action action)
     {
+        if(GameMode && _gamePaused)return;
         try {action();}
         catch(Exception error) when(error is InvalidOperationException or InvalidDataException)
         {if(_battleFeedback is not null)_battleFeedback.Text=error.Message;else _expeditionStatus.Text=error.Message;}
@@ -184,12 +185,20 @@ public partial class WorldPreview
     {
         _beginEncounter=false;
         if(_expedition is null || _expedition.Phase!=WorldEncounterPhase.Ready)return;
-        if(_doors?.IsInspecting==true){_checkpointStatus.Text="Finish animation inspection before entering combat";return;}
+        if(_doors?.IsInspecting==true){if(GameMode)Notice("Заверши осмотр двери перед атакой.");else _checkpointStatus.Text="Finish animation inspection before entering combat";return;}
+        if(GameMode)
+        {
+            var target=PlayerEncounterTarget();
+            if(target.Target is null){Notice(target.Reason);return;}
+        }
+        else
+        {
         var anchor=EncounterAnchors.OrderBy(p=>p.DistanceSquaredTo(_view.GlobalPosition)).First();
         if(_view.GlobalPosition.DistanceTo(anchor)>3){_checkpointStatus.Text="Approach the orange encounter marker (N jumps to native arrival)";return;}
         using var ray=PhysicsRayQueryParameters3D.Create(_view.GlobalPosition,anchor,1);
         ray.HitBackFaces=true;
         if(GetWorld3D().DirectSpaceState.IntersectRay(ray).Count>0){_checkpointStatus.Text="Encounter marker is occluded";return;}
+        }
         _expedition=WorldExpedition.Begin(_expedition with {World=CaptureCheckpoint()});
         _walking=_enterWalk=_useDoor=_inspectDoor=false;RefreshExpedition();
         FocusEncounter();

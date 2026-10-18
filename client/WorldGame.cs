@@ -18,12 +18,15 @@ public partial class WorldPreview
         void Button(string text,Action action){var b=new Button {Text=text};b.Pressed+=action;top.AddChild(b);}
         Button("Инвентарь · I",ShowPlayerInventory);Button("Сохранить · F5",SavePlayerGame);Button("Меню · Esc",TogglePlayerMenu);
         _gameHud=new Label {Position=new(18,GetViewport().GetVisibleRect().Size.Y-88),MouseFilter=Control.MouseFilterEnum.Ignore,AutowrapMode=TextServer.AutowrapMode.WordSmart};layer.AddChild(_gameHud);
+        _combatHint=new Label {MouseFilter=Control.MouseFilterEnum.Ignore};layer.AddChild(_combatHint);
         _itemHint=new Label {MouseFilter=Control.MouseFilterEnum.Ignore};layer.AddChild(_itemHint);
         _gameNotice=new Label {Position=new(18,60),Text="Загрузка монастыря…",MouseFilter=Control.MouseFilterEnum.Ignore,AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(850,0)};layer.AddChild(_gameNotice);
         _gameMenu=new PanelContainer {Visible=false,Position=new(32,110),CustomMinimumSize=new(440,0)};layer.AddChild(_gameMenu);
         var menu=new VBoxContainer();_gameMenu.AddChild(menu);
-        menu.AddChild(new Label {Text="МОНАСТЫРЬ\nWASD — ходить · мышь — смотреть\nE / щелчок — подобрать, дверь или встреча\nF5 — сохранить · F9 — загрузить\nI — инвентарь · Esc — меню"});
+        menu.AddChild(new Label {Text="МОНАСТЫРЬ\nWASD — ходить · мышь — смотреть\nE / щелчок — взаимодействовать · B — атаковать\nF5 — сохранить · F9 — загрузить\nI — инвентарь · Esc — меню"});
         void MenuButton(string text,Action action){var b=new Button {Text=text};b.Pressed+=action;menu.AddChild(b);}
+        _menuAttack=new Button {Text="Атаковать ближайшую группу · B"};menu.AddChild(_menuAttack);
+        _menuAttack.Pressed+=()=>{_gamePaused=false;_gameMenu.Hide();Input.MouseMode=Input.MouseModeEnum.Captured;RequestPlayerAttack();};
         MenuButton("Продолжить",TogglePlayerMenu);MenuButton("Бестиарий · модели и анимации",ShowPlayerCreatures);MenuButton("Сохранить",SavePlayerGame);
         MenuButton("Загрузить",()=>{try{LoadExpedition();_gameSaveBlocked=false;_gamePaused=false;_gameMenu.Hide();if(!BattleOpen)ResumePlayerWalking();}catch(Exception e){Notice("Сохранение не загружено: "+e.Message);}});
         MenuButton("Новая группа · 6 героев",NewPlayerGame);MenuButton("Выйти",()=>{SavePlayerGame();GetTree().Quit();});
@@ -72,7 +75,7 @@ public partial class WorldPreview
                 catch(Exception error){_gameSaveBlocked=true;Notice("Сохранение не загружено и не будет перезаписано: "+error.Message+". Выберите «Новая группа» в меню для нового прохождения.");}
             }
             _gameReady=true;if(!BattleOpen)ResumePlayerWalking();
-            if(!_gameSaveBlocked)Notice(_expedition.Phase==WorldEncounterPhase.Victory?"Пляж очищен · E — подобрать / открыть дверь · F5 — сохранить":_nativeEncounter?.Disposition==0?"Существа на пляже нейтральны · E рядом — атаковать · F5 — сохранить · Esc — меню":"Первый этаж монастыря · E — дверь / встреча · F5 — сохранить · Esc — меню");
+            if(!_gameSaveBlocked)Notice(_expedition.Phase==WorldEncounterPhase.Victory?"Пляж очищен · E — подобрать / открыть дверь · F5 — сохранить":_nativeEncounter?.Disposition==0?"Существа на пляже нейтральны · B — атаковать (до 8 м) · F5 — сохранить · Esc — меню":"Первый этаж монастыря · E — дверь / встреча · F5 — сохранить · Esc — меню");
             if(System.Environment.GetEnvironmentVariable("NEO_STARTUP_SMOKE")=="1")await CheckPlayerStartup();
         }
         catch(Exception error)
@@ -133,11 +136,13 @@ public partial class WorldPreview
         if(!_gameReady || _bestiaryOpen)return;
         if(input is InputEventKey key && key.Pressed && !key.Echo)
         {
-            if(key.Keycode==Key.Escape){TogglePlayerMenu();return;}
-            if(key.Keycode==Key.F5){SavePlayerGame();return;}
-            if(key.Keycode==Key.F9){try{LoadExpedition();if(!BattleOpen)ResumePlayerWalking();}catch(Exception e){Notice("Не удалось загрузить: "+e.Message);}return;}
-            if(key.Keycode==Key.I){ShowPlayerInventory();return;}
-            if(!_gamePaused && !BattleOpen && key.Keycode is Key.E or Key.B)PlayerInteract();
+            Key code=key.PhysicalKeycode!=Key.None?key.PhysicalKeycode:key.Keycode;
+            if(code==Key.Escape){TogglePlayerMenu();return;}
+            if(code==Key.F5){SavePlayerGame();return;}
+            if(code==Key.F9){try{LoadExpedition();if(!BattleOpen)ResumePlayerWalking();}catch(Exception e){Notice("Не удалось загрузить: "+e.Message);}return;}
+            if(code==Key.I){ShowPlayerInventory();return;}
+            if(!_gamePaused && !BattleOpen && code==Key.B){RequestPlayerAttack();return;}
+            if(!_gamePaused && !BattleOpen && code==Key.E)PlayerInteract();
         }
         if(_gamePaused || BattleOpen)return;
         if(input is InputEventMouseMotion motion && Input.MouseMode==Input.MouseModeEnum.Captured)
@@ -148,8 +153,8 @@ public partial class WorldPreview
     {
         if(_expedition is null || BattleOpen || _expedition.Phase==WorldEncounterPhase.Defeat)return;
         if(TryCollectWorldItem())return;
-        if(_expedition?.Phase==WorldEncounterPhase.Ready && EncounterAnchors.Any(p=>_view.GlobalPosition.DistanceTo(p)<3))
-        {_beginEncounter=true;return;}
+        if(_expedition.Phase==WorldEncounterPhase.Ready && LookingAtPlayerEncounter())
+        {RequestPlayerAttack();return;}
         Notice(_doors?.Use(_view)??"Здесь нет доступной двери");
     }
     private void ShowPlayerCreatures()
@@ -219,6 +224,7 @@ public partial class WorldPreview
                 if(_encounterCreatures[$"monster-{i+1}"].Position.DistanceTo(NativePosition(_nativeEncounter.Members[i].Position))>0.001f)
                     throw new InvalidDataException("Native encounter was relocated from source placement");
             _gameSaveBlocked=false;_gamePaused=true;
+            await CheckPlayerAttackInput();
             CheckWorldExpedition();
             if(_expedition!.Phase!=WorldEncounterPhase.Victory)throw new InvalidDataException("Native encounter fixture did not reach victory");
             CheckPreviousItemMigration();

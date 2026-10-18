@@ -58,3 +58,8 @@ The first-launch directory picker now uses `PopupCenteredClamped` with a 90% par
 Visible loose items now appear at their original positions with original models. Approach and look at an item, then press E/click when the pickup hint appears; I opens the shared party bag. Unidentified items retain that state. Picked items stay removed after saving, loading and battle. Hidden items await search mechanics; containers/treasure are separate unfinished work.
 
 Updating prepares the additional private item data, using the remembered installation when available. Compatible native campaigns from iteration 055 retain their party, inventory, XP, cleared encounter and position in a new snapshot; the previous file remains intact. Incompatible earlier authored encounters are not converted into the native campaign.
+
+
+## Starting the beach encounter
+
+B attacks the nearest visible group within eight world units. The walking HUD shows its distance, whether attack is available, or what blocks it. E/click interacts with the item or encounter you face. The Esc menu also offers Attack nearest group. These letter shortcuts work by physical key position, including with a Russian keyboard layout. In battle, select a hero and click an adjacent enemy/free cell, or use Следующий раунд for the group's automatic actions. A previously cleared group stays cleared; Esc → Новая группа starts a fresh campaign with the old file backed up.
