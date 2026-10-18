@@ -36,7 +36,7 @@ def monster_bank(r):
         if not 0x28<=size<=0x12b:raise FormatError('Unsupported STS group size')
         raw=r.take(size);version=struct.unpack_from('<I',raw,0xc4)[0] if size>=0xc8 else 0
         encounter=r.read('B')[0] if version>=2 else 0
-        groups.append({'id':struct.unpack_from('<i',raw)[0],'species':struct.unpack_from('<I',raw,0x18)[0], 'version':version,'encounter':bool(encounter)})
+        groups.append({'id':struct.unpack_from('<i',raw)[0],'species':struct.unpack_from('<I',raw,0x18)[0], 'version':version,'encounter':bool(encounter),'disposition':raw[0x2a]})
     for _ in range(nm):
         version=r.read('I')[0];size=r.count()
         if not 1<=version<=7 or not 0x2f<=size<=0x425:raise FormatError('Unsupported STS monster version/size')
@@ -83,6 +83,18 @@ def parse(data):
     return {'schema':1,'sha256':hashlib.sha256(data).hexdigest(),'levels':levels}
 
 def inspect(archive):
+    from tools.prepare_game import installation,child
+    from tools.slf import Resources
+    from tools.monsters import monster_catalog
+    root,_,data,_,patches=installation(archive.parent.parent)
+    catalog=monster_catalog(Resources(Archive(data),[Archive(p) for p in patches],child(root,'Data')))
+    for row in catalog['monsters']:
+        if row['id'] not in (253,309,108,109,312):continue
+        raw=bytes.fromhex(row['raw_record_hex'])
+        print(json.dumps({'profile':row['id'],'label':row['label'],'hp':list(struct.unpack_from('<hBB',raw,0xd6)),
+            'spell':raw[0xe1],'npc':raw[0xd0]&1,'gold':list(struct.unpack_from('<hBB',raw,0x243)),
+            'treasure':[struct.unpack_from('<h',raw,0x1f4+slot*10)[0] for slot in range(8)],
+            'attacks':[{'enabled':raw[at],'category':raw[at+3],'effects':list(raw[at+5:at+21]),'modes':struct.unpack_from('<H',raw,at+21)[0]} for at in (0xe7,0x109,0x12b)]},separators=(',',':')))
     source=Archive(archive)
     for n in (1,2):
         obj=objects(source.read(f'Monastery/Monastery{n}.PVL'))
