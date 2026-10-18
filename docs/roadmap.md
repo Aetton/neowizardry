@@ -3,6 +3,8 @@
 ## Current baseline
 Status checked against code and iteration reports through **053**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
+Immediate player milestone: [TOC-44 — a complete playable first monastery floor](https://linear.app/tochka/issue/TOC-44/pervyj-etazh-monastyrya-polnocennyj-prohodimyj-scenarij-iz-obychnogo). Iteration 053 fixes ordinary launch and exposes the imported floor; its original encounter/item/event scenario is still in progress. Finish that connected player path before treating broader catalog coverage as the next milestone.
+
 | Workstream | Recovered / implemented | Still required for original gameplay |
 |---|---|---|
 | Combat | Recovered physical rules, live multi-opponent grid battles, persisted positions/initiative, authored tactical AI, mixed original monster rosters, multi-slot/mode attacks, fumbles and connected condition 16; 79/595 original records admit supported profiles | Other conditions, magic/special/projectile delivery, native world AI/formation/time, effective party stat producers and original rewards; 516 monster records remain blocked |
