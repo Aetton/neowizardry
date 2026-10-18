@@ -55,7 +55,7 @@ def track(animation, key, fallback, first, last, scale):
             if entry['channel']!=2:continue
             meshes=entry['mesh']['meshes']
             mesh=meshes[0] if len(meshes)==1 else next(m for m in meshes if m['frame']==frame)
-            index=next((index for marker,index in mesh['vertex_map'] if marker==key),None)
+            index=dict(mesh['vertex_map']).get(key)
             if index is None:continue
             variants=mesh['positions'];point=variants[frame if len(variants)>1 else 0][index]
             path=entry.get('path') or animation.get('path')

@@ -102,13 +102,13 @@ internal sealed class CreatureParticles
             }
             float speed=I("speed_mode")==0?0:I("speed_mode")==1?F("speed"):F("speed_min")+Unit()*(F("speed_max")-F("speed_min"));
             Vector3 direction=Vector3.Zero;
-            if(I("direction_mode")==2)direction=basis.Z;
+            if(I("direction_mode")==2)direction=-basis.Z;
             if(I("direction_mode")==1)direction=V(_data.GetProperty("fixed_direction"));
             if(I("direction_mode")==3)
             {
                 var cone=_data.GetProperty("cone");
-                direction=basis*(new Basis(Vector3.Up,Mathf.DegToRad((Unit()-0.5f)*cone[0].GetSingle()))*
-                    (new Basis(Vector3.Right,Mathf.DegToRad((Unit()-0.5f)*cone[1].GetSingle()))*Vector3.Back));
+                direction=ConeDirection(basis,Mathf.DegToRad((Unit()-0.5f)*cone[0].GetSingle()),
+                    Mathf.DegToRad((Unit()-0.5f)*cone[1].GetSingle()));
             }
             if(I("direction_mode")==4)direction=new Vector3(Unit()-0.5f,Unit()-0.5f,Unit()-0.5f).Normalized();
             var velocity=direction*speed*500*_scale;
@@ -124,8 +124,14 @@ internal sealed class CreatureParticles
             _emissionClock=I("emission_mode")==1?0:_emissionClock-interval;
         }
     }
+    // C R C converts native +Z motion to Godot -Z, including cone angles.
+    private static Vector3 ConeDirection(Basis basis,float yaw,float pitch)=>
+        basis*(new Basis(Vector3.Up,-yaw)*(new Basis(Vector3.Right,-pitch)*Vector3.Forward));
     public void Check(int first,int frames)
     {
+        if(!ConeDirection(Basis.Identity,0,0).IsEqualApprox(Vector3.Forward) ||
+            !ConeDirection(new Basis(Vector3.Up,Mathf.Pi/2),0,0).IsEqualApprox(Vector3.Left))
+            throw new InvalidDataException("Native particle forward/cone reflection mismatch");
         Clear();Begin();
         int start=I("start_frame"),end=I("end_frame");
         int source=start!=-1 && end!=-1 && start!=end?Math.Max(first,start):first;

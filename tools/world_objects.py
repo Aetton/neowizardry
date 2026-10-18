@@ -85,8 +85,8 @@ class ObjectsReader(Reader):
         vertex_map = self.array('hh', self.count('b', 127)) if version > 3 else []
         if any(index<0 or index>=vertices for _,index in vertex_map):
             raise FormatError('Dynamic mesh attachment vertex outside bounds')
-        if len({key for key,_ in vertex_map})!=len(vertex_map):
-            raise FormatError('Duplicate dynamic mesh attachment key')
+        # Repeated marker keys occur in the retail greater-demon spell mesh.
+        # Keep source order: native SetMappedVertex replaces an earlier key.
         lods = 1
         positions = []
         if flags & 1:

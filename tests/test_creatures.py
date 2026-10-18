@@ -145,6 +145,15 @@ class CreatureTests(unittest.TestCase):
             self.assertEqual(name,doc['images'][index]['name'].casefold())
         self.assertNotIn('some particle emitters blocked',manifest['limitations'])
 
+    def test_repeated_marker_key_uses_last_native_setmappedvertex_value(self):
+        from tools.creature_particles import track
+        animation,first,last=creatures.mon(fixture_particles())
+        mesh=animation['entries'][0]['mesh']['meshes'][0]
+        mesh['vertex_map']=[(7,2),(7,1)]
+        points,mapped=track(animation,7,[9,9,9],first,last,1)
+        self.assertEqual(mapped,2)
+        self.assertEqual(points,[[0,1.3,-0.0],[0,1.3,-0.0]])
+
     def test_particle_versions_nonfinite_values_and_bad_attachment_indices(self):
         from tools.creature_particles import decode
         for version,size in ((1,0x216),(2,0x218),(3,0x21d),(4,0x225)):
