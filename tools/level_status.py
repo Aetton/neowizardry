@@ -56,6 +56,27 @@ def monster_bank(r):
     if r.pos!=len(r.data):raise FormatError('Unconsumed STS monster tail')
     return {'groups':groups,'monsters':monsters}
 
+def item_bank(r):
+    # LoadItemStatus -> LoadItem: 0xad-byte packed W8WorldItem chains.
+    groups=[]
+    for group in range(r.count()):
+        members=[]
+        while True:
+            if sum(map(len,groups))+len(members)>=100000:raise FormatError('STS item chain outside bounds')
+            raw=r.take(0xad)
+            position=list(struct.unpack_from('<3f',raw,0x15))
+            if not all(math.isfinite(v) for v in position):raise FormatError('Nonfinite STS item position')
+            members.append({'id':struct.unpack_from('<i',raw)[0],
+                'definition_id':struct.unpack_from('<i',raw,9)[0],
+                'stack_count':raw[13],'charges':raw[14],'identified':bool(raw[15]),
+                'instance_flags':list(raw[16:21]),'position':position,
+                'entity_flags':struct.unpack_from('<I',raw,0x25)[0],
+                'flags':struct.unpack_from('<I',raw,0x29)[0]})
+            if not struct.unpack_from('<I',raw,0x31)[0]:break
+        groups.append(members)
+    if r.pos!=len(r.data):raise FormatError('Unconsumed STS item tail')
+    return groups
+
 def parse(data):
     r=Reader(data);name,grouped,at_end,root=chunk(r)
     if name!='RIFF' or at_end or r.pos!=len(data):raise FormatError(f'Invalid STS RIFF envelope: {name}, grouped={grouped}, end={at_end}, consumed={r.pos}, size={len(data)}')
@@ -63,12 +84,14 @@ def parse(data):
     for _ in range(root.count()):
         name,grouped,at_end,level=chunk(root)
         if name!='LVLS':raise FormatError('Unsupported STS root chunk')
-        count=level.count();level_id=level.read('I')[0];parts=[];bank=None
+        count=level.count();level_id=level.read('I')[0];parts=[];bank=None;items=None
         for _ in range(count):
             name,grouped,at_end,part=chunk(level)
             meta={'id':name,'bytes':len(part.data),'at_end':bool(at_end)}
             if name=='MONS' and not at_end:
                 bank=monster_bank(part);meta.update(groups=len(bank['groups']),monsters=len(bank['monsters']))
+            if name=='ITEM' and not at_end:
+                items=item_bank(part);meta.update(groups=len(items),items=sum(map(len,items)))
             if name=='MONG' and not at_end:
                 version=part.read('i')[0]
                 if version>4:part.take(4)
@@ -78,7 +101,7 @@ def parse(data):
                 meta.update(version=version,generators=part.count())
             parts.append(meta)
         if level.pos!=len(level.data):raise FormatError('STS level extent mismatch')
-        levels.append({'level':level_id,'chunks':parts,'bank':bank})
+        levels.append({'level':level_id,'chunks':parts,'bank':bank,'items':items})
     if root.pos!=len(root.data):raise FormatError('STS root extent mismatch')
     return {'schema':1,'sha256':hashlib.sha256(data).hexdigest(),'levels':levels}
 

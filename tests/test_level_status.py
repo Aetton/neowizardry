@@ -2,7 +2,7 @@ import hashlib
 import struct
 import unittest
 from unittest.mock import patch
-from tools.level_status import parse,build
+from tools.level_status import parse,build,item_bank,Reader
 from tools.slf import FormatError
 
 
@@ -28,6 +28,24 @@ def fixture(*,species=0,script=False):
 
 
 class LevelStatusTest(unittest.TestCase):
+    def test_item_chains_preserve_instances_and_reject_truncation(self):
+        raw=bytearray(0xad)
+        struct.pack_into('<ii',raw,0,42,0)
+        struct.pack_into('<i6B',raw,9,123,5,7,1,0,0,0)
+        struct.pack_into('<3f',raw,0x15,10,20,30)
+        struct.pack_into('<I',raw,0x29,1)
+        tail=bytes(raw);struct.pack_into('<I',raw,0x31,0x123456)
+        data=struct.pack('<I',1)+raw+tail
+        bank=item_bank(Reader(data))
+        self.assertEqual(len(bank),1);self.assertEqual(len(bank[0]),2)
+        self.assertEqual(bank[0][0]['definition_id'],123)
+        self.assertEqual(bank[0][0]['position'],[10,20,30])
+        self.assertEqual(bank[0][0]['stack_count'],5)
+        self.assertEqual(bank[0][0]['charges'],7)
+        for end in range(len(data)):
+            with self.assertRaises(FormatError):item_bank(Reader(data[:end]))
+        with self.assertRaises(FormatError):item_bank(Reader(data+b'x'))
+
     def test_native_packed_headers_group_flags_and_monster_tail(self):
         data=fixture(script=True);result=parse(data);bank=result['levels'][0]['bank']
         self.assertEqual(result['sha256'],hashlib.sha256(data).hexdigest())
