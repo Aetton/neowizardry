@@ -58,7 +58,7 @@ def monster_bank(r):
 
 def parse(data):
     r=Reader(data);name,grouped,at_end,root=chunk(r)
-    if name!='RIFF' or not grouped or at_end or r.pos!=len(data):raise FormatError('Invalid STS RIFF envelope')
+    if name!='RIFF' or not grouped or at_end or r.pos!=len(data):raise FormatError(f'Invalid STS RIFF envelope: {name}, grouped={grouped}, end={at_end}, consumed={r.pos}, size={len(data)}')
     levels=[]
     for _ in range(root.count()):
         name,grouped,at_end,level=chunk(root)
@@ -85,6 +85,8 @@ def parse(data):
 def inspect(archive):
     source=Archive(archive)
     for n in (1,2):
+        obj=objects(source.read(f'Monastery/Monastery{n}.PVL'))
+        print(json.dumps({'level':n,'arrivals':[{'name':t['name'],'position':t['position'],'orientation':t.get('orientation')} for t in obj['triggers'] if t['start'] in obj['arrivals']]},separators=(',',':')))
         resource=f'Monastery/Monastery{n}.STS';result=parse(source.read(resource))
         print(json.dumps({'resource':resource,'status':result},separators=(',',':')))
         obj=objects(source.read(f'Monastery/Monastery{n}.PVL'))
