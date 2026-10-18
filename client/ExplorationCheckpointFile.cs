@@ -5,7 +5,7 @@ using NeoWizardry.Core;
 // Atomic checkpoint storage; callers protect failed reads from automatic overwrite.
 public static class ExplorationCheckpointFile
 {
-    public static string ContentHash(string worldPath)
+    public static string ContentHash(string worldPath,bool includeItems=true)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach(var suffix in new[] { ".glb", ".nwcol", ".nwobjects.json", ".nwdoors.json", ".nwdoors.glb", ".nwprops.json", ".nwprops.glb" })
@@ -25,6 +25,12 @@ public static class ExplorationCheckpointFile
         {
             hash.AppendData(Encoding.UTF8.GetBytes(".nwencounter.json"));
             using var stream=File.OpenRead(encounter);hash.AppendData(SHA256.HashData(stream));
+        }
+        var items=Path.ChangeExtension(worldPath,".nwitems.json");
+        if(includeItems && File.Exists(items))
+        {
+            hash.AppendData(Encoding.UTF8.GetBytes(".nwitems.json"));
+            using var stream=File.OpenRead(items);hash.AppendData(SHA256.HashData(stream));
         }
         return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
     }

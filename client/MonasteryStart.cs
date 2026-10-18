@@ -59,7 +59,7 @@ public partial class MonasteryStart : Control
     {
         if(!File.Exists(world))return false;
         string folder=Path.GetDirectoryName(Path.GetFullPath(world))!;
-        return new[]{".nwcol",".nwobjects.json",".nwdoors.json",".nwdoors.glb",".nwprops.json",".nwprops.glb",".nwencounter.json"}.All(s=>File.Exists(Path.ChangeExtension(world,s))) &&
+        return new[]{".nwcol",".nwobjects.json",".nwdoors.json",".nwdoors.glb",".nwprops.json",".nwprops.glb",".nwencounter.json",".nwitems.json"}.All(s=>File.Exists(Path.ChangeExtension(world,s))) &&
             new[]{"items.json","monsters.json","creatures-index.json"}.All(s=>File.Exists(Path.Combine(folder,s)));
     }
     private void SelectInstallation()

@@ -18,10 +18,11 @@ public partial class WorldPreview
         void Button(string text,Action action){var b=new Button {Text=text};b.Pressed+=action;top.AddChild(b);}
         Button("Инвентарь · I",ShowPlayerInventory);Button("Сохранить · F5",SavePlayerGame);Button("Меню · Esc",TogglePlayerMenu);
         _gameHud=new Label {Position=new(18,GetViewport().GetVisibleRect().Size.Y-88),MouseFilter=Control.MouseFilterEnum.Ignore,AutowrapMode=TextServer.AutowrapMode.WordSmart};layer.AddChild(_gameHud);
+        _itemHint=new Label {MouseFilter=Control.MouseFilterEnum.Ignore};layer.AddChild(_itemHint);
         _gameNotice=new Label {Position=new(18,60),Text="Загрузка монастыря…",MouseFilter=Control.MouseFilterEnum.Ignore,AutowrapMode=TextServer.AutowrapMode.WordSmart,CustomMinimumSize=new(850,0)};layer.AddChild(_gameNotice);
         _gameMenu=new PanelContainer {Visible=false,Position=new(32,110),CustomMinimumSize=new(440,0)};layer.AddChild(_gameMenu);
         var menu=new VBoxContainer();_gameMenu.AddChild(menu);
-        menu.AddChild(new Label {Text="МОНАСТЫРЬ\nWASD — ходить · мышь — смотреть\nE / щелчок — дверь или встреча\nF5 — сохранить · F9 — загрузить\nI — инвентарь · Esc — меню"});
+        menu.AddChild(new Label {Text="МОНАСТЫРЬ\nWASD — ходить · мышь — смотреть\nE / щелчок — подобрать, дверь или встреча\nF5 — сохранить · F9 — загрузить\nI — инвентарь · Esc — меню"});
         void MenuButton(string text,Action action){var b=new Button {Text=text};b.Pressed+=action;menu.AddChild(b);}
         MenuButton("Продолжить",TogglePlayerMenu);MenuButton("Бестиарий · модели и анимации",ShowPlayerCreatures);MenuButton("Сохранить",SavePlayerGame);
         MenuButton("Загрузить",()=>{try{LoadExpedition();_gameSaveBlocked=false;_gamePaused=false;_gameMenu.Hide();if(!BattleOpen)ResumePlayerWalking();}catch(Exception e){Notice("Сохранение не загружено: "+e.Message);}});
@@ -65,13 +66,13 @@ public partial class WorldPreview
                 catch(InvalidDataException){}
             }
             _initialGameWorld=CaptureCheckpoint();_expedition=_expedition with {World=_initialGameWorld};
-            if(System.Environment.GetEnvironmentVariable("NEO_STARTUP_SMOKE")!="1" && File.Exists(_expeditionPath))
+            if(System.Environment.GetEnvironmentVariable("NEO_STARTUP_SMOKE")!="1")
             {
-                try{LoadExpedition();}
+                try{if(!File.Exists(_expeditionPath))MigratePreviousPlayerItems();if(File.Exists(_expeditionPath))LoadExpedition();}
                 catch(Exception error){_gameSaveBlocked=true;Notice("Сохранение не загружено и не будет перезаписано: "+error.Message+". Выберите «Новая группа» в меню для нового прохождения.");}
             }
             _gameReady=true;if(!BattleOpen)ResumePlayerWalking();
-            if(!_gameSaveBlocked)Notice(_nativeEncounter?.Disposition==0?"Существа на пляже нейтральны · E рядом — атаковать · F5 — сохранить · Esc — меню":"Первый этаж монастыря · E — дверь / встреча · F5 — сохранить · Esc — меню");
+            if(!_gameSaveBlocked)Notice(_expedition.Phase==WorldEncounterPhase.Victory?"Пляж очищен · E — подобрать / открыть дверь · F5 — сохранить":_nativeEncounter?.Disposition==0?"Существа на пляже нейтральны · E рядом — атаковать · F5 — сохранить · Esc — меню":"Первый этаж монастыря · E — дверь / встреча · F5 — сохранить · Esc — меню");
             if(System.Environment.GetEnvironmentVariable("NEO_STARTUP_SMOKE")=="1")await CheckPlayerStartup();
         }
         catch(Exception error)
@@ -117,6 +118,7 @@ public partial class WorldPreview
         RestoreCheckpoint(_initialGameWorld);
         _expedition=_nativeEncounter is null?WorldExpedition.Create(6,_expeditionItems,_expeditionMonsters,_expedition.MonsterDefinitionId,_initialGameWorld):
             WorldExpedition.CreateNative(6,_expeditionItems,_expeditionMonsters,_nativeEncounter,_initialGameWorld);
+        _expedition=WorldItemPickup.Attach(_expedition,_nativeItems,_expeditionItems);
         _gameSaveBlocked=false;_battleHero=0;foreach(var visual in _encounterCreatures.Values)visual.ResetIdle();_gamePaused=false;_gameMenu.Hide();RefreshExpedition();ResumePlayerWalking();SavePlayerGame();
     }
     private void SavePlayerGame()
@@ -144,6 +146,8 @@ public partial class WorldPreview
     }
     private void PlayerInteract()
     {
+        if(_expedition is null || BattleOpen || _expedition.Phase==WorldEncounterPhase.Defeat)return;
+        if(TryCollectWorldItem())return;
         if(_expedition?.Phase==WorldEncounterPhase.Ready && EncounterAnchors.Any(p=>_view.GlobalPosition.DistanceTo(p)<3))
         {_beginEncounter=true;return;}
         Notice(_doors?.Use(_view)??"Здесь нет доступной двери");
@@ -168,7 +172,7 @@ public partial class WorldPreview
         var body=new VBoxContainer();dialog.AddChild(body);
         var hero=new OptionButton();foreach(var h in _expedition.Game.Party)hero.AddItem($"{h.Name} · {h.Hp}/{h.MaxHp} HP · {h.Xp} XP");body.AddChild(hero);
         var list=new ItemList {CustomMinimumSize=new(700,300)};body.AddChild(list);
-        var bag=Inventory.Bag(_expedition.Game).ToArray();foreach(var item in bag)list.AddItem($"{_expeditionItems.Find(item.DefinitionId).Name} ×{item.Quantity}");
+        var bag=Inventory.Bag(_expedition.Game).ToArray();foreach(var item in bag)list.AddItem($"{(item.Identified?_expeditionItems.Find(item.DefinitionId).Name:"Неопознанный предмет")} ×{item.Quantity}");
         var status=new Label();body.AddChild(status);
         var equip=new Button {Text="Экипировать выбранное",Disabled=BattleOpen};body.AddChild(equip);
         equip.Pressed+=()=>{try{if(list.GetSelectedItems().FirstOrDefault(-1) is int at && at>=0)
@@ -193,6 +197,7 @@ public partial class WorldPreview
         string path=_expeditionPath;_expeditionPath=Path.Combine(Path.GetTempPath(),"neo-player-start-"+Guid.NewGuid().ToString("N")+".json");
         try
         {
+            CheckNativeWorldItems();
             SaveExpedition();var expected=_expedition!.Game;var savedPosition=_view.GlobalPosition;var savedRotation=_view.Rotation;
             _view.GlobalPosition+=Vector3.Right*2;_view.Rotation+=new Vector3(0,0.5f,0);LoadExpedition();
             if(_view.GlobalPosition.DistanceTo(savedPosition)>0.001f || _view.Rotation.DistanceTo(savedRotation)>0.001f)
@@ -216,6 +221,7 @@ public partial class WorldPreview
             _gameSaveBlocked=false;_gamePaused=true;
             CheckWorldExpedition();
             if(_expedition!.Phase!=WorldEncounterPhase.Victory)throw new InvalidDataException("Native encounter fixture did not reach victory");
+            CheckPreviousItemMigration();
             GD.Print($"PASS: native STS group {_nativeEncounter.GroupId}, {_nativeEncounter.Members.Length} original placements/HP/visuals, battle/save/reload, once-only XP and no respawn");
         }
         GetTree().Quit();

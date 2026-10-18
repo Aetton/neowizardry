@@ -50,6 +50,38 @@ public static class WorldExpeditionChecks
         var native=WorldExpedition.CreateNative(6,items,monsters,placed,world);
         string NativeSave(WorldExpeditionState state)=>WorldExpedition.Save(state,hash,limits,items,monsters,placed);
         WorldExpeditionState NativeLoad(string json)=>WorldExpedition.Load(json,hash,limits,items,monsters,placed);
+        var floorItems=new NativeWorldItems(1,placed.PvlSha256,placed.StsSha256,8,[
+            new(3,0,new(1000,0,0),0,0,false,false,"item-0.nwworlditem.glb",new('d',64)),
+            new(4,0,new(2000,0,0),0,0,true,true,"item-0.nwworlditem.glb",new('d',64))]);
+        var floor=WorldItemPickup.Attach(native,floorItems,items);
+        string FloorSave(WorldExpeditionState s)=>WorldExpedition.Save(s,hash,limits,items,monsters,placed,floorItems);
+        WorldExpeditionState FloorLoad(string s)=>WorldExpedition.Load(s,hash,limits,items,monsters,placed,floorItems);
+        var picked=WorldItemPickup.Take(floor,3,items);
+        Check(picked.CollectedItems!.SetEquals([3]) && floor.CollectedItems!.Count==0,"Pickup atomically updates immutable world identity");
+        Check(picked.Game.Items!.Items.Length==floor.Game.Items!.Items.Length+1 && picked.Game.RandomState==floor.Game.RandomState,"Pickup uses shared inventory without RNG");
+        Check(!picked.Game.Items.Items.Last().Identified,"Native identification preserved");
+        Check(FloorSave(FloorLoad(FloorSave(picked)))==FloorSave(picked),"Picked source identities survive save reload");
+        Reject(()=>WorldItemPickup.Take(picked,3,items),"No duplicate pickup after save");
+        Reject(()=>WorldItemPickup.Take(floor,4,items),"Hidden source items cannot be collected before search mechanics");
+        Reject(()=>WorldItemPickup.Take(WorldExpedition.Begin(floor),3,items),"World pickup blocked during battle");
+        Reject(()=>FloorSave(picked with {CollectedItems=picked.CollectedItems.Add(999)}),"Unknown collected ID rejected");
+        Reject(()=>FloorSave(picked with {WorldItems=floorItems with {StsSha256=new('e',64)}}),"Changed item source rejected");
+        var full=floor with {Game=floor.Game with {Items=floor.Game.Items! with {Capacity=floor.Game.Items.Items.Length}}};
+        Reject(()=>WorldItemPickup.Take(full,3,items),"Inventory capacity failure cannot consume placement");
+        Check(full.CollectedItems!.Count==0,"Failed pickup leaves source placement available");
+        var traveling=WorldExpedition.Begin(picked);
+        for(int turn=0;turn<120 && traveling.Phase==WorldEncounterPhase.Active;turn++)traveling=WorldExpedition.Advance(FloorLoad(FloorSave(traveling)),items).State;
+        Check(traveling.Phase==WorldEncounterPhase.Victory && traveling.CollectedItems!.SetEquals([3]) && traveling.Game.Items!.Items.Length==picked.Game.Items.Items.Length,"World pickup persists through battle and XP grant");
+        var stack=SourceFixture.Item(items.Items[0] with {Id=1,Instance=items.Items[0].Instance! with {Mode=1,MaxStack=100}});
+        var charged=SourceFixture.Item(items.Items[0] with {Id=2,Instance=items.Items[0].Instance! with {Mode=2}});
+        var pickupCatalog=items with {Count=3,Items=[items.Items[0],stack,charged]};
+        var counts=floorItems with {Members=[
+            new(5,1,new(0,0,0),21,0,false,false,"item-1.nwworlditem.glb",new('d',64)),
+            new(6,2,new(0,0,0),0,7,true,false,"item-2.nwworlditem.glb",new('d',64))]};
+        var counted=WorldItemPickup.Attach(WorldExpedition.CreateNative(6,pickupCatalog,monsters,placed,world),counts,pickupCatalog);
+        counted=WorldItemPickup.Take(WorldItemPickup.Take(counted,5,pickupCatalog),6,pickupCatalog);
+        Check(Inventory.Bag(counted.Game).Single(i=>i.DefinitionId==1) is {Quantity:21,Identified:false},"Source stack count is not rerolled or normalized to one");
+        Check(Inventory.Bag(counted.Game).Single(i=>i.DefinitionId==2) is {Quantity:1,ResourceRemaining:7,Identified:true},"Source remaining charges preserved without refill");
         Check(native.Schema==3 && native.EncounterId==placed.Id && native.Game.Melee!.Field!.Monsters!.Count==3,"Native group source identity and roster");
         Check(TacticalCombat.Enemies(native.Game).Select(e=>e.Hp).SequenceEqual(new[]{9,8,14}),"Native saved HP used rather than rerolled HP");
         Check(NativeSave(NativeLoad(NativeSave(native)))==NativeSave(native),"Native roster save roundtrip");

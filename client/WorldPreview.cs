@@ -249,6 +249,7 @@ public partial class WorldPreview : Node3D
         if(GameMode && !_walking && !BattleOpen)ResumePlayerWalking();
         if(GameMode)
         {
+            UpdatePlayerItemHint();
             _autoSaveTime+=delta;
             if(_autoSaveTime>=15){_autoSaveTime=0;SavePlayerGame();}
         }

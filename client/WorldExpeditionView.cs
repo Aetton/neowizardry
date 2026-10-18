@@ -61,7 +61,8 @@ public partial class WorldPreview
         if(partyAt>=0 && (partyAt+1>=args.Length || !int.TryParse(args[partyAt+1],out size)))throw new InvalidDataException("Invalid --party-size");
         _expedition=_nativeEncounter is null?WorldExpedition.Create(size,_expeditionItems,_expeditionMonsters,definition.Id,CaptureCheckpoint()):
             WorldExpedition.CreateNative(size,_expeditionItems,_expeditionMonsters,_nativeEncounter,CaptureCheckpoint());
-        WorldExpedition.Validate(_expedition,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter);
+        InitializeWorldItems(worldFolder);
+        WorldExpedition.Validate(_expedition,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter,_nativeItems);
         _expeditionPath=ProjectSettings.GlobalizePath($"user://{(GameMode?"campaign":"expeditions")}/{_contentHash}.json");
         _encounterAnchor=(_objects?.Arrivals.FirstOrDefault()?.Position??_center)+Vector3.Up*1.25f;
         if(_nativeEncounter is not null)_encounterAnchor=NativePosition(_nativeEncounter.Members[0].Position)+Vector3.Up*1.25f;
@@ -113,6 +114,7 @@ public partial class WorldPreview
             visual.Visible=actor.Hp>0 || visual.HasCycle(21);
             visual.SetHealth(actor.Hp,s.Melee!.Field!.Monsters![id].MaxHp);
         }
+        RefreshWorldItems();
         _battlePanel.Visible=BattleOpen;
         if(GameMode){_expeditionStatus.Visible=false;RefreshPlayerHud();}
         foreach(var child in _battleBody.GetChildren()){_battleBody.RemoveChild(child);child.QueueFree();}
@@ -196,7 +198,7 @@ public partial class WorldPreview
     private void SaveExpedition()
     {
         var candidate=_expedition! with {World=BattleOpen?_expedition!.World:CaptureCheckpoint()};
-        var json=WorldExpedition.Save(candidate,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter);
+        var json=WorldExpedition.Save(candidate,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter,_nativeItems);
         ExplorationCheckpointFile.Write(_expeditionPath,json,WorldExpedition.MaximumBytes);
         _expedition=candidate;
     }
@@ -204,7 +206,7 @@ public partial class WorldPreview
     private void LoadExpedition()
     {
         var candidate=WorldExpedition.Load(ExplorationCheckpointFile.Read(_expeditionPath,WorldExpedition.MaximumBytes),
-            _contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter);
+            _contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter,_nativeItems);
         if(_creature is not null && candidate.MonsterDefinitionId!=_creature.DefinitionId)
             throw new InvalidDataException("Saved encounter does not match the loaded creature renderer");
         // World validation (including speed) completes before the shared game state is replaced.
@@ -243,15 +245,15 @@ public partial class WorldPreview
             ResolveExpedition([]);LoadExpedition();
             if(Game.Save(WorldExpedition.Advance(_expedition,_expeditionItems).State.Game)!=expected || !_battlePanel.Visible || _walking)
                 throw new InvalidDataException("Mid-battle expedition continuation failed");
-            var before=WorldExpedition.Save(_expedition,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter);
+            var before=WorldExpedition.Save(_expedition,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter,_nativeItems);
             File.WriteAllText(_expeditionPath,"{broken");bool rejected=false;
             try {LoadExpedition();}catch(System.Text.Json.JsonException){rejected=true;}
-            if(!rejected || WorldExpedition.Save(_expedition,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter)!=before || File.ReadAllText(_expeditionPath)!="{broken")
+            if(!rejected || WorldExpedition.Save(_expedition,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter,_nativeItems)!=before || File.ReadAllText(_expeditionPath)!="{broken")
                 throw new InvalidDataException("Failed expedition load mutated state or source");
             for(int round=0;round<160 && _expedition.Phase==WorldEncounterPhase.Active;round++)ResolveExpedition([]);
             if(_expedition.Phase is not (WorldEncounterPhase.Victory or WorldEncounterPhase.Defeat))throw new InvalidDataException("World encounter did not terminate");
             var outcome=_expedition.Phase;SaveExpedition();
-            string terminal=WorldExpedition.Save(_expedition,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter);
+            string terminal=WorldExpedition.Save(_expedition,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter,_nativeItems);
             if(outcome==WorldEncounterPhase.Victory)
             {
                 var record=_expedition.Game.Melee!.Field!.Monsters![_expedition.Game.Enemy.Id].Record;
@@ -266,7 +268,7 @@ public partial class WorldPreview
             _expedition=original;LoadExpedition();TryBeginExpeditionEncounter();
             if(_expedition.Phase!=outcome || _encounterMarker.Visible || _battlePanel.Visible!=(outcome==WorldEncounterPhase.Defeat))
                 throw new InvalidDataException("Completed world encounter respawned on reload");
-            if(WorldExpedition.Save(_expedition,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter)!=terminal)
+            if(WorldExpedition.Save(_expedition,_contentHash,CheckpointLimits,_expeditionItems,_expeditionMonsters,_nativeEncounter,_nativeItems)!=terminal)
                 throw new InvalidDataException("Terminal reload changed reward receipt or expedition state");
             GD.Print($"PASS: expedition {_expedition.Game.Party.Length} heroes; world/battle save continuation, failed-load preservation, {outcome}, no respawn");
         }

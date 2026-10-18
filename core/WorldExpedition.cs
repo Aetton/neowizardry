@@ -8,7 +8,8 @@ namespace NeoWizardry.Core;
 public enum WorldEncounterPhase { Ready, Active, Victory, Defeat }
 public sealed record WorldExpeditionState(int Schema, string EncounterId, string ItemDatabaseHash,
     string MonsterDatabaseHash, int MonsterDefinitionId, GameState Game, ExplorationCheckpoint World,
-    WorldEncounterPhase Phase = WorldEncounterPhase.Ready, ExpeditionRewardReceipt? Rewards=null,NativeWorldEncounter? Native=null);
+    WorldEncounterPhase Phase = WorldEncounterPhase.Ready, ExpeditionRewardReceipt? Rewards=null,NativeWorldEncounter? Native=null,
+    NativeWorldItems? WorldItems=null,ImmutableHashSet<int>? CollectedItems=null);
 
 // One persisted encounter: legacy authored placement or an explicitly bound STS group.
 public static class WorldExpedition
@@ -50,12 +51,13 @@ public static class WorldExpedition
     }
 
     public static void Validate(WorldExpeditionState state, string worldHash, ImmutableArray<ExplorationDoorLimit> limits,
-        ItemCatalog items, MonsterCatalog monsters,NativeWorldEncounter? expectedNative=null)
+        ItemCatalog items, MonsterCatalog monsters,NativeWorldEncounter? expectedNative=null,NativeWorldItems? expectedItems=null)
     {
         if(state is null || state.Schema is not (1 or 2 or 3) || expectedNative is not null && state.Schema!=3 || (state.Schema==3?state.Native is null || !state.Native.SameAs(expectedNative) || state.EncounterId!=state.Native.Id:state.EncounterId!=EncounterId || state.Native is not null) || state.Game is null || state.World is null ||
            !string.Equals(state.ItemDatabaseHash,items.Provenance.Sha256,StringComparison.OrdinalIgnoreCase) ||
            !string.Equals(state.MonsterDatabaseHash,monsters.DatabaseSha256,StringComparison.OrdinalIgnoreCase) || !Enum.IsDefined(state.Phase))
             throw new InvalidDataException("Expedition schema or content binding mismatch");
+        WorldItemPickup.Validate(state,expectedItems,items);
         state.World.Validate(worldHash,limits);
         Game.Validate(state.Game);MeleeCombat.Validate(state.Game,items);
         var field=state.Game.Melee?.Field;
@@ -118,20 +120,20 @@ public static class WorldExpedition
     }
 
     public static string Save(WorldExpeditionState state, string hash, ImmutableArray<ExplorationDoorLimit> limits,
-        ItemCatalog items, MonsterCatalog monsters,NativeWorldEncounter? expectedNative=null)
+        ItemCatalog items, MonsterCatalog monsters,NativeWorldEncounter? expectedNative=null,NativeWorldItems? expectedItems=null)
     {
-        Validate(state,hash,limits,items,monsters,expectedNative);
+        Validate(state,hash,limits,items,monsters,expectedNative,expectedItems);
         var json=JsonSerializer.Serialize(state,Options);
         if(Encoding.UTF8.GetByteCount(json)>MaximumBytes)throw new InvalidDataException("Expedition save exceeds size limit");
         return json;
     }
 
     public static WorldExpeditionState Load(string json, string hash, ImmutableArray<ExplorationDoorLimit> limits,
-        ItemCatalog items, MonsterCatalog monsters,NativeWorldEncounter? expectedNative=null)
+        ItemCatalog items, MonsterCatalog monsters,NativeWorldEncounter? expectedNative=null,NativeWorldItems? expectedItems=null)
     {
         if(Encoding.UTF8.GetByteCount(json)>MaximumBytes)throw new InvalidDataException("Expedition save exceeds size limit");
         var state=JsonSerializer.Deserialize<WorldExpeditionState>(json,Options) ?? throw new InvalidDataException("Empty expedition save");
-        Validate(state,hash,limits,items,monsters,expectedNative);
+        Validate(state,hash,limits,items,monsters,expectedNative,expectedItems);
         return state;
     }
 }

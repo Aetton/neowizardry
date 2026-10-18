@@ -25,7 +25,7 @@ class PrepareGameTests(unittest.TestCase):
     def test_prepared_cache_checks_hashes_and_refuses_empty_or_corrupt_markers(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);files={}
-            for name in ('monastery1.glb','monastery1.nwencounter.json','creature-282.nwcreature.json','items.json','monsters.json'):
+            for name in ('monastery1.glb','monastery1.nwencounter.json','monastery1.nwitems.json','creature-282.nwcreature.json','items.json','monsters.json'):
                 (root/name).write_bytes(b'authored');files[name]=prepare_game.file_hash(root/name)
             marker=root/'game-content.json';marker.write_text(json.dumps({'schema':1,'fingerprint':'key','files':files}))
             self.assertTrue(prepare_game.ready(root,'key'))

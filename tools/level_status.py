@@ -58,11 +58,12 @@ def monster_bank(r):
 
 def item_bank(r):
     # LoadItemStatus -> LoadItem: 0xad-byte packed W8WorldItem chains.
-    groups=[]
+    groups=[];total=0
     for group in range(r.count()):
         members=[]
         while True:
-            if sum(map(len,groups))+len(members)>=100000:raise FormatError('STS item chain outside bounds')
+            total+=1
+            if total>100000:raise FormatError('STS item chain outside bounds')
             raw=r.take(0xad)
             position=list(struct.unpack_from('<3f',raw,0x15))
             if not all(math.isfinite(v) for v in position):raise FormatError('Nonfinite STS item position')

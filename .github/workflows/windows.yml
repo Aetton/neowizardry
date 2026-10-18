@@ -168,6 +168,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m tools.level_status "$levels" --out "$world"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m tools.world_items "$levels" --out "$world"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $env:NEO_NATIVE_ENCOUNTER_SMOKE='1'
           $env:NEO_WORLD_CACHE=$world
           $env:NEO_STARTUP_SMOKE='1'

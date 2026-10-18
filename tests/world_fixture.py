@@ -46,3 +46,16 @@ if len(sys.argv)>2:
         'members':[{'location_id':20,'definition_id':0,'position':{'x':0.6/0.0013,'y':0,'z':0},'max_hp':16,'hp':16}]}
     for name in ('fixture.nwencounter.json','monastery1.nwencounter.json'):
         (root/name).write_text(json.dumps(encounter),encoding='utf-8')
+
+    from test_world_objects import mesh
+    from tools.world_items import model
+    payload=pvl.glb(model(b'\2'+mesh()),source_hash=source_hash)
+    item_catalog=json.loads(Path(sys.argv[2].replace('.monsters.json','.json')).read_text())
+    item=item_catalog['items'][0];item_id=item['id'];filename=f'item-{item_id}.nwworlditem.glb'
+    (root/filename).write_bytes(payload)
+    # Native item zero from the fixture catalog; amount counters reflect its mode.
+    manifest={'schema':1,'pvl_sha256':source_hash,'sts_sha256':'c'*64,'level':8,'members':[
+        {'location_id':3,'definition_id':item_id,'position':{'x':-0.6/0.0013,'y':0,'z':0},
+         'stack_count':1 if item['instance']['mode']==1 else 0,'charges':0,'identified':False,'hidden':False,
+         'mesh_file':filename,'mesh_sha256':hashlib.sha256(payload).hexdigest()}]}
+    (root/'monastery1.nwitems.json').write_text(json.dumps(manifest),encoding='utf-8')
