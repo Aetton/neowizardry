@@ -104,9 +104,47 @@ def inspect(archive):
         obj=objects(source.read(f'Monastery/Monastery{n}.PVL'))
         print(json.dumps({'level':n,'arrivals':[{'name':t['name'],'position':t['position'],'orientation':t.get('orientation')} for t in obj['triggers'] if t['start'] in obj['arrivals']]},separators=(',',':')))
 
+def build(source):
+    pvl=source.read('Monastery/Monastery1.PVL')
+    obj=objects(pvl)
+    arrivals=[t for t in obj['triggers'] if t['start'] in obj['arrivals'] and t['name'].casefold()=='mo100']
+    if len(arrivals)!=1:raise FormatError('Expected exactly one native beach entrance MO100')
+    start=[v*500 for v in arrivals[0]['position']]
+    status=parse(source.read('Monastery/Monastery1.STS'))
+    levels=[v for v in status['levels'] if v['level']==8]
+    if len(levels)!=1 or levels[0]['bank'] is None:raise FormatError('Missing monastery native monster bank')
+    bank=levels[0]['bank'];groups=bank['groups'];members=bank['monsters']
+    if len({g['id'] for g in groups})!=len(groups) or len({m['id'] for m in members})!=len(members):raise FormatError('Duplicate STS monster/group identity')
+    by_id={g['id']:g for g in groups}
+    if any(m['group'] not in by_id for m in members):raise FormatError('Placed monster has no source group')
+    candidates=[]
+    for group in groups:
+        placed=[m for m in members if m['group']==group['id'] and m['hp']>0 and not m['unborn']]
+        if not placed or group['disposition']==2:continue
+        distance=min(sum((a-b)**2 for a,b in zip(m['position'],start)) for m in placed)
+        candidates.append((distance,group['id'],group,placed))
+    if not candidates:raise FormatError('No live source encounter near beach entrance')
+    _,_,group,placed=min(candidates,key=lambda v:(v[0],v[1]))
+    if len(placed)>8 or any(m['script'] or m['species']!=group['species'] for m in placed):raise FormatError('First placed encounter requires unsupported scripted/mixed group behavior')
+    return {'schema':1,'pvl_sha256':obj['pvl_sha256'],'sts_sha256':status['sha256'],'level':8,
+        'group_id':group['id'],'disposition':group['disposition'],'members':[{'location_id':m['id'],'definition_id':m['species'],
+        'position':dict(zip(('x','y','z'),m['position'])),'max_hp':m['hp_max'],'hp':m['hp']} for m in placed]}
+
+def export(archive,out):
+    result=build(Archive(archive))
+    if out.resolve().is_relative_to(archive.resolve().parent):raise FormatError('Encounter export must be outside original Levels directory')
+    out.mkdir(parents=True,exist_ok=True);target=out/'monastery1.nwencounter.json'
+    if target.is_symlink():raise FormatError('Refusing symlink encounter destination')
+    target.write_text(json.dumps(result,separators=(',',':'),allow_nan=False)+'\n',encoding='utf-8')
+    print(f"Native beach encounter: group {result['group_id']}, {len(result['members'])} placed monsters, source IDs/positions/HP retained")
+    return result
+
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('archive',type=Path);a=p.parse_args()
-    try:inspect(a.archive);return 0
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('archive',type=Path);p.add_argument('--out',type=Path);a=p.parse_args()
+    try:
+        if a.out is None:inspect(a.archive)
+        else:export(a.archive,a.out)
+        return 0
     except (OSError,ValueError,KeyError,struct.error) as e:
         print('STS intake failed: '+str(e));return 1
 

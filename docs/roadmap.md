@@ -1,7 +1,7 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Status checked against code and iteration reports through **053**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+Status checked against code and iteration reports through **055**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
 Immediate player milestone: [TOC-44 — a complete playable first monastery floor](https://linear.app/tochka/issue/TOC-44/pervyj-etazh-monastyrya-polnocennyj-prohodimyj-scenarij-iz-obychnogo). Iteration 053 fixes ordinary launch and exposes the imported floor; its original encounter/item/event scenario is still in progress. Finish that connected player path before treating broader catalog coverage as the next milestone.
 
@@ -228,3 +228,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 053 — monastery is the ordinary player entry
 
 [Iteration 053](iteration-053.md) removes the hidden-flag barrier: the normal EXE prepares private original assets in-app and enters the first floor walking, with native prop poses/doors, original creature effects, party/inventory UI and protected campaign saves. Windows packaging includes its Python importer. Ordinary exported startup is checked against the real private world. Full native monastery content (spawning, NPCs/quests, loot/containers, locks/events and transitions) remains the next integration work; the existing authored encounter is not the complete original floor scenario.
+
+
+## Iteration 055 — native beach start and first STS group
+
+[Iteration 055](iteration-055.md) selects original MO100 for a new party, including its facing, and connects the closest original STS group: three neutral crabs at their saved placements/HP. Schema-3 persistence covers the complete roster, all-enemy victory and one-time summed XP. Ordinary player mode no longer substitutes a bat beside the arrival. Other source groups, generators, loot/containers, native world AI, NPC/events, locks and transitions remain open under TOC-44. The tactical grid and party facts remain authored.

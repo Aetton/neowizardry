@@ -16,6 +16,8 @@ source_hash = hashlib.sha256(source).hexdigest()
 (root / 'fixture.glb').write_bytes(pvl.glb(pvl.parse(source), source_hash=source_hash))
 (root / 'fixture.nwcol').write_bytes(oct.encode(oct.parse(oct_fixture()), source_hash))
 objects=world_objects.parse(source)
+for trigger in objects["triggers"]:
+    if trigger["start"] in objects["arrivals"]:trigger.update(name="MO100",position=[0,0,0])
 (root / 'fixture.nwobjects.json').write_text(json.dumps(objects), encoding='utf-8')
 door_glb,door_manifest,door_report=world_doors.build(source)
 (root / 'fixture.nwdoors.glb').write_bytes(door_glb)
@@ -39,3 +41,8 @@ if len(sys.argv)>2:
     (root/'creature-0.nwcreature.json').write_text(json.dumps(manifest),encoding='utf-8')
     (root/'creatures-index.json').write_text(json.dumps({'schema':1,'database_sha256':catalog['database_sha256'],
         'definitions':[{'id':0,'label':record['label'],'status':'ready','manifest':'creature-0.nwcreature.json'}]}),encoding='utf-8')
+
+    encounter={'schema':1,'pvl_sha256':source_hash,'sts_sha256':'c'*64,'level':8,'group_id':7,'disposition':0,
+        'members':[{'location_id':20,'definition_id':0,'position':{'x':0.6/0.0013,'y':0,'z':0},'max_hp':16,'hp':16}]}
+    for name in ('fixture.nwencounter.json','monastery1.nwencounter.json'):
+        (root/name).write_text(json.dumps(encounter),encoding='utf-8')

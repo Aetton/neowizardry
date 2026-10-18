@@ -25,7 +25,7 @@ class PrepareGameTests(unittest.TestCase):
     def test_prepared_cache_checks_hashes_and_refuses_empty_or_corrupt_markers(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);files={}
-            for name in ('monastery1.glb','creature-282.nwcreature.json','items.json','monsters.json'):
+            for name in ('monastery1.glb','monastery1.nwencounter.json','creature-282.nwcreature.json','items.json','monsters.json'):
                 (root/name).write_bytes(b'authored');files[name]=prepare_game.file_hash(root/name)
             marker=root/'game-content.json';marker.write_text(json.dumps({'schema':1,'fingerprint':'key','files':files}))
             self.assertTrue(prepare_game.ready(root,'key'))
@@ -35,6 +35,22 @@ class PrepareGameTests(unittest.TestCase):
             self.assertFalse(prepare_game.ready(root,'key'))
             marker.write_text('{bad')
             self.assertFalse(prepare_game.ready(root,'key'))
+
+    def test_model_upgrade_reuses_only_matching_source_caches_without_rewriting_old_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp);prior=out/'sets'/('a'*64);prior.mkdir(parents=True);stage=out/'preparing';stage.mkdir()
+            (prior/'model-test.glb').write_bytes(b'authored mesh')
+            cache={'fingerprint':'source','manifest':{'mesh_file':'model-test.glb'}}
+            (prior/'model-test.json').write_text(json.dumps(cache))
+            (prior/'model-other.json').write_text(json.dumps(dict(cache,fingerprint='different')))
+            prepare_game.seed_models(out,stage,'source')
+            self.assertEqual((stage/'model-test.glb').read_bytes(),b'authored mesh')
+            self.assertTrue((stage/'model-test.json').is_file())
+            self.assertFalse((stage/'model-other.json').exists())
+            # Exporter replaces files atomically even when the old GLB was hardlinked.
+            from tools.creatures import write_file
+            write_file(stage/'model-test.glb',b'updated')
+            self.assertEqual((prior/'model-test.glb').read_bytes(),b'authored mesh')
 
     def test_door_geometry_is_not_duplicated_as_furniture(self):
         payload,manifest=world_props.build(fixture(locked=False))

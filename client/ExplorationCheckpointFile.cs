@@ -20,6 +20,12 @@ public static class ExplorationCheckpointFile
                 hash.AppendData(SHA256.HashData(stream));
             }
         }
+        var encounter=Path.ChangeExtension(worldPath,".nwencounter.json");
+        if(File.Exists(encounter))
+        {
+            hash.AppendData(Encoding.UTF8.GetBytes(".nwencounter.json"));
+            using var stream=File.OpenRead(encounter);hash.AppendData(SHA256.HashData(stream));
+        }
         return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
     }
 

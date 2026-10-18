@@ -145,7 +145,7 @@ public partial class WorldPreview : Node3D
             layer.AddChild(_doorStatus);
             _checkpointStatus=new Label { Position=new Vector2(16,196),Text="F5 save checkpoint · F9 load · resumes in flight · separate from expedition saves" };
             layer.AddChild(_checkpointStatus);
-            InitializeExpedition(args,layer);
+            InitializeExpedition(args,layer,pvlHash);
             if(GameMode)
             {
                 foreach(var child in layer.GetChildren())if(child is Label)child.Set("visible",false);

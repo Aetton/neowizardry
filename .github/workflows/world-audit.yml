@@ -16,6 +16,8 @@ on:
       - 'client/WorldGame.cs'
       - 'tools/prepare_game.py'
       - 'tools/world_props.py'
+      - 'tools/level_status.py'
+      - 'core/NativeWorldEncounter.cs'
       - 'client/WorldProps.cs'
       - 'client/WorldCollision.cs'
       - 'client/WorldObjects.cs'
@@ -88,6 +90,12 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m tools.world_objects "$env:NEO_LEVELS_ARCHIVE" --out "$env:NEO_WORLD_CACHE" --report "$env:RUNNER_TEMP/monastery-objects.json"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Export first native STS encounter
+        run: |
+          python -m unittest discover -s tests -p test_level_status.py -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m tools.level_status "$env:NEO_LEVELS_ARCHIVE" --out "$env:NEO_WORLD_CACHE"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Export private native door frames
         run: |
           python -m unittest discover -s tests -p test_world_doors.py -v
@@ -130,12 +138,14 @@ jobs:
       - name: Verify player startup on the original first floor without flags
         run: |
           $env:NEO_STARTUP_SMOKE='1'
+          $env:NEO_NATIVE_ENCOUNTER_SMOKE='1'
           & $env:GODOT --headless --path client
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Remove-Item Env:NEO_STARTUP_SMOKE
+          Remove-Item Env:NEO_STARTUP_SMOKE,Env:NEO_NATIVE_ENCOUNTER_SMOKE
       - name: Verify in-app original-data preparation on a fresh player cache
         run: |
           $env:NEO_STARTUP_SMOKE='1'
+          $env:NEO_NATIVE_ENCOUNTER_SMOKE='1'
           $env:NEO_WIZ8_ROOT=Split-Path (Split-Path $env:NEO_LEVELS_ARCHIVE -Parent) -Parent
           $env:NEO_CONTENT_CACHE=Join-Path (Split-Path $env:NEO_WORLD_CACHE -Parent) 'NeoWizardryPlayerContent'
           $retained=$env:NEO_WORLD_CACHE
@@ -143,7 +153,7 @@ jobs:
           & $env:GODOT --headless --path client
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $env:NEO_WORLD_CACHE=$retained
-          Remove-Item Env:NEO_STARTUP_SMOKE,Env:NEO_WIZ8_ROOT,Env:NEO_CONTENT_CACHE
+          Remove-Item Env:NEO_STARTUP_SMOKE,Env:NEO_NATIVE_ENCOUNTER_SMOKE,Env:NEO_WIZ8_ROOT,Env:NEO_CONTENT_CACHE
       - name: Verify every exported creature in Godot
         run: |
           & $env:GODOT --headless --path client -- --creatures "$env:NEO_WORLD_CACHE/creatures-index.json" --creatures-smoke

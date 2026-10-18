@@ -43,15 +43,18 @@ public partial class WorldPreview
             if(_collision is null || _walker is null || _objects is null || _expedition is null || _creature is null)
                 throw new InvalidDataException("Отсутствуют данные пола, дверей или исходная модель существа. Повторите подготовку оригинала.");
             await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);
-            var arrival=_objects.Arrivals.FirstOrDefault(a=>a.Name.Contains("beach",StringComparison.OrdinalIgnoreCase) || a.Name.Contains("start",StringComparison.OrdinalIgnoreCase))??_objects.Arrivals.FirstOrDefault()
-                ??throw new InvalidDataException("В монастыре не найдена исходная точка входа");
+            // Native new game: level 8, entrance 0 -> Levels.cpp resolves MO100.
+            // Arrival list order is not an entry policy (another arrival is in the corridor).
+            var arrival=_objects.Arrivals.SingleOrDefault(a=>a.Name.Equals("MO100",StringComparison.OrdinalIgnoreCase))
+                ??throw new InvalidDataException("Не найдена исходная стартовая точка MO100 на пляже");
             Vector3 floor=PlayerFloor(arrival.Position);
             _walker.GlobalPosition=floor+Vector3.Up*(WorldWalker.Height/2+0.05f);_walker.Velocity=Vector3.Zero;
             _view.GlobalPosition=_walker.GlobalPosition+Vector3.Up*WorldWalker.EyeOffset;
-            var target=_collision.Faces.Where(f=>f.Walkable).OrderBy(f=>f.Center.DistanceSquaredTo(floor+Vector3.Forward*3)).First().Center;
-            if(new Vector2(target.X-floor.X,target.Z-floor.Z).Length()>0.2f)_view.LookAt(new(target.X,_view.GlobalPosition.Y,target.Z));
+            var facing=arrival.Forward??Vector3.Forward;
+            if(new Vector2(facing.X,facing.Z).LengthSquared()<0.000001f)throw new InvalidDataException("Стартовое направление не горизонтально");
+            _view.LookAt(_view.GlobalPosition+new Vector3(facing.X,0,facing.Z).Normalized());
             // Place the existing authored encounter on a nearby clear floor, never inside the party.
-            foreach(var offset in new[]{new Vector3(0,0,-4),new Vector3(4,0,0),new Vector3(-4,0,0),new Vector3(0,0,4)})
+            if(_nativeEncounter is null)foreach(var offset in new[]{new Vector3(0,0,-4),new Vector3(4,0,0),new Vector3(-4,0,0),new Vector3(0,0,4)})
             {
                 try
                 {
@@ -68,7 +71,7 @@ public partial class WorldPreview
                 catch(Exception error){_gameSaveBlocked=true;Notice("Сохранение не загружено и не будет перезаписано: "+error.Message+". Выберите «Новая группа» в меню для нового прохождения.");}
             }
             _gameReady=true;if(!BattleOpen)ResumePlayerWalking();
-            if(!_gameSaveBlocked)Notice("Первый этаж монастыря · E — дверь / встреча · F5 — сохранить · Esc — меню");
+            if(!_gameSaveBlocked)Notice(_nativeEncounter?.Disposition==0?"Существа на пляже нейтральны · E рядом — атаковать · F5 — сохранить · Esc — меню":"Первый этаж монастыря · E — дверь / встреча · F5 — сохранить · Esc — меню");
             if(System.Environment.GetEnvironmentVariable("NEO_STARTUP_SMOKE")=="1")await CheckPlayerStartup();
         }
         catch(Exception error)
@@ -112,8 +115,9 @@ public partial class WorldPreview
         if(_expedition is null || _initialGameWorld is null)return;
         if(File.Exists(_expeditionPath))File.Move(_expeditionPath,_expeditionPath+".backup-"+DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
         RestoreCheckpoint(_initialGameWorld);
-        _expedition=WorldExpedition.Create(6,_expeditionItems,_expeditionMonsters,_expedition.MonsterDefinitionId,_initialGameWorld);
-        _gameSaveBlocked=false;_battleHero=0;_creature?.ResetIdle();_gamePaused=false;_gameMenu.Hide();RefreshExpedition();ResumePlayerWalking();SavePlayerGame();
+        _expedition=_nativeEncounter is null?WorldExpedition.Create(6,_expeditionItems,_expeditionMonsters,_expedition.MonsterDefinitionId,_initialGameWorld):
+            WorldExpedition.CreateNative(6,_expeditionItems,_expeditionMonsters,_nativeEncounter,_initialGameWorld);
+        _gameSaveBlocked=false;_battleHero=0;foreach(var visual in _encounterCreatures.Values)visual.ResetIdle();_gamePaused=false;_gameMenu.Hide();RefreshExpedition();ResumePlayerWalking();SavePlayerGame();
     }
     private void SavePlayerGame()
     {
@@ -140,7 +144,7 @@ public partial class WorldPreview
     }
     private void PlayerInteract()
     {
-        if(_expedition?.Phase==WorldEncounterPhase.Ready && _view.GlobalPosition.DistanceTo(_encounterAnchor)<3)
+        if(_expedition?.Phase==WorldEncounterPhase.Ready && EncounterAnchors.Any(p=>_view.GlobalPosition.DistanceTo(p)<3))
         {_beginEncounter=true;return;}
         Notice(_doors?.Use(_view)??"Здесь нет доступной двери");
     }
@@ -177,12 +181,23 @@ public partial class WorldPreview
     {
         if(!_gameReady || !_walking || _expedition is null || _creature is null || _objects?.Visible==true || _expeditionStatus.Visible)
             throw new InvalidDataException("Ordinary startup did not enter the walking monastery with original creature and player HUD");
+        var arrival=_objects!.Arrivals.Single(a=>a.Name.Equals("MO100",StringComparison.OrdinalIgnoreCase));
+        if(new Vector2(_walker!.GlobalPosition.X-arrival.Position.X,_walker.GlobalPosition.Z-arrival.Position.Z).Length()>1)
+            throw new InvalidDataException("New game drifted away from native beach entrance MO100");
+        var facing=arrival.Forward??Vector3.Forward;
+        var expectedForward=new Vector3(facing.X,0,facing.Z).Normalized();
+        if((-_view.GlobalBasis.Z).Dot(expectedForward)<0.999f)throw new InvalidDataException("New game facing differs from native entrance");
+        GD.Print("PASS: new game uses native beach entrance MO100 and its facing; save resume remains independent");
         for(int i=0;i<20;i++){_walker!.Step(1.0/60,Vector3.Zero);await ToSignal(GetTree(),SceneTree.SignalName.PhysicsFrame);}
         if(!_walker!.IsOnFloor())throw new InvalidDataException("Player did not settle at monastery arrival");
         string path=_expeditionPath;_expeditionPath=Path.Combine(Path.GetTempPath(),"neo-player-start-"+Guid.NewGuid().ToString("N")+".json");
         try
         {
-            SaveExpedition();var expected=_expedition!.Game;LoadExpedition();ResumePlayerWalking();
+            SaveExpedition();var expected=_expedition!.Game;var savedPosition=_view.GlobalPosition;var savedRotation=_view.Rotation;
+            _view.GlobalPosition+=Vector3.Right*2;_view.Rotation+=new Vector3(0,0.5f,0);LoadExpedition();
+            if(_view.GlobalPosition.DistanceTo(savedPosition)>0.001f || _view.Rotation.DistanceTo(savedRotation)>0.001f)
+                throw new InvalidDataException("Saved exploration position/facing did not resume independently of new-game entrance");
+            ResumePlayerWalking();
             if(_expedition.Game.Round!=expected.Round || !_walking)throw new InvalidDataException("Player save did not resume walking");
         }
         finally{File.Delete(_expeditionPath);_expeditionPath=path;}
@@ -192,6 +207,17 @@ public partial class WorldPreview
         _gameGallery.ReturnToGame?.Invoke();await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
         if(_bestiaryOpen || !Visible || _view.GlobalPosition!=position || Game.Save(_expedition.Game)!=beforeGallery)
             throw new InvalidDataException("Returning from player bestiary changed the campaign");
-        GD.Print($"PASS: ordinary startup enters walking monastery; {_expedition.Game.Party.Length} heroes, original creature, doors, inventory HUD, save/resume, bestiary return; no --world argument");GetTree().Quit();
+        GD.Print($"PASS: ordinary startup enters walking monastery; {_expedition.Game.Party.Length} heroes, original creature, doors, inventory HUD, save/resume, bestiary return; no --world argument");if(System.Environment.GetEnvironmentVariable("NEO_NATIVE_ENCOUNTER_SMOKE")=="1")
+        {
+            if(_nativeEncounter is null || _encounterCreatures.Count!=_nativeEncounter.Members.Length)throw new InvalidDataException("Placed encounter visuals missing");
+            for(int i=0;i<_nativeEncounter.Members.Length;i++)
+                if(_encounterCreatures[$"monster-{i+1}"].Position.DistanceTo(NativePosition(_nativeEncounter.Members[i].Position))>0.001f)
+                    throw new InvalidDataException("Native encounter was relocated from source placement");
+            _gameSaveBlocked=false;_gamePaused=true;
+            CheckWorldExpedition();
+            if(_expedition!.Phase!=WorldEncounterPhase.Victory)throw new InvalidDataException("Native encounter fixture did not reach victory");
+            GD.Print($"PASS: native STS group {_nativeEncounter.GroupId}, {_nativeEncounter.Members.Length} original placements/HP/visuals, battle/save/reload, once-only XP and no respawn");
+        }
+        GetTree().Quit();
     }
 }

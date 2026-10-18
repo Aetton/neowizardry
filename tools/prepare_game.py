@@ -6,11 +6,12 @@ assets are downloaded or published. A failed preparation never replaces a set.
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
 import uuid
-from tools import creatures, oct, pvl, world_objects, world_doors, world_props
+from tools import creatures, oct, pvl, world_objects, world_doors, world_props, level_status
 from tools.slf import FormatError, item_catalog
 
 
@@ -44,8 +45,28 @@ def ready(target,key):
     try:
         manifest=json.loads((target/'game-content.json').read_text())
         files=manifest.get('files')
-        return manifest.get('schema')==1 and manifest.get('fingerprint')==key and isinstance(files,dict) and {'monastery1.glb','creature-282.nwcreature.json','items.json','monsters.json'}.issubset(files) and all(Path(name).name==name and not (target/name).is_symlink() and (target/name).is_file() and file_hash(target/name)==digest for name,digest in files.items())
+        return manifest.get('schema')==1 and manifest.get('fingerprint')==key and isinstance(files,dict) and {'monastery1.glb','monastery1.nwencounter.json','creature-282.nwcreature.json','items.json','monsters.json'}.issubset(files) and all(Path(name).name==name and not (target/name).is_symlink() and (target/name).is_file() and file_hash(target/name)==digest for name,digest in files.items())
     except (OSError,ValueError,KeyError):return False
+
+
+def seed_models(out,stage,key):
+    # Exporter independently checks source fingerprints and mesh hashes before reuse.
+    sets=out/'sets'
+    if not sets.is_dir():return
+    for prior in sets.iterdir():
+        if not prior.is_dir() or prior.is_symlink() or len(prior.name)!=64 or any(c not in '0123456789abcdef' for c in prior.name):continue
+        for cache in prior.glob('model-*.json'):
+            if cache.is_symlink() or (stage/cache.name).exists():continue
+            try:
+                value=json.loads(cache.read_text());name=value['manifest']['mesh_file']
+                mesh=prior/name
+                if value['fingerprint']!=key or Path(name).name!=name or not name.startswith('model-') or not name.endswith('.glb') or mesh.is_symlink() or not mesh.is_file():continue
+                target=stage/name
+                if not target.exists():
+                    try:os.link(mesh,target)
+                    except OSError:shutil.copyfile(mesh,target)
+                shutil.copyfile(cache,stage/cache.name)
+            except (OSError,KeyError,ValueError):continue
 
 
 def prepare(root,out):
@@ -53,8 +74,9 @@ def prepare(root,out):
     out=Path(out).resolve()
     if out==root or out.is_relative_to(root):raise FormatError('Private cache must be outside the original installation')
     resources=creatures.CreatureResources(data,monsters,patches,child(root,'Data'))
-    digest=hashlib.sha256(creatures.fingerprint(resources).encode())
-    for path in [levels,*[Path(__file__).with_name(n) for n in ('prepare_game.py','oct.py','world_props.py')]]:
+    resource_key=creatures.fingerprint(resources)
+    digest=hashlib.sha256(resource_key.encode())
+    for path in [levels,*[Path(__file__).with_name(n) for n in ('prepare_game.py','oct.py','world_props.py','level_status.py')]]:
         with path.open('rb') as stream:
             for chunk in iter(lambda:stream.read(1024*1024),b''):digest.update(chunk)
     key=digest.hexdigest();target=out/'sets'/key
@@ -69,12 +91,16 @@ def prepare(root,out):
             ('Native door animations',world_doors.export,{}),
             ('Original furniture and objects',world_props.export,{})):
             print(title,flush=True);exporter(levels,stage,stage/(exporter.__module__.split('.')[-1]+'-report.json'),**kwargs)
+        encounter=level_status.export(levels,stage)
         print('Original item and creature catalogs',flush=True)
         creatures.json_file(stage/'items.json',item_catalog(resources.shared))
+        seed_models(out,stage,resource_key)
         creatures.export_all(resources,stage,stage/'creatures-report.json')
-        required=['monastery1'+suffix for suffix in ('.glb','.nwcol','.nwobjects.json','.nwdoors.glb','.nwdoors.json','.nwprops.glb','.nwprops.json')]+['items.json','monsters.json','creatures-index.json','creature-282.nwcreature.json']
+        required=['monastery1'+suffix for suffix in ('.glb','.nwcol','.nwobjects.json','.nwdoors.glb','.nwdoors.json','.nwprops.glb','.nwprops.json','.nwencounter.json')]+['items.json','monsters.json','creatures-index.json','creature-282.nwcreature.json']
         if not all((stage/name).is_file() for name in required):raise FormatError('Prepared monastery is missing required playable content')
-        creature=json.loads((stage/'creature-282.nwcreature.json').read_text());required.append(creature['mesh_file'])
+        for definition_id in {282,*[m['definition_id'] for m in encounter['members']]}:
+            name=f'creature-{definition_id}.nwcreature.json';required.append(name)
+            creature=json.loads((stage/name).read_text());required.append(creature['mesh_file'])
         creatures.json_file(stage/'game-content.json',{'schema':1,'fingerprint':key,'files':{name:file_hash(stage/name) for name in required}})
         target.parent.mkdir(parents=True,exist_ok=True)
         if target.exists():

@@ -4,7 +4,7 @@ using System.Text.Json;
 // Research navigation/inspection only. Native trigger actions are never executed here.
 public partial class WorldObjects : Node3D
 {
-    public sealed record Point(long SourceId, string Name, Vector3 Position, string Description);
+    public sealed record Point(long SourceId, string Name, Vector3 Position, string Description,Vector3? Forward=null);
     public Point[] Arrivals { get; private set; } = [];
     public int PropCount { get; private set; }
     public int TriggerCount { get; private set; }
@@ -62,7 +62,20 @@ public partial class WorldObjects : Node3D
             var point=new Point(id,Name(trigger),Position(p),"trigger");
             result._points.Add(point);
             if(action.ValueKind==JsonValueKind.Number && action.GetInt32()==0x34 && trigger.GetProperty("recipients").GetString()=="")
-                positioned.Add(id,point with { Description="arrival" });
+            {
+                Vector3? forward=null;
+                if(trigger.TryGetProperty("orientation",out var orientation))
+                {
+                    if(orientation.GetArrayLength()!=4)throw new InvalidDataException("Invalid arrival orientation");
+                    float angle=orientation[0].GetSingle();
+                    var axis=new Vector3(orientation[1].GetSingle(),orientation[2].GetSingle(),-orientation[3].GetSingle());
+                    if(!float.IsFinite(angle) || !axis.IsFinite() || angle!=0 && axis.LengthSquared()<0.000001f)
+                        throw new InvalidDataException("Nonfinite/invalid arrival axis-angle");
+                    // Reflect native +Z forward into Godot -Z; reflection reverses rotation handedness.
+                    forward=angle==0?Vector3.Forward:new Basis(axis.Normalized(),-angle)*Vector3.Forward;
+                }
+                positioned.Add(id,point with { Description="arrival",Forward=forward });
+            }
         }
         var arrivalIds=root.GetProperty("arrivals").EnumerateArray().Select(x=>x.GetInt64()).ToArray();
         if(arrivalIds.Distinct().Count()!=arrivalIds.Length || arrivalIds.Length!=positioned.Count || arrivalIds.Any(id=>!positioned.ContainsKey(id)))

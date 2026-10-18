@@ -45,6 +45,32 @@ public static class WorldExpeditionChecks
             Check(Load(Save(dead)).Phase==WorldEncounterPhase.Defeat,"Defeat persists without resurrecting party");
             Reject(()=>Save(dead with {Phase=WorldEncounterPhase.Active}),"Defeat cannot be relabeled active");
         }
+        var placed=new NativeWorldEncounter(1,new('b',64),new('c',64),8,102,0,
+            [new(236,0,new(1000,0,0),13,9),new(237,0,new(2000,0,0),16,8),new(238,0,new(3000,0,0),18,14)]);
+        var native=WorldExpedition.CreateNative(6,items,monsters,placed,world);
+        string NativeSave(WorldExpeditionState state)=>WorldExpedition.Save(state,hash,limits,items,monsters,placed);
+        WorldExpeditionState NativeLoad(string json)=>WorldExpedition.Load(json,hash,limits,items,monsters,placed);
+        Check(native.Schema==3 && native.EncounterId==placed.Id && native.Game.Melee!.Field!.Monsters!.Count==3,"Native group source identity and roster");
+        Check(TacticalCombat.Enemies(native.Game).Select(e=>e.Hp).SequenceEqual(new[]{9,8,14}),"Native saved HP used rather than rerolled HP");
+        Check(NativeSave(NativeLoad(NativeSave(native)))==NativeSave(native),"Native roster save roundtrip");
+        Reject(()=>WorldExpedition.Save(native,hash,limits,items,monsters),"Native save requires external placement binding");
+        Reject(()=>WorldExpedition.Load(NativeSave(native),hash,limits,items,monsters,placed with {GroupId=103}),"Changed source group rejected");
+        Reject(()=>NativeSave(native with {Native=placed with {StsSha256=new('d',64)}}),"Changed STS hash rejected");
+        var activeNative=WorldExpedition.Begin(native);
+        var firstDead=activeNative with {Game=activeNative.Game with {Enemy=activeNative.Game.Enemy with {Hp=0}}};
+        var continued=WorldExpedition.Advance(firstDead,items).State;
+        Check(continued.Phase==WorldEncounterPhase.Active && !continued.Game.RewardGranted,"First monster death does not finish a multi-monster encounter");
+        for(int round=0;round<200 && activeNative.Phase==WorldEncounterPhase.Active;round++)
+        {
+            var loaded=NativeLoad(NativeSave(activeNative));
+            var next=WorldExpedition.Advance(activeNative,items).State;
+            Check(NativeSave(next)==NativeSave(WorldExpedition.Advance(loaded,items).State),"Native group exact saved combat continuation");
+            activeNative=next;
+        }
+        Check(activeNative.Phase==WorldEncounterPhase.Victory && TacticalCombat.Enemies(activeNative.Game).All(e=>e.Hp==0),"Native group clears only when all members die");
+        Check(NativeLoad(NativeSave(activeNative)).Rewards is {Granted:true},"Native group reward receipt persists");
+        Reject(()=>WorldExpedition.Begin(NativeLoad(NativeSave(activeNative))),"Native group cannot respawn after reload");
+        Reject(()=>WorldExpedition.Advance(activeNative,items),"Native group cannot award twice");
         var sample=WorldExpedition.Create(1,items,monsters,0,world);
         foreach(var invalid in new[]{sample with {Schema=3},sample with {EncounterId="other"},sample with {ItemDatabaseHash=new('b',64)},
             sample with {MonsterDatabaseHash=new('b',64)},sample with {MonsterDefinitionId=999},sample with {Phase=(WorldEncounterPhase)999},
@@ -65,6 +91,11 @@ public static class WorldExpeditionChecks
             return monsters with {Monsters=[row],DatabaseSha256=digest,Provenance=monsters.Provenance with {Sha256=digest}};
         }
         MonsterRecordSnapshot Record(MonsterCatalog c)=>new(0,c.DatabaseSha256,c.Monsters[0].RecordSha256,c.Monsters[0].RawRecordHex,3);
+        var groupXpCatalog=RewardCatalog(101);
+        var groupXp=WorldExpedition.Begin(WorldExpedition.CreateNative(6,items,groupXpCatalog,placed,world));
+        for(int round=0;round<200 && groupXp.Phase==WorldEncounterPhase.Active;round++)groupXp=WorldExpedition.Advance(groupXp,items).State;
+        Check(groupXp.Phase==WorldEncounterPhase.Victory && groupXp.Game.Party.All(h=>h.Xp==50),"Native group sums 303 XP before dividing once among six survivors");
+        WorldExpedition.Validate(groupXp,hash,limits,items,groupXpCatalog,placed);
         foreach(uint overridden in new uint[]{0,101})for(int size=1;size<=8;size++)
         {
             var catalog=RewardCatalog(794,overridden);int xp=(int)(overridden==0?794:overridden);

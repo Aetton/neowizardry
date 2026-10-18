@@ -24,12 +24,12 @@ public partial class MonasteryStart : Control
         panel.AddChild(new Label {Text="Оригинальные данные остаются на вашем компьютере.\nПодготовка моделей выполняется один раз и может занять несколько минут.",AutowrapMode=TextServer.AutowrapMode.WordSmart});
         var exit=new Button {Text="Выйти"};exit.Pressed+=()=>GetTree().Quit();panel.AddChild(exit);
         if(System.Environment.GetEnvironmentVariable("NEO_PICKER_SMOKE")=="1"){Callable.From(CheckFolderPicker).CallDeferred();return;}
-        string? world=null;
+        string? world=null,previousInstallation=null;
         var configured=System.Environment.GetEnvironmentVariable("NEO_WORLD_CACHE");
         if(!string.IsNullOrWhiteSpace(configured))world=Path.Combine(configured,"monastery1.glb");
         if(world is null && System.Environment.GetEnvironmentVariable("NEO_STARTUP_SMOKE")!="1" && File.Exists(_profile))
         {
-            try {using var json=JsonDocument.Parse(File.ReadAllText(_profile));world=json.RootElement.GetProperty("world").GetString();}
+            try {using var json=JsonDocument.Parse(File.ReadAllText(_profile));world=json.RootElement.GetProperty("world").GetString();if(json.RootElement.TryGetProperty("installation",out var savedInstallation))previousInstallation=savedInstallation.GetString();}
             catch(Exception e) when(e is IOException or JsonException or KeyNotFoundException or InvalidOperationException){_status.Text="Не удалось прочитать настройки: "+e.Message;}
         }
         if(world is not null && Complete(world)){Callable.From(()=>Enter(world)).CallDeferred();return;}
@@ -40,8 +40,8 @@ public partial class MonasteryStart : Control
             if(world is null){GD.Print("PASS: ordinary startup shows original-data setup instead of training");GetTree().Quit();return;}
             GD.PushError("Configured player content is incomplete");GetTree().Quit(1);return;
         }
-        _status.Text="Для входа в монастырь выберите папку оригинальной Wizardry 8.\nИгра найдёт уровни, текстуры и модели и подготовит их автоматически.";
-        var root=System.Environment.GetEnvironmentVariable("NEO_WIZ8_ROOT");
+        _status.Text=(world is null?"Для входа в монастырь выберите папку оригинальной Wizardry 8.":"Обновились данные монастыря. Выберите папку оригинальной Wizardry 8 для подготовки новой версии.")+"\nИгра найдёт уровни, текстуры и модели и подготовит их автоматически.";
+        var root=System.Environment.GetEnvironmentVariable("NEO_WIZ8_ROOT")??previousInstallation;
         if(string.IsNullOrWhiteSpace(root))
         {
             var candidates=new List<string>();
@@ -59,7 +59,7 @@ public partial class MonasteryStart : Control
     {
         if(!File.Exists(world))return false;
         string folder=Path.GetDirectoryName(Path.GetFullPath(world))!;
-        return new[]{".nwcol",".nwobjects.json",".nwdoors.json",".nwdoors.glb",".nwprops.json",".nwprops.glb"}.All(s=>File.Exists(Path.ChangeExtension(world,s))) &&
+        return new[]{".nwcol",".nwobjects.json",".nwdoors.json",".nwdoors.glb",".nwprops.json",".nwprops.glb",".nwencounter.json"}.All(s=>File.Exists(Path.ChangeExtension(world,s))) &&
             new[]{"items.json","monsters.json","creatures-index.json"}.All(s=>File.Exists(Path.Combine(folder,s)));
     }
     private void SelectInstallation()
@@ -137,7 +137,7 @@ public partial class MonasteryStart : Control
                 using var json=JsonDocument.Parse(File.ReadAllText(result));string world=json.RootElement.GetProperty("world").GetString()!;
                 if(!Complete(world) || !Path.GetFullPath(world).StartsWith(Path.GetFullPath(_cache)+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException("Подготовленный монастырь неполон");
-                if(System.Environment.GetEnvironmentVariable("NEO_STARTUP_SMOKE")!="1")ExplorationCheckpointFile.Write(_profile,JsonSerializer.Serialize(new {world}));Enter(world);
+                if(System.Environment.GetEnvironmentVariable("NEO_STARTUP_SMOKE")!="1")ExplorationCheckpointFile.Write(_profile,JsonSerializer.Serialize(new {world,installation=root}));Enter(world);
             }
             finally {_importProcess=null;if(File.Exists(result))File.Delete(result);}
         }

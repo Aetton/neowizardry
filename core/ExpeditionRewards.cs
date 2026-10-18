@@ -21,6 +21,12 @@ public static class ExpeditionRewards
         return (int)value;
     }
 
+    public static int Experience(GameState game)=>checked(game.Melee!.Field!.Monsters!.Values.Sum(m=>Experience(m.Record)));
+    private static void RequireSupported(GameState game)
+    {
+        foreach(var actor in game.Melee!.Field!.Monsters!.Values)RequireSupported(actor.Record);
+    }
+
     // Do not silently replace NPC/direct/table loot or gold with an empty reward.
     // The first connected native encounter has no enabled treasure slots or gold.
     public static ExpeditionRewardCapability Capability(MonsterRecordSnapshot record)
@@ -48,10 +54,10 @@ public static class ExpeditionRewards
 
     internal static GameState Grant(GameState game,MonsterRecordSnapshot record)
     {
-        RequireSupported(record);
+        RequireSupported(game);
         int count=game.Party.Count(Eligible);
-        if(!game.RewardGranted || game.Enemy.Hp!=0 || count==0)throw new InvalidOperationException("Native reward requires completed victory");
-        int share=Experience(record)/count; // Native truncation discards the remainder.
+        if(!game.RewardGranted || TacticalCombat.Enemies(game).Any(e=>e.Hp>0) || count==0)throw new InvalidOperationException("Native reward requires completed victory");
+        int share=Experience(game)/count; // Native truncation discards the remainder.
         return game with {Party=game.Party.Select(h=>Eligible(h)?h with {Xp=checked(h.Xp+share)}:h).ToImmutableArray()};
     }
 
@@ -62,14 +68,14 @@ public static class ExpeditionRewards
             if(state.Rewards is not null)throw new InvalidDataException("Legacy expedition cannot acquire a reward receipt");
             return; // Legacy victories never retroactively grant newly connected rewards.
         }
-        RequireSupported(record);
+        RequireSupported(state.Game);
         var receipt=state.Rewards;
         if(receipt?.InitialExperience is not {} initial || initial.Count!=state.Game.Party.Length ||
            initial.Any(p=>p.Value<0) || state.Game.Party.Any(h=>!initial.ContainsKey(h.Id)) ||
            receipt.Granted!=(state.Phase==WorldEncounterPhase.Victory))
             throw new InvalidDataException("Invalid expedition reward receipt");
         int count=state.Game.Party.Count(Eligible);
-        int share=receipt.Granted && count>0?Experience(record)/count:0;
+        int share=receipt.Granted && count>0?Experience(state.Game)/count:0;
         foreach(var hero in state.Game.Party)
             if((long)initial[hero.Id]+(receipt.Granted && Eligible(hero)?share:0)!=hero.Xp)
                 throw new InvalidDataException("Expedition XP differs from its once-only reward receipt");
