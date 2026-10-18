@@ -127,6 +127,16 @@ jobs:
           if (!(Test-Path build/windows/importer/python/python.exe)) { throw 'Bundled importer runtime missing' }
           & build/windows/importer/python/python.exe -c "import sys; sys.path.insert(0, 'build/windows/importer'); import tools.prepare_game"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Verify folder picker confirmation in packaged EXE
+        run: |
+          $env:NEO_PICKER_SMOKE='1'
+          try {
+            $start=Start-Process -FilePath "$PWD/build/windows/NeoWizardry.exe" -ArgumentList '--headless' -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP/picker.log" -RedirectStandardError "$env:RUNNER_TEMP/picker-error.log"
+            if (!$start.WaitForExit(60000)) { $start.Kill(); throw 'Folder picker timed out' }
+            Get-Content "$env:RUNNER_TEMP/picker.log"
+            Get-Content "$env:RUNNER_TEMP/picker-error.log"
+            if ($start.ExitCode -ne 0 -or !(Select-String -Path "$env:RUNNER_TEMP/picker.log" -Pattern 'PASS: folder picker confirmation')) { throw 'Folder confirmation is inaccessible' }
+          } finally { Remove-Item Env:NEO_PICKER_SMOKE }
       - name: Verify ordinary exported startup without developer flags
         run: |
           $env:NEO_STARTUP_SMOKE='1'

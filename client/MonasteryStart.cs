@@ -23,6 +23,7 @@ public partial class MonasteryStart : Control
         _select=new Button {Text="Выбрать папку установленной Wizardry 8"};_select.Pressed+=SelectInstallation;panel.AddChild(_select);
         panel.AddChild(new Label {Text="Оригинальные данные остаются на вашем компьютере.\nПодготовка моделей выполняется один раз и может занять несколько минут.",AutowrapMode=TextServer.AutowrapMode.WordSmart});
         var exit=new Button {Text="Выйти"};exit.Pressed+=()=>GetTree().Quit();panel.AddChild(exit);
+        if(System.Environment.GetEnvironmentVariable("NEO_PICKER_SMOKE")=="1"){Callable.From(CheckFolderPicker).CallDeferred();return;}
         string? world=null;
         var configured=System.Environment.GetEnvironmentVariable("NEO_WORLD_CACHE");
         if(!string.IsNullOrWhiteSpace(configured))world=Path.Combine(configured,"monastery1.glb");
@@ -64,8 +65,51 @@ public partial class MonasteryStart : Control
     private void SelectInstallation()
     {
         if(_busy)return;
-        var dialog=new FileDialog {FileMode=FileDialog.FileModeEnum.OpenDir,Access=FileDialog.AccessEnum.Filesystem,Title="Папка установленной Wizardry 8",Size=new(900,600)};
-        AddChild(dialog);dialog.DirSelected+=root=>{dialog.QueueFree();Prepare(root);};dialog.Canceled+=dialog.QueueFree;dialog.PopupCentered();
+        OpenInstallationPicker(Prepare);
+    }
+    private FileDialog OpenInstallationPicker(Action<string> selected)
+    {
+        var dialog=new FileDialog {
+            FileMode=FileDialog.FileModeEnum.OpenDir,Access=FileDialog.AccessEnum.Filesystem,
+            ModeOverridesTitle=false,Title="Папка установленной Wizardry 8",
+            OkButtonText="Выбрать папку",CancelButtonText="Отмена"
+        };
+        AddChild(dialog);
+        dialog.DirSelected+=root=>{dialog.QueueFree();selected(root);};
+        dialog.Canceled+=dialog.QueueFree;
+        // Embedded windows use the logical viewport (960 × 540), not the desktop size.
+        // A fixed 600px height puts the confirmation row outside the game window.
+        dialog.PopupCenteredClamped(new Vector2I(900,600),0.9f);
+        return dialog;
+    }
+    private async void CheckFolderPicker()
+    {
+        try
+        {
+            foreach(var size in new[]{new Vector2I(960,540),new Vector2I(1280,800)})
+            {
+                GetWindow().Size=size;
+                await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
+                string? selected=null;
+                var dialog=OpenInstallationPicker(root=>selected=root);
+                string folder=ProjectSettings.GlobalizePath("user://").TrimEnd('/','\\');
+                dialog.CurrentDir=folder;
+                for(int frame=0;frame<3;frame++)await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
+                var button=dialog.GetOkButton();
+                var viewport=new Rect2(Vector2.Zero,GetViewport().GetVisibleRect().Size);
+                var window=new Rect2(dialog.Position,dialog.Size);
+                if(!button.IsVisibleInTree() || button.Disabled || button.Text!="Выбрать папку" ||
+                    !viewport.Encloses(window) || !new Rect2(Vector2.Zero,dialog.Size).Encloses(button.GetGlobalRect()))
+                    throw new InvalidOperationException($"Folder confirmation is inaccessible at {size}: window {window}, viewport {viewport}, button {button.GetGlobalRect()}");
+                button.EmitSignal(Button.SignalName.Pressed);
+                await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
+                if(selected is null || Path.GetFullPath(selected).TrimEnd('/','\\')!=Path.GetFullPath(folder))
+                    throw new InvalidOperationException("Folder confirmation did not select the current directory");
+            }
+            GD.Print("PASS: folder picker confirmation visible, inside viewport and selects current directory at 960x540 and 1280x800");
+            GetTree().Quit();
+        }
+        catch(Exception e){GD.PushError(e.ToString());GetTree().Quit(1);}
     }
     private async void Prepare(string root)
     {
