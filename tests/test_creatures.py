@@ -145,6 +145,17 @@ class CreatureTests(unittest.TestCase):
             self.assertEqual(name,doc['images'][index]['name'].casefold())
         self.assertNotIn('some particle emitters blocked',manifest['limitations'])
 
+    def test_particle_saved_axis_is_normalized_like_native_node_rotation(self):
+        from tools.creature_particles import prepare
+        from tools.textures import Textures
+        resources=ParticleResources();animation,first,last=creatures.mon(fixture_particles())
+        raw=animation['particles'][0];raw.update(angle=0.2,axis=[2,0,0])
+        emitter,_=prepare(raw,animation,first,last,1,Textures(resources,'MONSTERS/test.MLS'))
+        for axis in emitter['basis']:
+            self.assertAlmostEqual(sum(v*v for v in axis),1)
+        raw['axis']=[0,0,0]
+        with self.assertRaisesRegex(FormatError,'Zero creature'):prepare(raw,animation,first,last,1,Textures(resources,'MONSTERS/test.MLS'))
+
     def test_repeated_marker_key_uses_last_native_setmappedvertex_value(self):
         from tools.creature_particles import track
         animation,first,last=creatures.mon(fixture_particles())

@@ -71,8 +71,12 @@ def prepare(raw, animation, first, last, scale, textures):
     result=dict(raw);result.pop('material')
     result['anchors'],result['mapped_frames']=track(animation,raw['attachment_key'],raw['location'],first,last,scale)
     result['scale']=scale
+    # srNode::rotate normalizes a saved emitter axis before building rotation.
+    length=math.sqrt(sum(v*v for v in raw['axis']))
+    if raw['angle']!=0 and length==0:raise FormatError('Zero creature emitter rotation axis')
+    axis=[v/length for v in raw['axis']] if length else [0,1,0]
     def direction(point, correction):
-        point=world_doors.rotate(point,raw['angle'],raw['axis'])
+        point=world_doors.rotate(point,raw['angle'],axis)
         point=world_doors.rotate(point,correction,[1,0,0])
         return [point[0],point[1],-point[2]]
     # Reflection C R C maps both the native local and world coordinate systems.
