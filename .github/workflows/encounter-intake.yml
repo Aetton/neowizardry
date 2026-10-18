@@ -1,0 +1,31 @@
+name: Native encounter intake
+on:
+  push:
+    branches: [main]
+    paths: ['tools/level_status.py', '.github/workflows/encounter-intake.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  intake:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ". '{0}'"
+    steps:
+      - name: Protect originals
+        run: |
+          if (Test-Path -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'wiz_data')) { throw 'Originals must be outside checkout' }
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+      - run: ./tools/windows/BootstrapHost.ps1
+      - name: Locate originals
+        env:
+          WIZ8_INSTALLATION: ${{ vars.WIZ8_ROOT }}
+        run: ./tools/windows/FindOriginal.ps1
+      - name: Inspect native status and entrances
+        run: |
+          python -m tools.level_status "$env:NEO_LEVELS_ARCHIVE"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
