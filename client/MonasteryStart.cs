@@ -29,7 +29,7 @@ public partial class MonasteryStart : Control
         if(world is null && System.Environment.GetEnvironmentVariable("NEO_STARTUP_SMOKE")!="1" && File.Exists(_profile))
         {
             try {using var json=JsonDocument.Parse(File.ReadAllText(_profile));world=json.RootElement.GetProperty("world").GetString();}
-            catch(Exception e) when(e is IOException or JsonException or KeyNotFoundException){_status.Text="Не удалось прочитать настройки: "+e.Message;}
+            catch(Exception e) when(e is IOException or JsonException or KeyNotFoundException or InvalidOperationException){_status.Text="Не удалось прочитать настройки: "+e.Message;}
         }
         if(world is not null && Complete(world)){Callable.From(()=>Enter(world)).CallDeferred();return;}
         if(System.Environment.GetEnvironmentVariable("NEO_STARTUP_SMOKE")=="1")

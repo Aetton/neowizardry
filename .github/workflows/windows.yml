@@ -119,6 +119,7 @@ jobs:
           }
       - name: Include local original-data importer and portable Python
         run: |
+          if (Test-Path build/windows/importer) { Remove-Item build/windows/importer -Recurse -Force }
           New-Item -ItemType Directory -Force build/windows/importer | Out-Null
           Copy-Item tools build/windows/importer/tools -Recurse
           Get-ChildItem build/windows/importer/tools -Directory -Filter __pycache__ -Recurse | Remove-Item -Recurse -Force
