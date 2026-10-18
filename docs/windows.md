@@ -51,3 +51,10 @@ Release discovery tries the public GitHub API, then its public release Atom feed
 The first-launch directory picker now uses `PopupCenteredClamped` with a 90% parent-window limit, rather than a fixed 900×600 dialog inside the 960×540 logical viewport. The confirmation and cancellation controls are explicitly labelled «Выбрать папку» and «Отмена». Selecting the current directory starts the existing preparation flow.
 
 `NEO_PICKER_SMOKE=1` opens the production picker at 960×540 and 1280×800, checks the enabled confirmation button and dialog bounds, presses the button and verifies the selected directory. Linux CI and the packaged Windows EXE run this check before release. This is a headless layout and interaction check, not a visual screenshot review.
+
+
+## Original floor items (iteration 056)
+
+Visible loose items now appear at their original positions with original models. Approach and look at an item, then press E/click when the pickup hint appears; I opens the shared party bag. Unidentified items retain that state. Picked items stay removed after saving, loading and battle. Hidden items await search mechanics; containers/treasure are separate unfinished work.
+
+Updating prepares the additional private item data, using the remembered installation when available. Compatible native campaigns from iteration 055 retain their party, inventory, XP, cleared encounter and position in a new snapshot; the previous file remains intact. Incompatible earlier authored encounters are not converted into the native campaign.
