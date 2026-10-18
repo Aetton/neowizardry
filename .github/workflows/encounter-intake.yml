@@ -2,7 +2,7 @@ name: Native encounter intake
 on:
   push:
     branches: [main]
-    paths: ['tools/level_status.py', '.github/workflows/encounter-intake.yml']
+    paths: ['tools/level_status.py', 'tools/world_items.py', '.github/workflows/encounter-intake.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -28,4 +28,9 @@ jobs:
       - name: Inspect native status and entrances
         run: |
           python -m tools.level_status "$env:NEO_LEVELS_ARCHIVE"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Inspect original loose item models
+        run: |
+          $out = Join-Path (Split-Path -Parent $env:NEO_LEVELS_ARCHIVE) '../../NeoWizardryItemIntake'
+          python -m tools.world_items "$env:NEO_LEVELS_ARCHIVE" --out "$out"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
