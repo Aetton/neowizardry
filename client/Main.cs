@@ -55,6 +55,11 @@ public partial class Main : Node3D
     }
     private void Initialize()
     {
+        if(System.Environment.GetEnvironmentVariable("NEO_WALKER_SMOKE")=="1")
+        {
+            SetProcessInput(false);SetProcessUnhandledInput(false);SetPhysicsProcess(false);
+            AddChild(new WorldWalkerSmoke());return;
+        }
         if(OS.GetCmdlineUserArgs().Contains("--creatures"))
         {
             SetProcessInput(false);SetProcessUnhandledInput(false);SetPhysicsProcess(false);

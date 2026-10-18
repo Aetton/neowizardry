@@ -37,6 +37,7 @@ jobs:
           chmod +x "$executable"
           timeout 60s "$executable" --headless --path client -- --smoke --catalog "$RUNNER_TEMP/neo-test-items.json" --spells "$RUNNER_TEMP/neo-test-items.spells.json" --recipes "$RUNNER_TEMP/neo-test-items.recipes.json"
           timeout 60s "$executable" --headless --path client -- --touch --mobile-smoke --catalog "$RUNNER_TEMP/neo-test-items.json" --spells "$RUNNER_TEMP/neo-test-items.spells.json" --recipes "$RUNNER_TEMP/neo-test-items.recipes.json"
+          NEO_WALKER_SMOKE=1 timeout 60s "$executable" --headless --path client
           NEO_PICKER_SMOKE=1 timeout 60s "$executable" --headless --path client
           python tests/world_fixture.py "$RUNNER_TEMP/world-fixture" "$RUNNER_TEMP/neo-test-items.monsters.json"
           cp "$RUNNER_TEMP/world-fixture/fixture.glb" "$RUNNER_TEMP/world-fixture/monastery1.glb"

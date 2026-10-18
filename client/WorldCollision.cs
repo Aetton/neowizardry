@@ -67,6 +67,7 @@ public partial class WorldCollision : Node3D
 public partial class WorldWalker : CharacterBody3D
 {
     public const float Height=1.6f, Radius=0.28f, EyeOffset=0.45f, Speed=3;
+    public const float StepHeight=0.35f;
     public CapsuleShape3D Capsule { get; } = new() { Height=Height, Radius=Radius };
     public WorldWalker()
     {
@@ -83,9 +84,40 @@ public partial class WorldWalker : CharacterBody3D
 
     public void Step(double delta,Vector3 direction)
     {
+        var start=GlobalTransform;
+        bool grounded=IsOnFloor();
         var velocity = Velocity;
         velocity.X=direction.X*Speed;velocity.Z=direction.Z*Speed;
         velocity.Y=IsOnFloor()?-0.1f:Math.Max(velocity.Y-9.8f*(float)delta,-30);
         Velocity=velocity;MoveAndSlide();
+        var motion=new Vector3(velocity.X,0,velocity.Z)*(float)delta;
+        if(grounded && motion.LengthSquared()>0.000001f && IsOnWall())TryClimbStep(start,motion);
+    }
+
+    private void TryClimbStep(Transform3D start,Vector3 motion)
+    {
+        // Sweep the whole capsule up, forward and down. Every leg must be clear;
+        // a ray at the feet alone would permit crossing walls or clipping the head.
+        using var obstruction=new KinematicCollision3D();
+        if(!TestMove(start,motion,obstruction))return;
+        var lift=Vector3.Up*StepHeight;
+        if(TestMove(start,lift))return;
+        var raised=start;raised.Origin+=lift;
+        if(TestMove(raised,motion))return;
+        raised.Origin+=motion;
+        // Probe onto the tread, beyond the rounded toe of the capsule. Its first
+        // downward shape contact can have a steep edge normal even on valid stairs.
+        var probe=raised.Origin+motion.Normalized()*Radius-Vector3.Up*(Height/2-0.02f);
+        using var query=PhysicsRayQueryParameters3D.Create(probe,probe-Vector3.Up*(StepHeight+0.05f),CollisionMask);
+        query.Exclude=new Godot.Collections.Array<Rid> {GetRid()};
+        var hit=GetWorld3D().DirectSpaceState.IntersectRay(query);
+        if(hit.Count==0 || hit["normal"].AsVector3().Y<Mathf.Cos(FloorMaxAngle))return;
+        var destination=raised.Origin;
+        destination.Y=hit["position"].AsVector3().Y+Height/2+0.015f;
+        float rise=destination.Y-start.Origin.Y;
+        if(rise<=0.01f || rise>StepHeight || TestMove(raised,destination-raised.Origin) || !CanStand(destination))return;
+        GlobalPosition=destination;
+        Velocity=new Vector3(Velocity.X,0,Velocity.Z);
+        ApplyFloorSnap();
     }
 }

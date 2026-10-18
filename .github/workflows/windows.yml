@@ -127,6 +127,16 @@ jobs:
           if (!(Test-Path build/windows/importer/python/python.exe)) { throw 'Bundled importer runtime missing' }
           & build/windows/importer/python/python.exe -c "import sys; sys.path.insert(0, 'build/windows/importer'); import tools.prepare_game"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Verify stair walking in packaged EXE
+        run: |
+          $env:NEO_WALKER_SMOKE='1'
+          try {
+            $start=Start-Process -FilePath "$PWD/build/windows/NeoWizardry.exe" -ArgumentList '--headless' -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP/walker.log" -RedirectStandardError "$env:RUNNER_TEMP/walker-error.log"
+            if (!$start.WaitForExit(60000)) { $start.Kill(); throw 'Stair walking timed out' }
+            Get-Content "$env:RUNNER_TEMP/walker.log"
+            Get-Content "$env:RUNNER_TEMP/walker-error.log"
+            if ($start.ExitCode -ne 0 -or !(Select-String -Path "$env:RUNNER_TEMP/walker.log" -Pattern 'PASS: stair walking')) { throw 'Stair walking failed' }
+          } finally { Remove-Item Env:NEO_WALKER_SMOKE }
       - name: Verify folder picker confirmation in packaged EXE
         run: |
           $env:NEO_PICKER_SMOKE='1'
