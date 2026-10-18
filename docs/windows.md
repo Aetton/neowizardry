@@ -45,3 +45,9 @@ Windows builds reuse an installed .NET 8 SDK, cache NuGet and the Godot editor/s
 A local Windows runner can keep its tools on disk. At the user's explicit request, Windows preview now directly selects a self-hosted Windows x64 runner and queues if none is online. See [persistent runner setup](windows-runner.md).
 
 Release discovery tries the public GitHub API, then its public release Atom feed if API access fails. Both paths use the same fixed repository download locations and manifest/SHA256 checks. If an older launcher reports HTTP 403, replace its two launcher files from the latest launcher ZIP once to obtain this fallback; game saves remain separate.
+
+### Folder selection confirmation
+
+The first-launch directory picker now uses `PopupCenteredClamped` with a 90% parent-window limit, rather than a fixed 900×600 dialog inside the 960×540 logical viewport. The confirmation and cancellation controls are explicitly labelled «Выбрать папку» and «Отмена». Selecting the current directory starts the existing preparation flow.
+
+`NEO_PICKER_SMOKE=1` opens the production picker at 960×540 and 1280×800, checks the enabled confirmation button and dialog bounds, presses the button and verifies the selected directory. Linux CI and the packaged Windows EXE run this check before release. This is a headless layout and interaction check, not a visual screenshot review.
