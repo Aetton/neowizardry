@@ -13,7 +13,7 @@ class PrepareGameTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)/'Wizardry8';(root/'data'/'monsters').mkdir(parents=True);(root/'levels').mkdir()
             for path in ('data/data.slf','data/monsters/monsters.slf','levels/levels.slf'):(root/path).write_bytes(b'fixture')
-            self.assertEqual(prepare_game.installation(root/'data')[0],root)
+            self.assertEqual(prepare_game.installation(root/'data')[0],root.resolve())
             (root/'levels'/'levels.slf').unlink()
             with self.assertRaises(FormatError):prepare_game.installation(root)
     def test_non_door_native_prop_pose_preserves_bounds_and_triangles(self):

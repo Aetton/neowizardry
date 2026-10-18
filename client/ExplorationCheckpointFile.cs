@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using NeoWizardry.Core;
 
-// No automatic saves: a failed read can never overwrite the user's checkpoint.
+// Atomic checkpoint storage; callers protect failed reads from automatic overwrite.
 public static class ExplorationCheckpointFile
 {
     public static string ContentHash(string worldPath)

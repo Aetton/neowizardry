@@ -3,13 +3,16 @@ using NeoWizardry.Core;
 
 public partial class WorldPreview
 {
-    private bool _gameReady,_gamePaused,_gameSaveBlocked;
+    private bool _gameReady,_gamePaused,_gameSaveBlocked,_bestiaryOpen;
+    private CanvasLayer _playerLayer=null!;
+    private CreatureGallery? _gameGallery;
     private Label? _gameHud,_gameNotice;
     private PanelContainer _gameMenu=null!;
     private double _autoSaveTime;
     private ExplorationCheckpoint? _initialGameWorld;
     private void InitializePlayerGame(CanvasLayer layer)
     {
+        _playerLayer=layer;
         var top=new HBoxContainer {Position=new(18,16)};layer.AddChild(top);
         top.AddChild(new Label {Text="МОНАСТЫРЬ · ПЕРВЫЙ ЭТАЖ",MouseFilter=Control.MouseFilterEnum.Ignore});
         void Button(string text,Action action){var b=new Button {Text=text};b.Pressed+=action;top.AddChild(b);}
@@ -20,7 +23,7 @@ public partial class WorldPreview
         var menu=new VBoxContainer();_gameMenu.AddChild(menu);
         menu.AddChild(new Label {Text="МОНАСТЫРЬ\nWASD — ходить · мышь — смотреть\nE / щелчок — дверь или встреча\nF5 — сохранить · F9 — загрузить\nI — инвентарь · Esc — меню"});
         void MenuButton(string text,Action action){var b=new Button {Text=text};b.Pressed+=action;menu.AddChild(b);}
-        MenuButton("Продолжить",TogglePlayerMenu);MenuButton("Сохранить",SavePlayerGame);
+        MenuButton("Продолжить",TogglePlayerMenu);MenuButton("Бестиарий · модели и анимации",ShowPlayerCreatures);MenuButton("Сохранить",SavePlayerGame);
         MenuButton("Загрузить",()=>{try{LoadExpedition();_gameSaveBlocked=false;_gamePaused=false;_gameMenu.Hide();if(!BattleOpen)ResumePlayerWalking();}catch(Exception e){Notice("Сохранение не загружено: "+e.Message);}});
         MenuButton("Новая группа · 6 героев",NewPlayerGame);MenuButton("Выйти",()=>{SavePlayerGame();GetTree().Quit();});
         RefreshPlayerHud();
@@ -121,7 +124,7 @@ public partial class WorldPreview
     }
     private void PlayerInput(InputEvent input)
     {
-        if(!_gameReady)return;
+        if(!_gameReady || _bestiaryOpen)return;
         if(input is InputEventKey key && key.Pressed && !key.Echo)
         {
             if(key.Keycode==Key.Escape){TogglePlayerMenu();return;}
@@ -140,6 +143,18 @@ public partial class WorldPreview
         if(_expedition?.Phase==WorldEncounterPhase.Ready && _view.GlobalPosition.DistanceTo(_encounterAnchor)<3)
         {_beginEncounter=true;return;}
         Notice(_doors?.Use(_view)??"Здесь нет доступной двери");
+    }
+    private void ShowPlayerCreatures()
+    {
+        int at=Array.IndexOf(Args,"--world");string index=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(Args[at+1]))!,"creatures-index.json");
+        if(!File.Exists(index)){Notice("Бестиарий отсутствует. Повторите подготовку данных оригинала.");return;}
+        _gamePaused=true;_bestiaryOpen=true;Input.MouseMode=Input.MouseModeEnum.Visible;Visible=false;_playerLayer.Hide();
+        CreatureGallery? gallery=null;
+        gallery=new CreatureGallery {IndexPath=index,ReturnToGame=()=>
+        {
+            gallery?.QueueFree();_gameGallery=null;_bestiaryOpen=false;Visible=true;_playerLayer.Show();_view.Current=true;_gamePaused=true;_gameMenu.Show();Input.MouseMode=Input.MouseModeEnum.Visible;
+        }};
+        _gameGallery=gallery;GetParent().AddChild(gallery);
     }
     private void ShowPlayerInventory()
     {
@@ -171,6 +186,12 @@ public partial class WorldPreview
             if(_expedition.Game.Round!=expected.Round || !_walking)throw new InvalidDataException("Player save did not resume walking");
         }
         finally{File.Delete(_expeditionPath);_expeditionPath=path;}
-        GD.Print($"PASS: ordinary startup enters walking monastery; {_expedition.Game.Party.Length} heroes, original creature, doors, inventory HUD, save/resume; no --world argument");GetTree().Quit();
+        string beforeGallery=Game.Save(_expedition.Game);var position=_view.GlobalPosition;
+        ShowPlayerCreatures();await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
+        if(!_bestiaryOpen || _gameGallery is null)throw new InvalidDataException("Player bestiary did not open");
+        _gameGallery.ReturnToGame?.Invoke();await ToSignal(GetTree(),SceneTree.SignalName.ProcessFrame);
+        if(_bestiaryOpen || !Visible || _view.GlobalPosition!=position || Game.Save(_expedition.Game)!=beforeGallery)
+            throw new InvalidDataException("Returning from player bestiary changed the campaign");
+        GD.Print($"PASS: ordinary startup enters walking monastery; {_expedition.Game.Party.Length} heroes, original creature, doors, inventory HUD, save/resume, bestiary return; no --world argument");GetTree().Quit();
     }
 }

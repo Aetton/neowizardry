@@ -2,7 +2,7 @@ using Godot;
 using System.Collections.Immutable;
 using NeoWizardry.Core;
 
-// Research world: original static collision, authored capsule walking and isolated checkpoints; no campaign integration.
+// Shared original world: explicit research controls and the ordinary walking player entry.
 public partial class WorldPreview : Node3D
 {
     public bool GameMode {get;init;}

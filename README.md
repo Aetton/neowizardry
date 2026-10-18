@@ -2,7 +2,7 @@
 
 Improved Wizardry 8 remake research project. **The ordinary player launch now enters the imported monastery; the complete original campaign is still in development.**
 
-Godot 4.5.1 .NET client + independent .NET 8 core + dependency-free Python 3.10+ asset tools.
+Godot 4.5.1 .NET client + independent .NET 8 core + dependency-free Python 3.11+ asset tools (the Windows package ships Python 3.12).
 
 The screenshot below shows the separate training laboratory (`--training`), not the default player start.
 

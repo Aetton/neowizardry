@@ -18,13 +18,15 @@ public partial class CreatureGallery : Node3D
     private OptionButton _clips=null!,_skins=null!;
     private CheckButton _loop=null!,_spin=null!;
     private bool _smoke;
+    public string? IndexPath {get;init;}
+    public Action? ReturnToGame {get;init;}
     public override async void _Ready()
     {
         try
         {
             var args=OS.GetCmdlineUserArgs();int at=Array.IndexOf(args,"--creatures");
-            if(at<0 || at+1>=args.Length)throw new InvalidDataException("--creatures requires creatures-index.json");
-            string path=Path.GetFullPath(args[at+1]);_folder=Path.GetDirectoryName(path)!;
+            if(IndexPath is null && (at<0 || at+1>=args.Length))throw new InvalidDataException("--creatures requires creatures-index.json");
+            string path=Path.GetFullPath(IndexPath??args[at+1]);_folder=Path.GetDirectoryName(path)!;
             if(new FileInfo(path).Length>4*1024*1024)throw new InvalidDataException("Creature index exceeds size limit");
             _catalog=MonsterCatalog.Parse(File.ReadAllText(Path.Combine(_folder,"monsters.json")));
             using var json=JsonDocument.Parse(File.ReadAllText(path));var root=json.RootElement;
@@ -71,7 +73,7 @@ public partial class CreatureGallery : Node3D
             }
             else if(_shown.FirstOrDefault(e=>e.Status!="blocked") is {} first)LoadEntry(first);
         }
-        catch(Exception error){GD.PushError(error.ToString());GetTree().Quit(1);}
+        catch(Exception error){if(ReturnToGame is not null){ReturnToGame();}else {GD.PushError(error.ToString());GetTree().Quit(1);}}
     }
     private void Build()
     {
@@ -84,6 +86,10 @@ public partial class CreatureGallery : Node3D
         var panel=new PanelContainer {Position=new(12,12),Size=new(390,GetViewport().GetVisibleRect().Size.Y-24)};canvas.AddChild(panel);
         var body=new VBoxContainer();panel.AddChild(body);
         body.AddChild(new Label {Text=$"ORIGINAL CREATURE GALLERY · {_entries.Length} definitions"});
+        if(ReturnToGame is not null)
+        {
+            var back=new Button {Text="Вернуться в монастырь"};back.Pressed+=ReturnToGame;body.AddChild(back);
+        }
         var search=new LineEdit {PlaceholderText="Search name / definition ID"};search.TextChanged+=Filter;body.AddChild(search);
         _list=new ItemList {CustomMinimumSize=new(380,220),SizeFlagsVertical=Control.SizeFlags.ExpandFill};
         _list.ItemSelected+=i=>{try{LoadEntry(_shown[(int)i]);}catch(Exception e){_status.Text=$"Load failed: {e.Message}";}};body.AddChild(_list);
@@ -121,6 +127,11 @@ public partial class CreatureGallery : Node3D
                 foreach(var emitter in emitters.EnumerateArray()){particles++;if(emitter.GetProperty("blocked_reason").GetString()!="")omitted++;}
         _status.Text=$"{entry.Id} · {entry.Label}\n{candidate.ClipCount} clips · {candidate.FrameCount} unique frames · {candidate.SkinCount} skins\n"+
             $"Unavailable clips: {blocked}; particle emitters: {particles-omitted}/{particles} active; {omitted} blocked.\nPresentation browser; combat support is tracked separately.";
+    }
+    public override void _UnhandledInput(InputEvent input)
+    {
+        if(ReturnToGame is not null && input is InputEventKey {Pressed:true,Echo:false,Keycode:Key.Escape})
+        {ReturnToGame();GetViewport().SetInputAsHandled();}
     }
     public override void _Process(double delta){if(!_smoke && _actor is not null && _spin.ButtonPressed)_actor.RotateY((float)delta*0.35f);}
 }
