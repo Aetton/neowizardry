@@ -2,6 +2,8 @@
 
 The creature importer now retains MON particle records semantically, imports their original TGA/IFL sprites and exports animated attachment tracks. Godot plays these as cosmetic billboard particles alongside the existing frame animation. This applies to the shared catalog pipeline; no replacement art is generated and original/derived assets remain private.
 
+The supplied archives retain **582/595 renderable definitions, 193 model/script sets, 173 distinct GLB payloads, 2,136 clips and 66,242 frames**. Particle-bearing clips number **388**, containing **1,767 emitter instances across script sets**; **1,761 are supported**. The six blocked instances require native line-of-sight collision. They affect seven definitions through shared models. Of the 342 particle-bearing definitions, 335 have no blocked emitter. All previously exported geometry clips are preserved, including the greater-demon spell mesh with a repeated marker key; no new model blockers were introduced.
+
 ## Import and playback
 
 - Versions 1–4 preserve record hashes, counts, timing, emission limits, speed/direction/cone, acceleration, lifetime/texture expiry, spread, bounds, flutter, opacity and frame windows. The mesh-v4 marker table is read as `(marker key, original vertex index)`. Anchors follow compressed or individual mesh frames and animation paths. An absent marker uses the stored source position, as the native attachment loader does.
@@ -16,4 +18,12 @@ Reference evidence: [075cbd0](https://github.com/agluszak/wizardry-8-decomp/tree
 
 ## Validation
 
-71 Python tests pass, including version defaults, truncation/non-finite rejection, invalid marker indices, moving compressed-frame anchors, repeated-key replacement, normalized emitter axes, native units, embedded particle sprite bindings and missing-sprite blockers. The client builds with zero warnings/errors; 4,196 gameplay/input checks pass. The authored Godot fixture exercises four particle-bearing clips, animated textures, limits/expiry and the connected expedition save/reward loop. Four representative original models pass complete clip/frame/skin and emitter simulation checks locally. Full catalog and release results are recorded below after verification.
+71 Python tests pass, including version defaults, truncation/non-finite rejection, invalid marker indices, moving compressed-frame anchors, repeated-key replacement, normalized emitter axes, native units, embedded particle sprite bindings and missing-sprite blockers. The client builds with zero warnings/errors; 4,196 gameplay/input checks pass. The authored Godot fixture exercises four particle-bearing clips, animated textures, limits/expiry and the connected expedition save/reward loop. The final normalized-axis export passes the complete local Godot gallery: all 582 definition bindings and 178 distinct model/clip configurations, every geometry frame/skin and supported sprite emitter. Emitter probes check forward/cone coordinate reflection, image bindings, finite motion/alpha, capacity/limits and expiry after emission stops.
+
+Runtime source: `d12ef11d5ae588d0216bc2de0fab8c302ef36ddc`.
+
+- Linux checks passed: https://github.com/Aetton/neowizardry/actions/runs/39082687487 .
+- The self-hosted original-data audit passed with matching coverage (1767 emitters, 6 explicit LOS blockers, no lost geometry clips): https://github.com/Aetton/neowizardry/actions/runs/39082687535 . Both original monastery levels pass full creature playback, 794 XP, save continuation and no respawn; the complete gallery passes all 582 bindings / 178 configurations.
+- Windows build, exported EXE, updater and first-download gates passed: https://github.com/Aetton/neowizardry/actions/runs/39082687524 . Preview: https://github.com/Aetton/neowizardry/releases/tag/windows-build-72 .
+- The old schema-1 Dusk Bat asset still loads (5 clips / 156 frames), preserves its 794 XP reward and passes world/battle save continuation and no-respawn checks.
+- Headless checks establish source binding and playback integrity; pixel-for-pixel comparison with the original renderer remains open.
