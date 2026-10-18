@@ -8,7 +8,7 @@ using System.Text.Json;
 public partial class WorldCreature : Node3D
 {
     private sealed record Clip(int Cycle,int Variant,string Label,MeshInstance3D[] Frames,double Fps)
-    { public double Duration=>Frames.Length/Fps; }
+    { public double Duration=>Frames.Length/Fps; public CreatureParticles[] Emitters=[]; public int First; }
     private readonly Dictionary<(int,int),Clip> _clips=[];
     private readonly Queue<int> _queue=[];
     private Clip _clip=null!;
@@ -68,6 +68,15 @@ public partial class WorldCreature : Node3D
         try
         {
         result.AddChild(scene);textures(state);result.ConfigureSkins(state,root,schema);
+        var particleImages=new Dictionary<string,Texture2D>();
+        using(var particleJson=JsonDocument.Parse(Godot.Json.Stringify(state.Json)))
+            if(particleJson.RootElement.TryGetProperty("extras",out var px) && px.TryGetProperty("neoParticleImages",out var pi))
+                foreach(var property in pi.EnumerateObject())
+                {
+                    int image=JsonInteger(property.Value);
+                    if(image<0 || image>=state.GetImages().Count)throw new InvalidDataException("Invalid particle sprite binding");
+                    particleImages.Add(property.Name,state.GetImages()[image]);
+                }
         var meshes=Meshes(scene).ToDictionary(m=>m.Name.ToString());var used=new HashSet<int>();Aabb? bounds=null;
         var clips=root.GetProperty("clips");if(clips.GetArrayLength() is <1 or >128)throw new InvalidDataException("Invalid creature clip count");
         foreach(var entry in clips.EnumerateArray())
@@ -93,7 +102,14 @@ public partial class WorldCreature : Node3D
             }
             double fps=entry.GetProperty("fps").GetDouble();
             if(!double.IsFinite(fps) || fps<=0 || fps>240)throw new InvalidDataException("Invalid creature playback rate");
-            result._clips.Add((cycle,variant),new(cycle,variant,entry.GetProperty("name").GetString()??"",frames,fps));
+            var clip=new Clip(cycle,variant,entry.GetProperty("name").GetString()??"",frames,fps) {First=entry.GetProperty("first").GetInt32()};
+            if(entry.TryGetProperty("emitters",out var emitters))
+            {
+                if(emitters.GetArrayLength()>256)throw new InvalidDataException("Creature emitter budget exceeded");
+                clip.Emitters=emitters.EnumerateArray().Where(e=>e.GetProperty("blocked_reason").GetString()=="")
+                    .Select(e=>new CreatureParticles(result,e,particleImages,frames.Length)).ToArray();
+            }
+            result._clips.Add((cycle,variant),clip);
         }
         if(used.Count!=meshes.Count || bounds is null || !result.HasCycle(1))throw new InvalidDataException("Unowned creature geometry or missing IDLE");
         result._bounds=bounds.Value;result.ResetIdle();return result;
@@ -106,7 +122,11 @@ public partial class WorldCreature : Node3D
         StartClip(_clips.Values.FirstOrDefault(c=>c.Cycle==cycle)??_clips.Values.First(c=>c.Cycle==1),loop);
     }
     private void StartClip(Clip clip,bool loop)
-    { _dead=false;_clip=clip;_loop=loop;_time=0;ShowFrame(0); }
+    {
+        if(_clip is not null)foreach(var emitter in _clip.Emitters)emitter.Stop();
+        _dead=false;_clip=clip;_loop=loop;_time=0;ShowFrame(0);
+        foreach(var emitter in clip.Emitters)emitter.Begin();
+    }
     public void PlayClip(int index,bool loop=false)
     {
         if(index<0 || index>=_clips.Count)throw new ArgumentOutOfRangeException(nameof(index));
@@ -198,6 +218,20 @@ public partial class WorldCreature : Node3D
     public void Step(double delta)
     {
         if(!double.IsFinite(delta) || delta<0)throw new InvalidDataException("Invalid cosmetic animation time");
+        while(delta>0)
+        {
+            double slice=Math.Min(delta,1.0/Math.Max(60,_clip.Fps));delta-=slice;
+            StepSlice(slice);
+        }
+    }
+    private void StepSlice(double delta)
+    {
+        if(IsInsideTree())
+        {
+            int frame=Math.Min((int)(_time*_clip.Fps),_clip.Frames.Length-1);
+            foreach(var clip in _clips.Values)foreach(var emitter in clip.Emitters)
+                emitter.Step(delta,frame,frame+_clip.First,clip==_clip && !(_dead && _time>=_clip.Duration));
+        }
         _skinTime=(_skinTime+delta)%86400;ApplySkinFrame();
         _time+=delta;
         if(_dead && _time>=_clip.Duration){_time=_clip.Duration;ShowFrame(_clip.Frames.Length-1);return;}
@@ -227,7 +261,7 @@ public partial class WorldCreature : Node3D
     }
     public void Check()
     {
-        var all=Meshes(this).ToArray();
+        var all=_clips.Values.SelectMany(c=>c.Frames).Distinct().ToArray();
         foreach(var clip in _clips.Values)
         {
             StartClip(clip,false);
@@ -267,6 +301,11 @@ public partial class WorldCreature : Node3D
         SetHealth(1,10);if(SkinStage!=Math.Min(SkinCount-1,9*SkinCount/10))throw new InvalidDataException("Creature health skin mapping failed");
         SetSkinStage(0);
         if(HasCycle(21)){PlayDeath();Step(_clip.Duration*2);if(Cycle!=21 || !_dead || _visibleFrame!=_clip.Frames[^1])throw new InvalidDataException("Creature death did not hold last frame");}
-        ResetIdle();GD.Print($"PASS: creature {DefinitionId}: {ClipCount} clips, {FrameCount} bounds-verified frames, {SkinCount} skins, loop/cue playback");
+        foreach(var clip in _clips.Values)
+        {
+            foreach(var emitter in clip.Emitters)emitter.Check(clip.First,clip.Frames.Length);
+        }
+        foreach(var clip in _clips.Values)foreach(var emitter in clip.Emitters)emitter.Clear();
+        ResetIdle();GD.Print($"PASS: creature {DefinitionId}: {ClipCount} clips, {FrameCount} bounds-verified frames, {SkinCount} skins, {_clips.Values.Sum(c=>c.Emitters.Length)} sprite emitters, loop/cue/particle playback");
     }
 }

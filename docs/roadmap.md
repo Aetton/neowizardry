@@ -1,7 +1,7 @@
 # NeoWizardry roadmap
 
 ## Current baseline
-Status checked against code and iteration reports through **051**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
+Status checked against code and iteration reports through **052**. Original monastery geometry, embedded textures and IFL frame animation are imported privately and verified in Godot on the self-hosted runner. Windows launch and Android launch were confirmed by the user. Godot client and independent C# core support parties of 1–8, saves, imported catalogs, experimental combat, five synthetic spells, two synthetic crafting recipes and a portable Windows updater. Windows previews use the persistent self-hosted service.
 
 | Workstream | Recovered / implemented | Still required for original gameplay |
 |---|---|---|
@@ -216,3 +216,8 @@ Latest evidence: [iteration 032](iteration-032.md), [iteration 031](iteration-03
 ## Iteration 051 — catalog-wide original creature visuals
 
 [Iteration 051](iteration-051.md) expands private MLS/MON import from one species to 582/595 definitions, with 193 shared model/script sets, all native cycle families and variants, default/damage/IFL textures and original geometric death playback. The searchable gallery accounts for all 595 records and validates every exported configuration. Eleven absent death resources and two malformed Bela definitions remain blocked. Particle attachments are parsed and reported but their emitters are not rendered. This visual coverage does not change the 79/595 supported combat profiles or claim native spawning/AI/magic parity. Sound, event timing, particles and native rendering/motion parity remain open. XP/loot/progression work continues separately from iteration 050.
+
+
+## Iteration 052 — original creature particle playback
+
+[Iteration 052](iteration-052.md) imports the original particle sprite banks and MON emitter parameters through the catalog-wide pipeline. Animated mesh marker tracks position effects; a cosmetic simulator supports emission, motion, bounds, flutter, IFL expiry and death draining. The gallery reports emitter blockers. World line-of-sight collision and exact native event/render timing remain open, along with sound, spawning and broader gameplay parity. Re-export private assets to obtain the new sprite/attachment metadata.

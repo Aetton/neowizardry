@@ -152,7 +152,7 @@ def summary(level: Level, data: bytes, resource: str) -> dict:
                         'collision': False, 'native_spawn': False, 'gameplay_connected': False}}
 
 
-def glb(level: Level, textures: Textures | None = None, source_hash: str | None = None) -> bytes:
+def glb(level: Level, textures: Textures | None = None, source_hash: str | None = None, particle_images=()) -> bytes:
     binary = bytearray()
     doc = {'asset': {'version': '2.0', 'generator': 'NeoWizardry static PVL preview'},
            'scene': 0, 'scenes': [{'nodes': []}], 'nodes': [], 'meshes': [],
@@ -178,6 +178,9 @@ def glb(level: Level, textures: Textures | None = None, source_hash: str | None 
             doc['textures'].append({'sampler': 0, 'source': index})
             image_indices[key] = index
         return image_indices[key]
+
+    if particle_images:
+        doc.setdefault('extras',{})['neoParticleImages']={image['name'].casefold():embed(image) for image in particle_images}
 
     for i, material in enumerate(level.materials):
         output = {'name': material['name'], 'doubleSided': True,

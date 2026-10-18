@@ -18,6 +18,8 @@ on:
       - 'client/WorldCreature.cs'
       - 'client/CreatureGallery.cs'
       - 'tools/creatures.py'
+      - 'tools/creature_particles.py'
+      - 'client/CreatureParticles.cs'
       - 'tests/test_creatures.py'
       - 'core/WorldExpedition.cs'
       - 'core/ExpeditionRewards.cs'

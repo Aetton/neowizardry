@@ -2,7 +2,7 @@
 
 Reference: wizardry-8-decomp 075cbd0, Monster/GrCycle/AnimObj/ReadMesh.
 Channel-2 geometry is exported for all named cycles/variants. Particle records
-are bounded and reported; their emitters are not approximated as native effects.
+retain original sprite banks, parameters and animated vertex attachments.
 """
 from __future__ import annotations
 import argparse
@@ -14,7 +14,7 @@ import re
 import struct
 import sys
 
-from tools import pvl, world_doors
+from tools import pvl, world_doors, creature_particles
 from tools.world_objects import ObjectsReader
 from tools.slf import Archive, Resources, FormatError, canonical
 from tools.textures import Textures
@@ -23,7 +23,7 @@ CYCLES = {name:i for i,name in enumerate(('BIRTH','IDLE','SPICE','TRANSITION','W
     'ATTACK_CLOSE','ATTACK_RANGED','UNUSED','ATTACK_SWING','ATTACK_THRUST','ATTACK_BASH',
     'ATTACK_MELEE','ATTACK_THROW','ATTACK_PUNCH','ATTACK_KICK','ATTACK_LASH','ATTACK_SHOOT',
     'ATTACK_SPECIAL','DODGE','GET_HIT','DIE','TURN','TALK_SPICE','TALK','SPELL','SPECIAL'))}
-EXPORT_VERSION = 2
+EXPORT_VERSION = 3
 
 
 def cycle_id(name):
@@ -113,7 +113,7 @@ def mon(data):
         for _ in range(r.count(limit=4096)):
             version=r.version(1,4)
             raw=r.take({1:0x216,2:0x218,3:0x21d,4:0x225}[version])
-            particles.append({'version':version,'record_sha256':hashlib.sha256(raw).hexdigest()})
+            particles.append(creature_particles.decode(raw,version))
     animation = r.animation()
     if r.offset != len(data): raise FormatError('Unexpected MON trailing bytes')
     animation['particles']=particles
@@ -160,6 +160,7 @@ def build(resources, definition_id):
     spec=script(text);scale=spec['scale']
     materials, material_ids, meshes, clips, sources = [],{},[],[],[]
     total_faces, variants, geometry_cache, blocked, particle_clips = 0,{}, {}, [],[]
+    textures = Textures(resources,resource);particle_images=[]
     for choice in spec['clips']:
         cycle=choice['cycle'];path=f"MONSTERS/{choice['file']}.MON"
         variant=variants.get(cycle,0);variants[cycle]=variant+1
@@ -185,7 +186,14 @@ def build(resources, definition_id):
                 total_faces+=count_faces;geometry_cache[key]=(frames,boxes)
             if animation['particles']:
                 particle_clips.append({'cycle':cycle,'variant':variant,'attachments':len(animation['particles'])})
-            clips.append({'cycle':cycle,'variant':variant,'name':choice['name'],'frames':frames,'bounds':boxes,
+            emitters=[]
+            for particle in animation['particles']:
+                try:
+                    emitter,images=creature_particles.prepare(particle,animation,first,last,scale,textures)
+                    emitters.append(emitter);particle_images.extend(images)
+                except (KeyError,ValueError) as error:
+                    emitters.append({'record_sha256':particle['record_sha256'],'blocked_reason':str(error)})
+            clips.append({'emitters':emitters,'cycle':cycle,'variant':variant,'name':choice['name'],'frames':frames,'bounds':boxes,
                 'fps':choice['fps'] or animation['fps'],'first':first,'last':last,
                 'particle_attachments':len(animation['particles'])})
         except (KeyError,FormatError,ValueError) as error:
@@ -196,10 +204,9 @@ def build(resources, definition_id):
     materials=[materials[i] for i in used]
     for mesh in meshes:mesh.materials=[remap[i] for i in mesh.materials]
     apply_skins(materials,spec)
-    textures = Textures(resources,resource)
-    payload = pvl.glb(pvl.Level(0,materials,meshes,0,0),textures)
+    payload = pvl.glb(pvl.Level(0,materials,meshes,0,0),textures,particle_images=particle_images)
     if len(payload)>128*1024*1024:raise FormatError('Creature GLB exceeds runtime size limit')
-    limitations=['particle emitters' if particle_clips else None,'native event timing/sound','random scale/hover','native lighting/blend parity']
+    limitations=['some particle emitters blocked' if any(e['blocked_reason'] for c in clips for e in c['emitters']) else None,'native event timing/sound','random scale/hover','native lighting/blend parity']
     limitations=[x for x in limitations if x]
     manifest = {'schema':2,'export_version':EXPORT_VERSION,'definition_id':definition_id,
         'database_sha256':hashlib.sha256(database).hexdigest(),'record_sha256':hashlib.sha256(record).hexdigest(),
@@ -209,6 +216,9 @@ def build(resources, definition_id):
         'sources':[{'resource':'DATABASES/MONSTERS.DBS',**db_source},{'resource':resource,**mls_source},*sources]}
     report={'schema':2,'definition_id':definition_id,'clips':len(clips),'frames':len(meshes),
         'frame_triangles':total_faces,'images':len(textures.images),'skin_stages':len(spec['skins']),
+        'emitters':sum(len(c['emitters']) for c in clips),
+        'blocked_emitters':sum(bool(e['blocked_reason']) for c in clips for e in c['emitters']),
+        'mapped_emitters':sum(e.get('mapped_frames',0)>0 for c in clips for e in c['emitters']),
         'mesh_sha256':manifest['mesh_sha256'],'database_sha256':manifest['database_sha256'],
         'record_sha256':manifest['record_sha256'],'blocked_clips':blocked,'particle_clips':particle_clips,'limitations':limitations}
     return payload,manifest,report
@@ -244,7 +254,7 @@ def fingerprint(resources):
     # Include relevant loose overrides, including newly created files. No mtime cache.
     if resources.shared.loose:
         paths+=sorted(p for p in resources.shared.loose.values() if p.suffix.casefold() in ('.mls','.mon','.tga','.ifl','.dbs'))
-    paths += [Path(__file__).with_name(n) for n in ('creatures.py','world_objects.py','world_doors.py','pvl.py','textures.py','slf.py')]
+    paths += [Path(__file__).with_name(n) for n in ('creatures.py','creature_particles.py','world_objects.py','world_doors.py','pvl.py','textures.py','slf.py')]
     for path in paths:
         digest.update(str(path).encode())
         with path.open('rb') as stream:
@@ -256,7 +266,7 @@ def export_all(resources,out,report):
     from tools.monsters import monster_catalog
     catalog=monster_catalog(resources);key=fingerprint(resources)
     out.mkdir(parents=True,exist_ok=True);json_file(out/'monsters.json',catalog)
-    groups={};entries=[];totals={'models':0,'frames':0,'frame_triangles':0,'bytes':0,'clips':0,'particle_clips':0,'blocked_clips':0}
+    groups={};entries=[];totals={'models':0,'frames':0,'frame_triangles':0,'bytes':0,'clips':0,'particle_clips':0,'blocked_clips':0,'emitters':0,'blocked_emitters':0,'mapped_emitters':0}
     for row in catalog['monsters']:
         raw=bytes.fromhex(row['raw_record_hex']);name=raw[0x189:0x1b9].split(b'\0')[0].decode('ascii')
         groups.setdefault(name.casefold(),[]).append(row)
@@ -282,12 +292,12 @@ def export_all(resources,out,report):
                 print(f"Model {ordinal}/{len(groups)}: BLOCKED definitions {','.join(str(r['id']) for r in rows)}: {error}",flush=True)
                 continue
         manifest=shared['manifest'];metadata=shared['report'];totals['models']+=1
-        for field in ('frames','frame_triangles','clips'):totals[field]+=metadata[field]
+        for field in ('frames','frame_triangles','clips','emitters','blocked_emitters','mapped_emitters'):totals[field]+=metadata[field]
         totals['bytes']+=shared['bytes'];totals['particle_clips']+=len(manifest['particle_clips']);totals['blocked_clips']+=len(manifest['blocked_clips'])
         for row in rows:
             bound=dict(manifest,definition_id=row['id'],record_sha256=row['record_sha256'])
             filename=f"creature-{row['id']}.nwcreature.json";json_file(out/filename,bound)
-            entries.append({'id':row['id'],'label':row['label'],'status':'partial' if manifest['blocked_clips'] or manifest['particle_clips'] else 'ready',
+            entries.append({'id':row['id'],'label':row['label'],'status':'partial' if manifest['blocked_clips'] or metadata['blocked_emitters'] else 'ready',
                 'manifest':filename,'clips':len(manifest['clips']),'skin_stages':manifest['skin_stages'],
                 'blocked_clips':len(manifest['blocked_clips']),'particle_clips':len(manifest['particle_clips'])})
         print(f"Model {ordinal}/{len(groups)}: {metadata['clips']} clips, {metadata['frames']} frames, {metadata['skin_stages']} skins"+(' (cached)' if cached else ''),flush=True)
@@ -297,7 +307,7 @@ def export_all(resources,out,report):
     summary={'schema':1,'definitions':len(entries),'renderable':sum(e['status']!='blocked' for e in entries),
         'blocked':[{'id':e['id'],'reason':e['reason']} for e in entries if e['status']=='blocked'],
         'partial':sum(e['status']=='partial' for e in entries),'totals':totals,
-        'database_sha256':catalog['database_sha256'],'limitations':['particle emitters','sound/native event timing','random scale/hover','native shading/blend parity']}
+        'database_sha256':catalog['database_sha256'],'limitations':['particle collision/camera adapters','sound/native event timing','random scale/hover','native shading/blend parity']}
     json_file(report,summary);print(json.dumps(summary),flush=True)
     return summary
 

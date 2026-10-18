@@ -23,11 +23,11 @@ door_glb,door_manifest,door_report=world_doors.build(source)
 
 # Optional authored creature: the source of the binding is the C# fixture catalog.
 if len(sys.argv)>2:
-    from test_creatures import SkinResources
+    from test_creatures import ParticleResources
     from tools import creatures
     catalog=json.loads(Path(sys.argv[2]).read_text())
     record=catalog['monsters'][0]
-    payload,manifest,_=creatures.build(SkinResources(),0)
+    payload,manifest,_=creatures.build(ParticleResources(),0)
     manifest.update(database_sha256=catalog['database_sha256'],record_sha256=record['record_sha256'],
                     cycle_name=bytes.fromhex(record['raw_record_hex'])[0x189:0x1b9].split(b'\0')[0].decode('ascii'))
     (root/'monsters.json').write_text(json.dumps(catalog),encoding='utf-8')

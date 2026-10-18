@@ -115,9 +115,12 @@ public partial class CreatureGallery : Node3D
         _actor.ResetIdle();_clips.Select(Array.FindIndex(candidate.ClipNames,n=>n.StartsWith("IDLE")));
         using var json=JsonDocument.Parse(File.ReadAllText(Path.Combine(_folder,entry.Manifest!)));var root=json.RootElement;
         int blocked=root.TryGetProperty("blocked_clips",out var b)?b.GetArrayLength():0;
-        int particles=root.TryGetProperty("particle_clips",out var p)?p.GetArrayLength():0;
+        int particles=0,omitted=0;
+        foreach(var clip in root.GetProperty("clips").EnumerateArray())
+            if(clip.TryGetProperty("emitters",out var emitters))
+                foreach(var emitter in emitters.EnumerateArray()){particles++;if(emitter.GetProperty("blocked_reason").GetString()!="")omitted++;}
         _status.Text=$"{entry.Id} · {entry.Label}\n{candidate.ClipCount} clips · {candidate.FrameCount} unique frames · {candidate.SkinCount} skins\n"+
-            $"Unavailable clips: {blocked}; clips with omitted particle emitters: {particles}.\nPresentation browser; combat support is tracked separately.";
+            $"Unavailable clips: {blocked}; particle emitters: {particles-omitted}/{particles} active; {omitted} blocked.\nPresentation browser; combat support is tracked separately.";
     }
     public override void _Process(double delta){if(!_smoke && _actor is not null && _spin.ButtonPressed)_actor.RotateY((float)delta*0.35f);}
 }

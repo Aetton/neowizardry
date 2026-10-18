@@ -89,7 +89,7 @@ python -m tools.creatures "/path/to/Wizardry8/Data/DATA.SLF" "/path/to/Wizardry8
 godot --path client -- --creatures "/absolute/path/to/neowizardry/local/creatures/creatures-index.json"
 ```
 
-Packaged Windows builds accept `NeoWizardry.exe --creatures "C:/NeoWizardryWorld/creatures-index.json"`. Include enabled `--patch` and `--loose-dir` overrides as for the catalogs above. The supplied archives provide models for 582/595 definitions. Every exported animation variant and default/damage texture stage can be inspected; omitted particle emitters and unavailable definitions are labeled. Models stay outside public packages. This is visual coverage, separate from supported combat profiles. See [iteration 051](docs/iteration-051.md) for exact coverage and remaining mechanisms.
+Packaged Windows builds accept `NeoWizardry.exe --creatures "C:/NeoWizardryWorld/creatures-index.json"`. Include enabled `--patch` and `--loose-dir` overrides as for the catalogs above. The supplied archives provide models for 582/595 definitions. Every exported animation variant and default/damage texture stage can be inspected; Original particle sprites and animated attachment tracks are imported too; blocked collision-dependent emitters and unavailable definitions are labeled. Models stay outside public packages. This is visual coverage, separate from supported combat profiles. See [iteration 051](docs/iteration-051.md) for model coverage and [iteration 052](docs/iteration-052.md) for particles and remaining mechanisms.
 
 ## Original spell reference
 

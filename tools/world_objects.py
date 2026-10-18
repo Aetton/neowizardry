@@ -82,8 +82,11 @@ class ObjectsReader(Reader):
         if flags & ~7:
             raise FormatError('Unknown dynamic mesh flags')
         transform = self.floats(10) if version > 1 else None
-        if version > 3:
-            self.take(self.count('b', 127) * 4)
+        vertex_map = self.array('hh', self.count('b', 127)) if version > 3 else []
+        if any(index<0 or index>=vertices for _,index in vertex_map):
+            raise FormatError('Dynamic mesh attachment vertex outside bounds')
+        if len({key for key,_ in vertex_map})!=len(vertex_map):
+            raise FormatError('Duplicate dynamic mesh attachment key')
         lods = 1
         positions = []
         if flags & 1:
@@ -108,7 +111,7 @@ class ObjectsReader(Reader):
         if any(any(i >= vertices for i in row[:3]) or row[-2] >= len(materials) for row in rows):
             raise FormatError('Dynamic mesh vertex/material index outside bounds')
         result = {'start':start, 'end':self.offset, 'version':version, 'vertices':vertices,
-                  'faces':faces, 'lod_frames':lods, 'transform':transform, 'materials':materials}
+                  'faces':faces, 'vertex_map':vertex_map, 'lod_frames':lods, 'transform':transform, 'materials':materials}
         if self.geometry:
             result.update(positions=positions, polygons=rows)
         return result

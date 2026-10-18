@@ -47,6 +47,34 @@ class SkinResources(FixtureResources):
         return data,{'kind':'loose','file':name,'sha256':hashlib.sha256(data).hexdigest()}
 
 
+def fixture_particles():
+    data=fixture_mon('old.tga')
+    # One marker attached to vertex 2 in both compressed animation frames.
+    mapping=bytes([1])+struct.pack('<hh',7,2)
+    # Mesh starts after the fixed animation prefix; replace its empty map.
+    animation,_,_=creatures.mon(data)
+    at=animation['entries'][0]['mesh']['meshes'][0]['start']+53
+    assert data[at]==0
+    data=data[:at]+mapping+data[at+1:]
+    raw=bytearray(0x225);raw[:5]=b'smoke'
+    for offset,value in ((0x68,3),(0xac,200),(0xb0,2),(0xb4,10),(0xbc,1),(0xdc,4),(0xe8,1),(0x218,5)):
+        struct.pack_into('<i',raw,offset,value)
+    for offset,value in ((0xc0,1),(0xcc,100),(0xec+1+0xfc,1),(0xec+1+0x111,20)):
+        struct.pack_into('<f',raw,offset,value)
+    raw[0xec]=4;raw[0xec+1+40:0xec+1+48]=b'base.ifl'
+    struct.pack_into('<h',raw,0x216,7)
+    struct.pack_into('<ii',raw,0x21d,0,1)
+    return data[:2]+b'\1'+struct.pack('<iB',1,4)+raw+data[3:]
+
+
+class ParticleResources(SkinResources):
+    def resolve(self,name):
+        if name=='MONSTERS/test_idle.MON':
+            data=fixture_particles()
+            return data,{'kind':'loose','file':name,'sha256':hashlib.sha256(data).hexdigest()}
+        return super().resolve(name)
+
+
 class CreatureTests(unittest.TestCase):
     def test_compressed_frames_uv_binding_and_native_rates(self):
         animation,first,last=creatures.mon(fixture_mon())
@@ -99,7 +127,38 @@ class CreatureTests(unittest.TestCase):
                 return super().resolve(name)
         _,manifest,_=creatures.build(Particles(),0)
         self.assertEqual(len(manifest['particle_clips']),3)
-        self.assertIn('particle emitters',manifest['limitations'])
+        self.assertIn('some particle emitters blocked',manifest['limitations'])
+        self.assertTrue(manifest['clips'][0]['emitters'][0]['blocked_reason'])
+
+    def test_particle_sprite_bank_animated_vertex_anchors_and_units(self):
+        payload,manifest,report=creatures.build(ParticleResources(),0)
+        emitter=manifest['clips'][0]['emitters'][0]
+        self.assertEqual(emitter['blocked_reason'],'')
+        self.assertEqual(emitter['mapped_frames'],2)
+        self.assertEqual(emitter['anchors'],[[1.3,0,-0.0],[1.625,0,-0.0]])
+        self.assertEqual((emitter['capacity'],emitter['interval_ms'],emitter['limit']),(3,10,5))
+        self.assertEqual((emitter['start_frame'],emitter['end_frame']),(0,1))
+        self.assertEqual(emitter['sprite_fps'],20)
+        length=struct.unpack_from('<I',payload,12)[0];doc=json.loads(payload[20:20+length])
+        self.assertEqual(len(doc['extras']['neoParticleImages']),2)
+        for name,index in doc['extras']['neoParticleImages'].items():
+            self.assertEqual(name,doc['images'][index]['name'].casefold())
+        self.assertNotIn('some particle emitters blocked',manifest['limitations'])
+
+    def test_particle_versions_nonfinite_values_and_bad_attachment_indices(self):
+        from tools.creature_particles import decode
+        for version,size in ((1,0x216),(2,0x218),(3,0x21d),(4,0x225)):
+            raw=bytearray(size);raw[0xec]=4
+            parsed=decode(raw,version)
+            self.assertEqual(parsed['attachment_key'],-1 if version==1 else 0)
+            self.assertEqual(parsed['start_frame'],-1 if version<4 else 0)
+            struct.pack_into('<f',raw,0xcc,float('nan'))
+            with self.assertRaises(FormatError):decode(raw,version)
+        data=bytearray(fixture_particles())
+        animation,_,_=creatures.mon(data)
+        at=animation['entries'][0]['mesh']['meshes'][0]['start']+56
+        struct.pack_into('<h',data,at,3)
+        with self.assertRaisesRegex(FormatError,'attachment vertex'):creatures.mon(data)
 
     def test_missing_optional_animation_is_reported_without_replacing_it(self):
         class Missing(FixtureResources):
